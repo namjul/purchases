@@ -1,12 +1,4 @@
 
-# Purchases
+# Purchases App  repository for Firefox OS and Firefox for Android
 
-    This is a app for Firefox OS and Firefox for Android for tracking purchases.
-
-## Installation
-
-    coming ..
-
-## License
-
-  MIT
+    Please look in the gh-pages branch for all code
