@@ -199,212 +199,9366 @@ require.relative = function(parent) {
 
   return localRequire;
 };
-require.register("component-zepto/index.js", Function("exports, require, module",
-";(function(){//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function(undefined){\n  if (String.prototype.trim === undefined) // fix for iOS 3.2\n    String.prototype.trim = function(){ return this.replace(/^\\s+/, '').replace(/\\s+$/, '') }\n\n  // For iOS 3.x\n  // from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/reduce\n  if (Array.prototype.reduce === undefined)\n    Array.prototype.reduce = function(fun){\n      if(this === void 0 || this === null) throw new TypeError()\n      var t = Object(this), len = t.length >>> 0, k = 0, accumulator\n      if(typeof fun != 'function') throw new TypeError()\n      if(len == 0 && arguments.length == 1) throw new TypeError()\n\n      if(arguments.length >= 2)\n       accumulator = arguments[1]\n      else\n        do{\n          if(k in t){\n            accumulator = t[k++]\n            break\n          }\n          if(++k >= len) throw new TypeError()\n        } while (true)\n\n      while (k < len){\n        if(k in t) accumulator = fun.call(undefined, accumulator, t[k], k, t)\n        k++\n      }\n      return accumulator\n    }\n\n})()\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\nvar Zepto = (function() {\n  var undefined, key, $, classList, emptyArray = [], slice = emptyArray.slice,\n    document = window.document,\n    elementDisplay = {}, classCache = {},\n    getComputedStyle = document.defaultView.getComputedStyle,\n    cssNumber = { 'column-count': 1, 'columns': 1, 'font-weight': 1, 'line-height': 1,'opacity': 1, 'z-index': 1, 'zoom': 1 },\n    fragmentRE = /^\\s*<(\\w+|!)[^>]*>/,\n    tagExpanderRE = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\\w:]+)[^>]*)\\/>/ig,\n\n    // Used by `$.zepto.init` to wrap elements, text/comment nodes, document,\n    // and document fragment node types.\n    elementTypes = [1, 3, 8, 9, 11],\n\n    adjacencyOperators = [ 'after', 'prepend', 'before', 'append' ],\n    table = document.createElement('table'),\n    tableRow = document.createElement('tr'),\n    containers = {\n      'tr': document.createElement('tbody'),\n      'tbody': table, 'thead': table, 'tfoot': table,\n      'td': tableRow, 'th': tableRow,\n      '*': document.createElement('div')\n    },\n    readyRE = /complete|loaded|interactive/,\n    classSelectorRE = /^\\.([\\w-]+)$/,\n    idSelectorRE = /^#([\\w-]+)$/,\n    tagSelectorRE = /^[\\w-]+$/,\n    toString = {}.toString,\n    zepto = {},\n    camelize, uniq,\n    tempParent = document.createElement('div')\n\n  zepto.matches = function(element, selector) {\n    if (!element || element.nodeType !== 1) return false\n    var matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||\n                          element.oMatchesSelector || element.matchesSelector\n    if (matchesSelector) return matchesSelector.call(element, selector)\n    // fall back to performing a selector:\n    var match, parent = element.parentNode, temp = !parent\n    if (temp) (parent = tempParent).appendChild(element)\n    match = ~zepto.qsa(parent, selector).indexOf(element)\n    temp && tempParent.removeChild(element)\n    return match\n  }\n\n  function isFunction(value) { return toString.call(value) == \"[object Function]\" }\n  function isObject(value) { return value instanceof Object }\n  function isPlainObject(value) {\n    return isObject(value) && value.__proto__ == Object.prototype\n  }\n  function isArray(value) { return value instanceof Array }\n  function likeArray(obj) { return typeof obj.length == 'number' }\n\n  function compact(array) { return array.filter(function(item){ return item !== undefined && item !== null }) }\n  function flatten(array) { return array.length > 0 ? [].concat.apply([], array) : array }\n  camelize = function(str){ return str.replace(/-+(.)?/g, function(match, chr){ return chr ? chr.toUpperCase() : '' }) }\n  function dasherize(str) {\n    return str.replace(/::/g, '/')\n           .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')\n           .replace(/([a-z\\d])([A-Z])/g, '$1_$2')\n           .replace(/_/g, '-')\n           .toLowerCase()\n  }\n  uniq = function(array){ return array.filter(function(item, idx){ return array.indexOf(item) == idx }) }\n\n  function classRE(name) {\n    return name in classCache ?\n      classCache[name] : (classCache[name] = new RegExp('(^|\\\\s)' + name + '(\\\\s|$)'))\n  }\n\n  function maybeAddPx(name, value) {\n    return (typeof value == \"number\" && !cssNumber[dasherize(name)]) ? value + \"px\" : value\n  }\n\n  function defaultDisplay(nodeName) {\n    var element, display\n    if (!elementDisplay[nodeName]) {\n      element = document.createElement(nodeName)\n      document.body.appendChild(element)\n      display = getComputedStyle(element, '').getPropertyValue(\"display\")\n      element.parentNode.removeChild(element)\n      display == \"none\" && (display = \"block\")\n      elementDisplay[nodeName] = display\n    }\n    return elementDisplay[nodeName]\n  }\n\n  // `$.zepto.fragment` takes a html string and an optional tag name\n  // to generate DOM nodes nodes from the given html string.\n  // The generated DOM nodes are returned as an array.\n  // This function can be overriden in plugins for example to make\n  // it compatible with browsers that don't support the DOM fully.\n  zepto.fragment = function(html, name) {\n    if (html.replace) html = html.replace(tagExpanderRE, \"<$1></$2>\")\n    if (name === undefined) name = fragmentRE.test(html) && RegExp.$1\n    if (!(name in containers)) name = '*'\n\n    var container = containers[name]\n    container.innerHTML = '' + html\n    return $.each(slice.call(container.childNodes), function(){\n      container.removeChild(this)\n    })\n  }\n\n  // `$.zepto.Z` swaps out the prototype of the given `dom` array\n  // of nodes with `$.fn` and thus supplying all the Zepto functions\n  // to the array. Note that `__proto__` is not supported on Internet\n  // Explorer. This method can be overriden in plugins.\n  zepto.Z = function(dom, selector) {\n    dom = dom || []\n    dom.__proto__ = arguments.callee.prototype\n    dom.selector = selector || ''\n    return dom\n  }\n\n  // `$.zepto.isZ` should return `true` if the given object is a Zepto\n  // collection. This method can be overriden in plugins.\n  zepto.isZ = function(object) {\n    return object instanceof zepto.Z\n  }\n\n  // `$.zepto.init` is Zepto's counterpart to jQuery's `$.fn.init` and\n  // takes a CSS selector and an optional context (and handles various\n  // special cases).\n  // This method can be overriden in plugins.\n  zepto.init = function(selector, context) {\n    // If nothing given, return an empty Zepto collection\n    if (!selector) return zepto.Z()\n    // If a function is given, call it when the DOM is ready\n    else if (isFunction(selector)) return $(document).ready(selector)\n    // If a Zepto collection is given, juts return it\n    else if (zepto.isZ(selector)) return selector\n    else {\n      var dom\n      // normalize array if an array of nodes is given\n      if (isArray(selector)) dom = compact(selector)\n      // if a JavaScript object is given, return a copy of it\n      // this is a somewhat peculiar option, but supported by\n      // jQuery so we'll do it, too\n      else if (isPlainObject(selector))\n        dom = [$.extend({}, selector)], selector = null\n      // wrap stuff like `document` or `window`\n      else if (elementTypes.indexOf(selector.nodeType) >= 0 || selector === window)\n        dom = [selector], selector = null\n      // If it's a html fragment, create nodes from it\n      else if (fragmentRE.test(selector))\n        dom = zepto.fragment(selector.trim(), RegExp.$1), selector = null\n      // If there's a context, create a collection on that context first, and select\n      // nodes from there\n      else if (context !== undefined) return $(context).find(selector)\n      // And last but no least, if it's a CSS selector, use it to select nodes.\n      else dom = zepto.qsa(document, selector)\n      // create a new Zepto collection from the nodes found\n      return zepto.Z(dom, selector)\n    }\n  }\n\n  // `$` will be the base `Zepto` object. When calling this\n  // function just call `$.zepto.init, whichs makes the implementation\n  // details of selecting nodes and creating Zepto collections\n  // patchable in plugins.\n  $ = function(selector, context){\n    return zepto.init(selector, context)\n  }\n\n  // Copy all but undefined properties from one or more\n  // objects to the `target` object.\n  $.extend = function(target){\n    slice.call(arguments, 1).forEach(function(source) {\n      for (key in source)\n        if (source[key] !== undefined)\n          target[key] = source[key]\n    })\n    return target\n  }\n\n  // `$.zepto.qsa` is Zepto's CSS selector implementation which\n  // uses `document.querySelectorAll` and optimizes for some special cases, like `#id`.\n  // This method can be overriden in plugins.\n  zepto.qsa = function(element, selector){\n    var found\n    return (element === document && idSelectorRE.test(selector)) ?\n      ( (found = element.getElementById(RegExp.$1)) ? [found] : emptyArray ) :\n      (element.nodeType !== 1 && element.nodeType !== 9) ? emptyArray :\n      slice.call(\n        classSelectorRE.test(selector) ? element.getElementsByClassName(RegExp.$1) :\n        tagSelectorRE.test(selector) ? element.getElementsByTagName(selector) :\n        element.querySelectorAll(selector)\n      )\n  }\n\n  function filtered(nodes, selector) {\n    return selector === undefined ? $(nodes) : $(nodes).filter(selector)\n  }\n\n  function funcArg(context, arg, idx, payload) {\n   return isFunction(arg) ? arg.call(context, idx, payload) : arg\n  }\n\n  $.isFunction = isFunction\n  $.isObject = isObject\n  $.isArray = isArray\n  $.isPlainObject = isPlainObject\n\n  $.inArray = function(elem, array, i){\n    return emptyArray.indexOf.call(array, elem, i)\n  }\n\n  $.trim = function(str) { return str.trim() }\n\n  // plugin compatibility\n  $.uuid = 0\n\n  $.map = function(elements, callback){\n    var value, values = [], i, key\n    if (likeArray(elements))\n      for (i = 0; i < elements.length; i++) {\n        value = callback(elements[i], i)\n        if (value != null) values.push(value)\n      }\n    else\n      for (key in elements) {\n        value = callback(elements[key], key)\n        if (value != null) values.push(value)\n      }\n    return flatten(values)\n  }\n\n  $.each = function(elements, callback){\n    var i, key\n    if (likeArray(elements)) {\n      for (i = 0; i < elements.length; i++)\n        if (callback.call(elements[i], i, elements[i]) === false) return elements\n    } else {\n      for (key in elements)\n        if (callback.call(elements[key], key, elements[key]) === false) return elements\n    }\n\n    return elements\n  }\n\n  // Define methods that will be available on all\n  // Zepto collections\n  $.fn = {\n    // Because a collection acts like an array\n    // copy over these useful array functions.\n    forEach: emptyArray.forEach,\n    reduce: emptyArray.reduce,\n    push: emptyArray.push,\n    indexOf: emptyArray.indexOf,\n    concat: emptyArray.concat,\n\n    // `map` and `slice` in the jQuery API work differently\n    // from their array counterparts\n    map: function(fn){\n      return $.map(this, function(el, i){ return fn.call(el, i, el) })\n    },\n    slice: function(){\n      return $(slice.apply(this, arguments))\n    },\n\n    ready: function(callback){\n      if (readyRE.test(document.readyState)) callback($)\n      else document.addEventListener('DOMContentLoaded', function(){ callback($) }, false)\n      return this\n    },\n    get: function(idx){\n      return idx === undefined ? slice.call(this) : this[idx]\n    },\n    toArray: function(){ return this.get() },\n    size: function(){\n      return this.length\n    },\n    remove: function(){\n      return this.each(function(){\n        if (this.parentNode != null)\n          this.parentNode.removeChild(this)\n      })\n    },\n    each: function(callback){\n      this.forEach(function(el, idx){ callback.call(el, idx, el) })\n      return this\n    },\n    filter: function(selector){\n      if (isFunction(selector)) return this.not(this.not(selector))\n      return $([].filter.call(this, function(element){\n        return zepto.matches(element, selector)\n      }))\n    },\n    add: function(selector,context){\n      return $(uniq(this.concat($(selector,context))))\n    },\n    is: function(selector){\n      return this.length > 0 && zepto.matches(this[0], selector)\n    },\n    not: function(selector){\n      var nodes=[]\n      if (isFunction(selector) && selector.call !== undefined)\n        this.each(function(idx){\n          if (!selector.call(this,idx)) nodes.push(this)\n        })\n      else {\n        var excludes = typeof selector == 'string' ? this.filter(selector) :\n          (likeArray(selector) && isFunction(selector.item)) ? slice.call(selector) : $(selector)\n        this.forEach(function(el){\n          if (excludes.indexOf(el) < 0) nodes.push(el)\n        })\n      }\n      return $(nodes)\n    },\n    eq: function(idx){\n      return idx === -1 ? this.slice(idx) : this.slice(idx, + idx + 1)\n    },\n    first: function(){\n      var el = this[0]\n      return el && !isObject(el) ? el : $(el)\n    },\n    last: function(){\n      var el = this[this.length - 1]\n      return el && !isObject(el) ? el : $(el)\n    },\n    find: function(selector){\n      var result\n      if (this.length == 1) result = zepto.qsa(this[0], selector)\n      else result = this.map(function(){ return zepto.qsa(this, selector) })\n      return $(result)\n    },\n    closest: function(selector, context){\n      var node = this[0]\n      while (node && !zepto.matches(node, selector))\n        node = node !== context && node !== document && node.parentNode\n      return $(node)\n    },\n    parents: function(selector){\n      var ancestors = [], nodes = this\n      while (nodes.length > 0)\n        nodes = $.map(nodes, function(node){\n          if ((node = node.parentNode) && node !== document && ancestors.indexOf(node) < 0) {\n            ancestors.push(node)\n            return node\n          }\n        })\n      return filtered(ancestors, selector)\n    },\n    parent: function(selector){\n      return filtered(uniq(this.pluck('parentNode')), selector)\n    },\n    children: function(selector){\n      return filtered(this.map(function(){ return slice.call(this.children) }), selector)\n    },\n    siblings: function(selector){\n      return filtered(this.map(function(i, el){\n        return slice.call(el.parentNode.children).filter(function(child){ return child!==el })\n      }), selector)\n    },\n    empty: function(){\n      return this.each(function(){ this.innerHTML = '' })\n    },\n    // `pluck` is borrowed from Prototype.js\n    pluck: function(property){\n      return this.map(function(){ return this[property] })\n    },\n    show: function(){\n      return this.each(function(){\n        this.style.display == \"none\" && (this.style.display = null)\n        if (getComputedStyle(this, '').getPropertyValue(\"display\") == \"none\")\n          this.style.display = defaultDisplay(this.nodeName)\n      })\n    },\n    replaceWith: function(newContent){\n      return this.before(newContent).remove()\n    },\n    wrap: function(newContent){\n      return this.each(function(){\n        $(this).wrapAll($(newContent)[0].cloneNode(false))\n      })\n    },\n    wrapAll: function(newContent){\n      if (this[0]) {\n        $(this[0]).before(newContent = $(newContent))\n        newContent.append(this)\n      }\n      return this\n    },\n    unwrap: function(){\n      this.parent().each(function(){\n        $(this).replaceWith($(this).children())\n      })\n      return this\n    },\n    clone: function(){\n      return $(this.map(function(){ return this.cloneNode(true) }))\n    },\n    hide: function(){\n      return this.css(\"display\", \"none\")\n    },\n    toggle: function(setting){\n      return (setting === undefined ? this.css(\"display\") == \"none\" : setting) ? this.show() : this.hide()\n    },\n    prev: function(selector){ return $(this.pluck('previousElementSibling')).filter(selector || '*') },\n    next: function(selector){ return $(this.pluck('nextElementSibling')).filter(selector || '*') },\n    html: function(html){\n      return html === undefined ?\n        (this.length > 0 ? this[0].innerHTML : null) :\n        this.each(function(idx){\n          var originHtml = this.innerHTML\n          $(this).empty().append( funcArg(this, html, idx, originHtml) )\n        })\n    },\n    text: function(text){\n      return text === undefined ?\n        (this.length > 0 ? this[0].textContent : null) :\n        this.each(function(){ this.textContent = text })\n    },\n    attr: function(name, value){\n      var result\n      return (typeof name == 'string' && value === undefined) ?\n        (this.length == 0 || this[0].nodeType !== 1 ? undefined :\n          (name == 'value' && this[0].nodeName == 'INPUT') ? this.val() :\n          (!(result = this[0].getAttribute(name)) && name in this[0]) ? this[0][name] : result\n        ) :\n        this.each(function(idx){\n          if (this.nodeType !== 1) return\n          if (isObject(name)) for (key in name) this.setAttribute(key, name[key])\n          else this.setAttribute(name, funcArg(this, value, idx, this.getAttribute(name)))\n        })\n    },\n    removeAttr: function(name){\n      return this.each(function(){ if (this.nodeType === 1) this.removeAttribute(name) })\n    },\n    prop: function(name, value){\n      return (value === undefined) ?\n        (this[0] ? this[0][name] : undefined) :\n        this.each(function(idx){\n          this[name] = funcArg(this, value, idx, this[name])\n        })\n    },\n    data: function(name, value){\n      var data = this.attr('data-' + dasherize(name), value)\n      return data !== null ? data : undefined\n    },\n    val: function(value){\n      return (value === undefined) ?\n        (this.length > 0 ?\n          (this[0].multiple ? $(this[0]).find('option').filter(function(o){ return this.selected }).pluck('value') : this[0].value) :\n          undefined) :\n        this.each(function(idx){\n          this.value = funcArg(this, value, idx, this.value)\n        })\n    },\n    offset: function(){\n      if (this.length==0) return null\n      var obj = this[0].getBoundingClientRect()\n      return {\n        left: obj.left + window.pageXOffset,\n        top: obj.top + window.pageYOffset,\n        width: obj.width,\n        height: obj.height\n      }\n    },\n    css: function(property, value){\n      if (value === undefined && typeof property == 'string')\n        return (\n          this.length == 0\n            ? undefined\n            : this[0].style[camelize(property)] || getComputedStyle(this[0], '').getPropertyValue(property))\n\n      var css = ''\n      for (key in property)\n        if(typeof property[key] == 'string' && property[key] == '')\n          this.each(function(){ this.style.removeProperty(dasherize(key)) })\n        else\n          css += dasherize(key) + ':' + maybeAddPx(key, property[key]) + ';'\n\n      if (typeof property == 'string')\n        if (value == '')\n          this.each(function(){ this.style.removeProperty(dasherize(property)) })\n        else\n          css = dasherize(property) + \":\" + maybeAddPx(property, value)\n\n      return this.each(function(){ this.style.cssText += ';' + css })\n    },\n    index: function(element){\n      return element ? this.indexOf($(element)[0]) : this.parent().children().indexOf(this[0])\n    },\n    hasClass: function(name){\n      if (this.length < 1) return false\n      else return classRE(name).test(this[0].className)\n    },\n    addClass: function(name){\n      return this.each(function(idx){\n        classList = []\n        var cls = this.className, newName = funcArg(this, name, idx, cls)\n        newName.split(/\\s+/g).forEach(function(klass){\n          if (!$(this).hasClass(klass)) classList.push(klass)\n        }, this)\n        classList.length && (this.className += (cls ? \" \" : \"\") + classList.join(\" \"))\n      })\n    },\n    removeClass: function(name){\n      return this.each(function(idx){\n        if (name === undefined)\n          return this.className = ''\n        classList = this.className\n        funcArg(this, name, idx, classList).split(/\\s+/g).forEach(function(klass){\n          classList = classList.replace(classRE(klass), \" \")\n        })\n        this.className = classList.trim()\n      })\n    },\n    toggleClass: function(name, when){\n      return this.each(function(idx){\n        var newName = funcArg(this, name, idx, this.className)\n        ;(when === undefined ? !$(this).hasClass(newName) : when) ?\n          $(this).addClass(newName) : $(this).removeClass(newName)\n      })\n    }\n  }\n\n  // Generate the `width` and `height` functions\n  ;['width', 'height'].forEach(function(dimension){\n    $.fn[dimension] = function(value){\n      var offset, Dimension = dimension.replace(/./, function(m){ return m[0].toUpperCase() })\n      if (value === undefined) return this[0] == window ? window['inner' + Dimension] :\n        this[0] == document ? document.documentElement['offset' + Dimension] :\n        (offset = this.offset()) && offset[dimension]\n      else return this.each(function(idx){\n        var el = $(this)\n        el.css(dimension, funcArg(this, value, idx, el[dimension]()))\n      })\n    }\n  })\n\n  function insert(operator, target, node) {\n    var parent = (operator % 2) ? target : target.parentNode\n    parent ? parent.insertBefore(node,\n      !operator ? target.nextSibling :      // after\n      operator == 1 ? parent.firstChild :   // prepend\n      operator == 2 ? target :              // before\n      null) :                               // append\n      $(node).remove()\n  }\n\n  function traverseNode(node, fun) {\n    fun(node)\n    for (var key in node.childNodes) traverseNode(node.childNodes[key], fun)\n  }\n\n  // Generate the `after`, `prepend`, `before`, `append`,\n  // `insertAfter`, `insertBefore`, `appendTo`, and `prependTo` methods.\n  adjacencyOperators.forEach(function(key, operator) {\n    $.fn[key] = function(){\n      // arguments can be nodes, arrays of nodes, Zepto objects and HTML strings\n      var nodes = $.map(arguments, function(n){ return isObject(n) ? n : zepto.fragment(n) })\n      if (nodes.length < 1) return this\n      var size = this.length, copyByClone = size > 1, inReverse = operator < 2\n\n      return this.each(function(index, target){\n        for (var i = 0; i < nodes.length; i++) {\n          var node = nodes[inReverse ? nodes.length-i-1 : i]\n          traverseNode(node, function(node){\n            if (node.nodeName != null && node.nodeName.toUpperCase() === 'SCRIPT' && (!node.type || node.type === 'text/javascript'))\n              window['eval'].call(window, node.innerHTML)\n          })\n          if (copyByClone && index < size - 1) node = node.cloneNode(true)\n          insert(operator, target, node)\n        }\n      })\n    }\n\n    $.fn[(operator % 2) ? key+'To' : 'insert'+(operator ? 'Before' : 'After')] = function(html){\n      $(html)[key](this)\n      return this\n    }\n  })\n\n  zepto.Z.prototype = $.fn\n\n  // Export internal API functions in the `$.zepto` namespace\n  zepto.camelize = camelize\n  zepto.uniq = uniq\n  $.zepto = zepto\n\n  return $\n})()\n\n// If `$` is not yet defined, point it to `Zepto`\nwindow.Zepto = Zepto\n'$' in window || (window.$ = Zepto)\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function($){\n  var $$ = $.zepto.qsa, handlers = {}, _zid = 1, specialEvents={}\n\n  specialEvents.click = specialEvents.mousedown = specialEvents.mouseup = specialEvents.mousemove = 'MouseEvents'\n\n  function zid(element) {\n    return element._zid || (element._zid = _zid++)\n  }\n  function findHandlers(element, event, fn, selector) {\n    event = parse(event)\n    if (event.ns) var matcher = matcherFor(event.ns)\n    return (handlers[zid(element)] || []).filter(function(handler) {\n      return handler\n        && (!event.e  || handler.e == event.e)\n        && (!event.ns || matcher.test(handler.ns))\n        && (!fn       || zid(handler.fn) === zid(fn))\n        && (!selector || handler.sel == selector)\n    })\n  }\n  function parse(event) {\n    var parts = ('' + event).split('.')\n    return {e: parts[0], ns: parts.slice(1).sort().join(' ')}\n  }\n  function matcherFor(ns) {\n    return new RegExp('(?:^| )' + ns.replace(' ', ' .* ?') + '(?: |$)')\n  }\n\n  function eachEvent(events, fn, iterator){\n    if ($.isObject(events)) $.each(events, iterator)\n    else events.split(/\\s/).forEach(function(type){ iterator(type, fn) })\n  }\n\n  function add(element, events, fn, selector, getDelegate, capture){\n    capture = !!capture\n    var id = zid(element), set = (handlers[id] || (handlers[id] = []))\n    eachEvent(events, fn, function(event, fn){\n      var delegate = getDelegate && getDelegate(fn, event),\n        callback = delegate || fn\n      var proxyfn = function (event) {\n        var result = callback.apply(element, [event].concat(event.data))\n        if (result === false) event.preventDefault()\n        return result\n      }\n      var handler = $.extend(parse(event), {fn: fn, proxy: proxyfn, sel: selector, del: delegate, i: set.length})\n      set.push(handler)\n      element.addEventListener(handler.e, proxyfn, capture)\n    })\n  }\n  function remove(element, events, fn, selector){\n    var id = zid(element)\n    eachEvent(events || '', fn, function(event, fn){\n      findHandlers(element, event, fn, selector).forEach(function(handler){\n        delete handlers[id][handler.i]\n        element.removeEventListener(handler.e, handler.proxy, false)\n      })\n    })\n  }\n\n  $.event = { add: add, remove: remove }\n\n  $.proxy = function(fn, context) {\n    if ($.isFunction(fn)) {\n      var proxyFn = function(){ return fn.apply(context, arguments) }\n      proxyFn._zid = zid(fn)\n      return proxyFn\n    } else if (typeof context == 'string') {\n      return $.proxy(fn[context], fn)\n    } else {\n      throw new TypeError(\"expected function\")\n    }\n  }\n\n  $.fn.bind = function(event, callback){\n    return this.each(function(){\n      add(this, event, callback)\n    })\n  }\n  $.fn.unbind = function(event, callback){\n    return this.each(function(){\n      remove(this, event, callback)\n    })\n  }\n  $.fn.one = function(event, callback){\n    return this.each(function(i, element){\n      add(this, event, callback, null, function(fn, type){\n        return function(){\n          var result = fn.apply(element, arguments)\n          remove(element, type, fn)\n          return result\n        }\n      })\n    })\n  }\n\n  var returnTrue = function(){return true},\n      returnFalse = function(){return false},\n      eventMethods = {\n        preventDefault: 'isDefaultPrevented',\n        stopImmediatePropagation: 'isImmediatePropagationStopped',\n        stopPropagation: 'isPropagationStopped'\n      }\n  function createProxy(event) {\n    var proxy = $.extend({originalEvent: event}, event)\n    $.each(eventMethods, function(name, predicate) {\n      proxy[name] = function(){\n        this[predicate] = returnTrue\n        return event[name].apply(event, arguments)\n      }\n      proxy[predicate] = returnFalse\n    })\n    return proxy\n  }\n\n  // emulates the 'defaultPrevented' property for browsers that have none\n  function fix(event) {\n    if (!('defaultPrevented' in event)) {\n      event.defaultPrevented = false\n      var prevent = event.preventDefault\n      event.preventDefault = function() {\n        this.defaultPrevented = true\n        prevent.call(this)\n      }\n    }\n  }\n\n  $.fn.delegate = function(selector, event, callback){\n    var capture = false\n    if(event == 'blur' || event == 'focus'){\n      if($.iswebkit)\n        event = event == 'blur' ? 'focusout' : event == 'focus' ? 'focusin' : event\n      else\n        capture = true\n    }\n\n    return this.each(function(i, element){\n      add(element, event, callback, selector, function(fn){\n        return function(e){\n          var evt, match = $(e.target).closest(selector, element).get(0)\n          if (match) {\n            evt = $.extend(createProxy(e), {currentTarget: match, liveFired: element})\n            return fn.apply(match, [evt].concat([].slice.call(arguments, 1)))\n          }\n        }\n      }, capture)\n    })\n  }\n  $.fn.undelegate = function(selector, event, callback){\n    return this.each(function(){\n      remove(this, event, callback, selector)\n    })\n  }\n\n  $.fn.live = function(event, callback){\n    $(document.body).delegate(this.selector, event, callback)\n    return this\n  }\n  $.fn.die = function(event, callback){\n    $(document.body).undelegate(this.selector, event, callback)\n    return this\n  }\n\n  $.fn.on = function(event, selector, callback){\n    return selector == undefined || $.isFunction(selector) ?\n      this.bind(event, selector || callback) : this.delegate(selector, event, callback)\n  }\n  $.fn.off = function(event, selector, callback){\n    return selector == undefined || $.isFunction(selector) ?\n      this.unbind(event, selector || callback) : this.undelegate(selector, event, callback)\n  }\n\n  $.fn.trigger = function(event, data){\n    if (typeof event == 'string') event = $.Event(event)\n    fix(event)\n    event.data = data\n    return this.each(function(){\n      // items in the collection might not be DOM elements\n      // (todo: possibly support events on plain old objects)\n      if('dispatchEvent' in this) this.dispatchEvent(event)\n    })\n  }\n\n  // triggers event handlers on current element just as if an event occurred,\n  // doesn't trigger an actual event, doesn't bubble\n  $.fn.triggerHandler = function(event, data){\n    var e, result\n    this.each(function(i, element){\n      e = createProxy(typeof event == 'string' ? $.Event(event) : event)\n      e.data = data\n      e.target = element\n      $.each(findHandlers(element, event.type || event), function(i, handler){\n        result = handler.proxy(e)\n        if (e.isImmediatePropagationStopped()) return false\n      })\n    })\n    return result\n  }\n\n  // shortcut methods for `.bind(event, fn)` for each event type\n  ;('focusin focusout load resize scroll unload click dblclick '+\n  'mousedown mouseup mousemove mouseover mouseout '+\n  'change select keydown keypress keyup error').split(' ').forEach(function(event) {\n    $.fn[event] = function(callback){ return this.bind(event, callback) }\n  })\n\n  ;['focus', 'blur'].forEach(function(name) {\n    $.fn[name] = function(callback) {\n      if (callback) this.bind(name, callback)\n      else if (this.length) try { this.get(0)[name]() } catch(e){}\n      return this\n    }\n  })\n\n  $.Event = function(type, props) {\n    var event = document.createEvent(specialEvents[type] || 'Events'), bubbles = true\n    if (props) for (var name in props) (name == 'bubbles') ? (bubbles = !!props[name]) : (event[name] = props[name])\n    event.initEvent(type, bubbles, true, null, null, null, null, null, null, null, null, null, null, null, null)\n    return event\n  }\n\n})(Zepto)\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function($){\n  function detect(ua){\n    var os = this.os = {}, browser = this.browser = {},\n      webkit = ua.match(/WebKit\\/([\\d.]+)/),\n      android = ua.match(/(Android)\\s+([\\d.]+)/),\n      ipad = ua.match(/(iPad).*OS\\s([\\d_]+)/),\n      iphone = !ipad && ua.match(/(iPhone\\sOS)\\s([\\d_]+)/),\n      webos = ua.match(/(webOS|hpwOS)[\\s\\/]([\\d.]+)/),\n      touchpad = webos && ua.match(/TouchPad/),\n      kindle = ua.match(/Kindle\\/([\\d.]+)/),\n      silk = ua.match(/Silk\\/([\\d._]+)/),\n      blackberry = ua.match(/(BlackBerry).*Version\\/([\\d.]+)/)\n\n    // todo clean this up with a better OS/browser\n    // separation. we need to discern between multiple\n    // browsers on android, and decide if kindle fire in\n    // silk mode is android or not\n\n    if (browser.webkit = !!webkit) browser.version = webkit[1]\n\n    if (android) os.android = true, os.version = android[2]\n    if (iphone) os.ios = os.iphone = true, os.version = iphone[2].replace(/_/g, '.')\n    if (ipad) os.ios = os.ipad = true, os.version = ipad[2].replace(/_/g, '.')\n    if (webos) os.webos = true, os.version = webos[2]\n    if (touchpad) os.touchpad = true\n    if (blackberry) os.blackberry = true, os.version = blackberry[2]\n    if (kindle) os.kindle = true, os.version = kindle[1]\n    if (silk) browser.silk = true, browser.version = silk[1]\n    if (!silk && os.android && ua.match(/Kindle Fire/)) browser.silk = true\n  }\n\n  detect.call($, navigator.userAgent)\n  // make available to unit tests\n  $.__detect = detect\n\n})(Zepto)\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function($, undefined){\n  var prefix = '', eventPrefix, endEventName, endAnimationName,\n    vendors = { Webkit: 'webkit', Moz: '', O: 'o', ms: 'MS' },\n    document = window.document, testEl = document.createElement('div'),\n    supportedTransforms = /^((translate|rotate|scale)(X|Y|Z|3d)?|matrix(3d)?|perspective|skew(X|Y)?)$/i,\n    clearProperties = {}\n\n  function downcase(str) { return str.toLowerCase() }\n  function normalizeEvent(name) { return eventPrefix ? eventPrefix + name : downcase(name) }\n\n  $.each(vendors, function(vendor, event){\n    if (testEl.style[vendor + 'TransitionProperty'] !== undefined) {\n      prefix = '-' + downcase(vendor) + '-'\n      eventPrefix = event\n      return false\n    }\n  })\n\n  clearProperties[prefix + 'transition-property'] =\n  clearProperties[prefix + 'transition-duration'] =\n  clearProperties[prefix + 'transition-timing-function'] =\n  clearProperties[prefix + 'animation-name'] =\n  clearProperties[prefix + 'animation-duration'] = ''\n\n  $.fx = {\n    off: (eventPrefix === undefined && testEl.style.transitionProperty === undefined),\n    cssPrefix: prefix,\n    transitionEnd: normalizeEvent('TransitionEnd'),\n    animationEnd: normalizeEvent('AnimationEnd')\n  }\n\n  $.fn.animate = function(properties, duration, ease, callback){\n    if ($.isObject(duration))\n      ease = duration.easing, callback = duration.complete, duration = duration.duration\n    if (duration) duration = duration / 1000\n    return this.anim(properties, duration, ease, callback)\n  }\n\n  $.fn.anim = function(properties, duration, ease, callback){\n    var transforms, cssProperties = {}, key, that = this, wrappedCallback, endEvent = $.fx.transitionEnd\n    if (duration === undefined) duration = 0.4\n    if ($.fx.off) duration = 0\n\n    if (typeof properties == 'string') {\n      // keyframe animation\n      cssProperties[prefix + 'animation-name'] = properties\n      cssProperties[prefix + 'animation-duration'] = duration + 's'\n      endEvent = $.fx.animationEnd\n    } else {\n      // CSS transitions\n      for (key in properties)\n        if (supportedTransforms.test(key)) {\n          transforms || (transforms = [])\n          transforms.push(key + '(' + properties[key] + ')')\n        }\n        else cssProperties[key] = properties[key]\n\n      if (transforms) cssProperties[prefix + 'transform'] = transforms.join(' ')\n      if (!$.fx.off && typeof properties === 'object') {\n        cssProperties[prefix + 'transition-property'] = Object.keys(properties).join(', ')\n        cssProperties[prefix + 'transition-duration'] = duration + 's'\n        cssProperties[prefix + 'transition-timing-function'] = (ease || 'linear')\n      }\n    }\n\n    wrappedCallback = function(event){\n      if (typeof event !== 'undefined') {\n        if (event.target !== event.currentTarget) return // makes sure the event didn't bubble from \"below\"\n        $(event.target).unbind(endEvent, arguments.callee)\n      }\n      $(this).css(clearProperties)\n      callback && callback.call(this)\n    }\n    if (duration > 0) this.bind(endEvent, wrappedCallback)\n\n    setTimeout(function() {\n      that.css(cssProperties)\n      if (duration <= 0) setTimeout(function() {\n        that.each(function(){ wrappedCallback.call(this) })\n      }, 0)\n    }, 0)\n\n    return this\n  }\n\n  testEl = null\n})(Zepto)\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function($){\n  var jsonpID = 0,\n      isObject = $.isObject,\n      document = window.document,\n      key,\n      name,\n      rscript = /<script\\b[^<]*(?:(?!<\\/script>)<[^<]*)*<\\/script>/gi,\n      scriptTypeRE = /^(?:text|application)\\/javascript/i,\n      xmlTypeRE = /^(?:text|application)\\/xml/i,\n      jsonType = 'application/json',\n      htmlType = 'text/html',\n      blankRE = /^\\s*$/\n\n  // trigger a custom event and return false if it was cancelled\n  function triggerAndReturn(context, eventName, data) {\n    var event = $.Event(eventName)\n    $(context).trigger(event, data)\n    return !event.defaultPrevented\n  }\n\n  // trigger an Ajax \"global\" event\n  function triggerGlobal(settings, context, eventName, data) {\n    if (settings.global) return triggerAndReturn(context || document, eventName, data)\n  }\n\n  // Number of active Ajax requests\n  $.active = 0\n\n  function ajaxStart(settings) {\n    if (settings.global && $.active++ === 0) triggerGlobal(settings, null, 'ajaxStart')\n  }\n  function ajaxStop(settings) {\n    if (settings.global && !(--$.active)) triggerGlobal(settings, null, 'ajaxStop')\n  }\n\n  // triggers an extra global event \"ajaxBeforeSend\" that's like \"ajaxSend\" but cancelable\n  function ajaxBeforeSend(xhr, settings) {\n    var context = settings.context\n    if (settings.beforeSend.call(context, xhr, settings) === false ||\n        triggerGlobal(settings, context, 'ajaxBeforeSend', [xhr, settings]) === false)\n      return false\n\n    triggerGlobal(settings, context, 'ajaxSend', [xhr, settings])\n  }\n  function ajaxSuccess(data, xhr, settings) {\n    var context = settings.context, status = 'success'\n    settings.success.call(context, data, status, xhr)\n    triggerGlobal(settings, context, 'ajaxSuccess', [xhr, settings, data])\n    ajaxComplete(status, xhr, settings)\n  }\n  // type: \"timeout\", \"error\", \"abort\", \"parsererror\"\n  function ajaxError(error, type, xhr, settings) {\n    var context = settings.context\n    settings.error.call(context, xhr, type, error)\n    triggerGlobal(settings, context, 'ajaxError', [xhr, settings, error])\n    ajaxComplete(type, xhr, settings)\n  }\n  // status: \"success\", \"notmodified\", \"error\", \"timeout\", \"abort\", \"parsererror\"\n  function ajaxComplete(status, xhr, settings) {\n    var context = settings.context\n    settings.complete.call(context, xhr, status)\n    triggerGlobal(settings, context, 'ajaxComplete', [xhr, settings])\n    ajaxStop(settings)\n  }\n\n  // Empty function, used as default callback\n  function empty() {}\n\n  $.ajaxJSONP = function(options){\n    var callbackName = 'jsonp' + (++jsonpID),\n      script = document.createElement('script'),\n      abort = function(){\n        $(script).remove()\n        if (callbackName in window) window[callbackName] = empty\n        ajaxComplete('abort', xhr, options)\n      },\n      xhr = { abort: abort }, abortTimeout\n\n    if (options.error) script.onerror = function() {\n      xhr.abort()\n      options.error()\n    }\n\n    window[callbackName] = function(data){\n      clearTimeout(abortTimeout)\n      $(script).remove()\n      delete window[callbackName]\n      ajaxSuccess(data, xhr, options)\n    }\n\n    serializeData(options)\n    script.src = options.url.replace(/=\\?/, '=' + callbackName)\n    $('head').append(script)\n\n    if (options.timeout > 0) abortTimeout = setTimeout(function(){\n        xhr.abort()\n        ajaxComplete('timeout', xhr, options)\n      }, options.timeout)\n\n    return xhr\n  }\n\n  $.ajaxSettings = {\n    // Default type of request\n    type: 'GET',\n    // Callback that is executed before request\n    beforeSend: empty,\n    // Callback that is executed if the request succeeds\n    success: empty,\n    // Callback that is executed the the server drops error\n    error: empty,\n    // Callback that is executed on request complete (both: error and success)\n    complete: empty,\n    // The context for the callbacks\n    context: null,\n    // Whether to trigger \"global\" Ajax events\n    global: true,\n    // Transport\n    xhr: function () {\n      return new window.XMLHttpRequest()\n    },\n    // MIME types mapping\n    accepts: {\n      script: 'text/javascript, application/javascript',\n      json:   jsonType,\n      xml:    'application/xml, text/xml',\n      html:   htmlType,\n      text:   'text/plain'\n    },\n    // Whether the request is to another domain\n    crossDomain: false,\n    // Default timeout\n    timeout: 0\n  }\n\n  function mimeToDataType(mime) {\n    return mime && ( mime == htmlType ? 'html' :\n      mime == jsonType ? 'json' :\n      scriptTypeRE.test(mime) ? 'script' :\n      xmlTypeRE.test(mime) && 'xml' ) || 'text'\n  }\n\n  function appendQuery(url, query) {\n    return (url + '&' + query).replace(/[&?]{1,2}/, '?')\n  }\n\n  // serialize payload and append it to the URL for GET requests\n  function serializeData(options) {\n    if (isObject(options.data)) options.data = $.param(options.data)\n    if (options.data && (!options.type || options.type.toUpperCase() == 'GET'))\n      options.url = appendQuery(options.url, options.data)\n  }\n\n  $.ajax = function(options){\n    var settings = $.extend({}, options || {})\n    for (key in $.ajaxSettings) if (settings[key] === undefined) settings[key] = $.ajaxSettings[key]\n\n    ajaxStart(settings)\n\n    if (!settings.crossDomain) settings.crossDomain = /^([\\w-]+:)?\\/\\/([^\\/]+)/.test(settings.url) &&\n      RegExp.$2 != window.location.host\n\n    var dataType = settings.dataType, hasPlaceholder = /=\\?/.test(settings.url)\n    if (dataType == 'jsonp' || hasPlaceholder) {\n      if (!hasPlaceholder) settings.url = appendQuery(settings.url, 'callback=?')\n      return $.ajaxJSONP(settings)\n    }\n\n    if (!settings.url) settings.url = window.location.toString()\n    serializeData(settings)\n\n    var mime = settings.accepts[dataType],\n        baseHeaders = { },\n        protocol = /^([\\w-]+:)\\/\\//.test(settings.url) ? RegExp.$1 : window.location.protocol,\n        xhr = $.ajaxSettings.xhr(), abortTimeout\n\n    if (!settings.crossDomain) baseHeaders['X-Requested-With'] = 'XMLHttpRequest'\n    if (mime) {\n      baseHeaders['Accept'] = mime\n      if (mime.indexOf(',') > -1) mime = mime.split(',', 2)[0]\n      xhr.overrideMimeType && xhr.overrideMimeType(mime)\n    }\n    if (settings.contentType || (settings.data && settings.type.toUpperCase() != 'GET'))\n      baseHeaders['Content-Type'] = (settings.contentType || 'application/x-www-form-urlencoded')\n    settings.headers = $.extend(baseHeaders, settings.headers || {})\n\n    xhr.onreadystatechange = function(){\n      if (xhr.readyState == 4) {\n        clearTimeout(abortTimeout)\n        var result, error = false\n        if ((xhr.status >= 200 && xhr.status < 300) || xhr.status == 304 || (xhr.status == 0 && protocol == 'file:')) {\n          dataType = dataType || mimeToDataType(xhr.getResponseHeader('content-type'))\n          result = xhr.responseText\n\n          try {\n            if (dataType == 'script')    (1,eval)(result)\n            else if (dataType == 'xml')  result = xhr.responseXML\n            else if (dataType == 'json') result = blankRE.test(result) ? null : JSON.parse(result)\n          } catch (e) { error = e }\n\n          if (error) ajaxError(error, 'parsererror', xhr, settings)\n          else ajaxSuccess(result, xhr, settings)\n        } else {\n          ajaxError(null, 'error', xhr, settings)\n        }\n      }\n    }\n\n    var async = 'async' in settings ? settings.async : true\n    xhr.open(settings.type, settings.url, async)\n\n    for (name in settings.headers) xhr.setRequestHeader(name, settings.headers[name])\n\n    if (ajaxBeforeSend(xhr, settings) === false) {\n      xhr.abort()\n      return false\n    }\n\n    if (settings.timeout > 0) abortTimeout = setTimeout(function(){\n        xhr.onreadystatechange = empty\n        xhr.abort()\n        ajaxError(null, 'timeout', xhr, settings)\n      }, settings.timeout)\n\n    // avoid sending empty string (#319)\n    xhr.send(settings.data ? settings.data : null)\n    return xhr\n  }\n\n  $.get = function(url, success){ return $.ajax({ url: url, success: success }) }\n\n  $.post = function(url, data, success, dataType){\n    if ($.isFunction(data)) dataType = dataType || success, success = data, data = null\n    return $.ajax({ type: 'POST', url: url, data: data, success: success, dataType: dataType })\n  }\n\n  $.getJSON = function(url, success){\n    return $.ajax({ url: url, success: success, dataType: 'json' })\n  }\n\n  $.fn.load = function(url, success){\n    if (!this.length) return this\n    var self = this, parts = url.split(/\\s/), selector\n    if (parts.length > 1) url = parts[0], selector = parts[1]\n    $.get(url, function(response){\n      self.html(selector ?\n        $(document.createElement('div')).html(response.replace(rscript, \"\")).find(selector).html()\n        : response)\n      success && success.call(self)\n    })\n    return this\n  }\n\n  var escape = encodeURIComponent\n\n  function serialize(params, obj, traditional, scope){\n    var array = $.isArray(obj)\n    $.each(obj, function(key, value) {\n      if (scope) key = traditional ? scope : scope + '[' + (array ? '' : key) + ']'\n      // handle data in serializeArray() format\n      if (!scope && array) params.add(value.name, value.value)\n      // recurse into nested objects\n      else if (traditional ? $.isArray(value) : isObject(value))\n        serialize(params, value, traditional, key)\n      else params.add(key, value)\n    })\n  }\n\n  $.param = function(obj, traditional){\n    var params = []\n    params.add = function(k, v){ this.push(escape(k) + '=' + escape(v)) }\n    serialize(params, obj, traditional)\n    return params.join('&').replace('%20', '+')\n  }\n})(Zepto)\n//     Zepto.js\n//     (c) 2010-2012 Thomas Fuchs\n//     Zepto.js may be freely distributed under the MIT license.\n\n;(function ($) {\n  $.fn.serializeArray = function () {\n    var result = [], el\n    $( Array.prototype.slice.call(this.get(0).elements) ).each(function () {\n      el = $(this)\n      var type = el.attr('type')\n      if (this.nodeName.toLowerCase() != 'fieldset' &&\n        !this.disabled && type != 'submit' && type != 'reset' && type != 'button' &&\n        ((type != 'radio' && type != 'checkbox') || this.checked))\n        result.push({\n          name: el.attr('name'),\n          value: el.val()\n        })\n    })\n    return result\n  }\n\n  $.fn.serialize = function () {\n    var result = []\n    this.serializeArray().forEach(function (elm) {\n      result.push( encodeURIComponent(elm.name) + '=' + encodeURIComponent(elm.value) )\n    })\n    return result.join('&')\n  }\n\n  $.fn.submit = function (callback) {\n    if (callback) this.bind('submit', callback)\n    else if (this.length) {\n      var event = $.Event('submit')\n      this.eq(0).trigger(event)\n      if (!event.defaultPrevented) this.get(0).submit()\n    }\n    return this\n  }\n\n})(Zepto)\n\nmodule.exports = Zepto;\n\n})();//@ sourceURL=component-zepto/index.js"
-));
-require.register("component-stack/index.js", Function("exports, require, module",
-"\n/**\n * Expose `stack()`.\n */\n\nmodule.exports = stack;\n\n/**\n * Return the stack.\n *\n * @return {Array}\n * @api public\n */\n\nfunction stack() {\n  var orig = Error.prepareStackTrace;\n  Error.prepareStackTrace = function(_, stack){ return stack; };\n  var err = new Error;\n  Error.captureStackTrace(err, arguments.callee);\n  var stack = err.stack;\n  Error.prepareStackTrace = orig;\n  return stack;\n}//@ sourceURL=component-stack/index.js"
-));
-require.register("component-assert/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar stack = require('stack');\n\n/**\n * Load contents of `script`.\n *\n * @param {String} script\n * @return {String}\n * @api private\n */\n\nfunction getScript(script) {\n  var xhr = new XMLHttpRequest;\n  xhr.open('GET', script, false);\n  xhr.send(null);\n  return xhr.responseText;\n}\n\n/**\n * Assert `expr` with optional failure `msg`.\n *\n * @param {Mixed} expr\n * @param {String} [msg]\n * @api public\n */\n\nmodule.exports = function(expr, msg){\n  if (expr) return;\n  if (!msg) {\n    if (Error.captureStackTrace) {\n      var callsite = stack()[1];\n      var fn = callsite.fun.toString();\n      var file = callsite.getFileName();\n      var line = callsite.getLineNumber() - 1;\n      var col = callsite.getColumnNumber() - 1;\n      var src = getScript(file);\n      line = src.split('\\n')[line].slice(col);\n      expr = line.match(/assert\\((.*)\\)/)[1].trim();\n      msg = expr;\n    } else {\n      msg = 'assertion failed';\n    }\n  }\n\n  throw new Error(msg);\n};//@ sourceURL=component-assert/index.js"
-));
-require.register("component-moment/index.js", Function("exports, require, module",
-"// moment.js\n// version : 2.0.0\n// author : Tim Wood\n// license : MIT\n// momentjs.com\n\n(function (undefined) {\n\n    /************************************\n        Constants\n    ************************************/\n\n    var moment,\n        VERSION = \"2.0.0\",\n        round = Math.round, i,\n        // internal storage for language config files\n        languages = {},\n\n        // check for nodeJS\n        hasModule = (typeof module !== 'undefined' && module.exports),\n\n        // ASP.NET json date format regex\n        aspNetJsonRegex = /^\\/?Date\\((\\-?\\d+)/i,\n\n        // format tokens\n        formattingTokens = /(\\[[^\\[]*\\])|(\\\\)?(Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|YYYYY|YYYY|YY|a|A|hh?|HH?|mm?|ss?|SS?S?|X|zz?|ZZ?|.)/g,\n        localFormattingTokens = /(\\[[^\\[]*\\])|(\\\\)?(LT|LL?L?L?|l{1,4})/g,\n\n        // parsing tokens\n        parseMultipleFormatChunker = /([0-9a-zA-Z\\u00A0-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFEF]+)/gi,\n\n        // parsing token regexes\n        parseTokenOneOrTwoDigits = /\\d\\d?/, // 0 - 99\n        parseTokenOneToThreeDigits = /\\d{1,3}/, // 0 - 999\n        parseTokenThreeDigits = /\\d{3}/, // 000 - 999\n        parseTokenFourDigits = /\\d{1,4}/, // 0 - 9999\n        parseTokenSixDigits = /[+\\-]?\\d{1,6}/, // -999,999 - 999,999\n        parseTokenWord = /[0-9]*[a-z\\u00A0-\\u05FF\\u0700-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFEF]+|[\\u0600-\\u06FF]+\\s*?[\\u0600-\\u06FF]+/i, // any word (or two) characters or numbers including two word month in arabic.\n        parseTokenTimezone = /Z|[\\+\\-]\\d\\d:?\\d\\d/i, // +00:00 -00:00 +0000 -0000 or Z\n        parseTokenT = /T/i, // T (ISO seperator)\n        parseTokenTimestampMs = /[\\+\\-]?\\d+(\\.\\d{1,3})?/, // 123456789 123456789.123\n\n        // preliminary iso regex\n        // 0000-00-00 + T + 00 or 00:00 or 00:00:00 or 00:00:00.000 + +00:00 or +0000\n        isoRegex = /^\\s*\\d{4}-\\d\\d-\\d\\d((T| )(\\d\\d(:\\d\\d(:\\d\\d(\\.\\d\\d?\\d?)?)?)?)?([\\+\\-]\\d\\d:?\\d\\d)?)?/,\n        isoFormat = 'YYYY-MM-DDTHH:mm:ssZ',\n\n        // iso time formats and regexes\n        isoTimes = [\n            ['HH:mm:ss.S', /(T| )\\d\\d:\\d\\d:\\d\\d\\.\\d{1,3}/],\n            ['HH:mm:ss', /(T| )\\d\\d:\\d\\d:\\d\\d/],\n            ['HH:mm', /(T| )\\d\\d:\\d\\d/],\n            ['HH', /(T| )\\d\\d/]\n        ],\n\n        // timezone chunker \"+10:00\" > [\"10\", \"00\"] or \"-1530\" > [\"-15\", \"30\"]\n        parseTimezoneChunker = /([\\+\\-]|\\d\\d)/gi,\n\n        // getter and setter names\n        proxyGettersAndSetters = 'Month|Date|Hours|Minutes|Seconds|Milliseconds'.split('|'),\n        unitMillisecondFactors = {\n            'Milliseconds' : 1,\n            'Seconds' : 1e3,\n            'Minutes' : 6e4,\n            'Hours' : 36e5,\n            'Days' : 864e5,\n            'Months' : 2592e6,\n            'Years' : 31536e6\n        },\n\n        // format function strings\n        formatFunctions = {},\n\n        // tokens to ordinalize and pad\n        ordinalizeTokens = 'DDD w W M D d'.split(' '),\n        paddedTokens = 'M D H h m s w W'.split(' '),\n\n        formatTokenFunctions = {\n            M    : function () {\n                return this.month() + 1;\n            },\n            MMM  : function (format) {\n                return this.lang().monthsShort(this, format);\n            },\n            MMMM : function (format) {\n                return this.lang().months(this, format);\n            },\n            D    : function () {\n                return this.date();\n            },\n            DDD  : function () {\n                return this.dayOfYear();\n            },\n            d    : function () {\n                return this.day();\n            },\n            dd   : function (format) {\n                return this.lang().weekdaysMin(this, format);\n            },\n            ddd  : function (format) {\n                return this.lang().weekdaysShort(this, format);\n            },\n            dddd : function (format) {\n                return this.lang().weekdays(this, format);\n            },\n            w    : function () {\n                return this.week();\n            },\n            W    : function () {\n                return this.isoWeek();\n            },\n            YY   : function () {\n                return leftZeroFill(this.year() % 100, 2);\n            },\n            YYYY : function () {\n                return leftZeroFill(this.year(), 4);\n            },\n            YYYYY : function () {\n                return leftZeroFill(this.year(), 5);\n            },\n            a    : function () {\n                return this.lang().meridiem(this.hours(), this.minutes(), true);\n            },\n            A    : function () {\n                return this.lang().meridiem(this.hours(), this.minutes(), false);\n            },\n            H    : function () {\n                return this.hours();\n            },\n            h    : function () {\n                return this.hours() % 12 || 12;\n            },\n            m    : function () {\n                return this.minutes();\n            },\n            s    : function () {\n                return this.seconds();\n            },\n            S    : function () {\n                return ~~(this.milliseconds() / 100);\n            },\n            SS   : function () {\n                return leftZeroFill(~~(this.milliseconds() / 10), 2);\n            },\n            SSS  : function () {\n                return leftZeroFill(this.milliseconds(), 3);\n            },\n            Z    : function () {\n                var a = -this.zone(),\n                    b = \"+\";\n                if (a < 0) {\n                    a = -a;\n                    b = \"-\";\n                }\n                return b + leftZeroFill(~~(a / 60), 2) + \":\" + leftZeroFill(~~a % 60, 2);\n            },\n            ZZ   : function () {\n                var a = -this.zone(),\n                    b = \"+\";\n                if (a < 0) {\n                    a = -a;\n                    b = \"-\";\n                }\n                return b + leftZeroFill(~~(10 * a / 6), 4);\n            },\n            X    : function () {\n                return this.unix();\n            }\n        };\n\n    function padToken(func, count) {\n        return function (a) {\n            return leftZeroFill(func.call(this, a), count);\n        };\n    }\n    function ordinalizeToken(func) {\n        return function (a) {\n            return this.lang().ordinal(func.call(this, a));\n        };\n    }\n\n    while (ordinalizeTokens.length) {\n        i = ordinalizeTokens.pop();\n        formatTokenFunctions[i + 'o'] = ordinalizeToken(formatTokenFunctions[i]);\n    }\n    while (paddedTokens.length) {\n        i = paddedTokens.pop();\n        formatTokenFunctions[i + i] = padToken(formatTokenFunctions[i], 2);\n    }\n    formatTokenFunctions.DDDD = padToken(formatTokenFunctions.DDD, 3);\n\n\n    /************************************\n        Constructors\n    ************************************/\n\n    function Language() {\n\n    }\n\n    // Moment prototype object\n    function Moment(config) {\n        extend(this, config);\n    }\n\n    // Duration Constructor\n    function Duration(duration) {\n        var data = this._data = {},\n            years = duration.years || duration.year || duration.y || 0,\n            months = duration.months || duration.month || duration.M || 0,\n            weeks = duration.weeks || duration.week || duration.w || 0,\n            days = duration.days || duration.day || duration.d || 0,\n            hours = duration.hours || duration.hour || duration.h || 0,\n            minutes = duration.minutes || duration.minute || duration.m || 0,\n            seconds = duration.seconds || duration.second || duration.s || 0,\n            milliseconds = duration.milliseconds || duration.millisecond || duration.ms || 0;\n\n        // representation for dateAddRemove\n        this._milliseconds = milliseconds +\n            seconds * 1e3 + // 1000\n            minutes * 6e4 + // 1000 * 60\n            hours * 36e5; // 1000 * 60 * 60\n        // Because of dateAddRemove treats 24 hours as different from a\n        // day when working around DST, we need to store them separately\n        this._days = days +\n            weeks * 7;\n        // It is impossible translate months into days without knowing\n        // which months you are are talking about, so we have to store\n        // it separately.\n        this._months = months +\n            years * 12;\n\n        // The following code bubbles up values, see the tests for\n        // examples of what that means.\n        data.milliseconds = milliseconds % 1000;\n        seconds += absRound(milliseconds / 1000);\n\n        data.seconds = seconds % 60;\n        minutes += absRound(seconds / 60);\n\n        data.minutes = minutes % 60;\n        hours += absRound(minutes / 60);\n\n        data.hours = hours % 24;\n        days += absRound(hours / 24);\n\n        days += weeks * 7;\n        data.days = days % 30;\n\n        months += absRound(days / 30);\n\n        data.months = months % 12;\n        years += absRound(months / 12);\n\n        data.years = years;\n    }\n\n\n    /************************************\n        Helpers\n    ************************************/\n\n\n    function extend(a, b) {\n        for (var i in b) {\n            if (b.hasOwnProperty(i)) {\n                a[i] = b[i];\n            }\n        }\n        return a;\n    }\n\n    function absRound(number) {\n        if (number < 0) {\n            return Math.ceil(number);\n        } else {\n            return Math.floor(number);\n        }\n    }\n\n    // left zero fill a number\n    // see http://jsperf.com/left-zero-filling for performance comparison\n    function leftZeroFill(number, targetLength) {\n        var output = number + '';\n        while (output.length < targetLength) {\n            output = '0' + output;\n        }\n        return output;\n    }\n\n    // helper function for _.addTime and _.subtractTime\n    function addOrSubtractDurationFromMoment(mom, duration, isAdding) {\n        var ms = duration._milliseconds,\n            d = duration._days,\n            M = duration._months,\n            currentDate;\n\n        if (ms) {\n            mom._d.setTime(+mom + ms * isAdding);\n        }\n        if (d) {\n            mom.date(mom.date() + d * isAdding);\n        }\n        if (M) {\n            currentDate = mom.date();\n            mom.date(1)\n                .month(mom.month() + M * isAdding)\n                .date(Math.min(currentDate, mom.daysInMonth()));\n        }\n    }\n\n    // check if is an array\n    function isArray(input) {\n        return Object.prototype.toString.call(input) === '[object Array]';\n    }\n\n    // compare two arrays, return the number of differences\n    function compareArrays(array1, array2) {\n        var len = Math.min(array1.length, array2.length),\n            lengthDiff = Math.abs(array1.length - array2.length),\n            diffs = 0,\n            i;\n        for (i = 0; i < len; i++) {\n            if (~~array1[i] !== ~~array2[i]) {\n                diffs++;\n            }\n        }\n        return diffs + lengthDiff;\n    }\n\n\n    /************************************\n        Languages\n    ************************************/\n\n\n    Language.prototype = {\n        set : function (config) {\n            var prop, i;\n            for (i in config) {\n                prop = config[i];\n                if (typeof prop === 'function') {\n                    this[i] = prop;\n                } else {\n                    this['_' + i] = prop;\n                }\n            }\n        },\n\n        _months : \"January_February_March_April_May_June_July_August_September_October_November_December\".split(\"_\"),\n        months : function (m) {\n            return this._months[m.month()];\n        },\n\n        _monthsShort : \"Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec\".split(\"_\"),\n        monthsShort : function (m) {\n            return this._monthsShort[m.month()];\n        },\n\n        monthsParse : function (monthName) {\n            var i, mom, regex, output;\n\n            if (!this._monthsParse) {\n                this._monthsParse = [];\n            }\n\n            for (i = 0; i < 12; i++) {\n                // make the regex if we don't have it already\n                if (!this._monthsParse[i]) {\n                    mom = moment([2000, i]);\n                    regex = '^' + this.months(mom, '') + '|^' + this.monthsShort(mom, '');\n                    this._monthsParse[i] = new RegExp(regex.replace('.', ''), 'i');\n                }\n                // test the regex\n                if (this._monthsParse[i].test(monthName)) {\n                    return i;\n                }\n            }\n        },\n\n        _weekdays : \"Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday\".split(\"_\"),\n        weekdays : function (m) {\n            return this._weekdays[m.day()];\n        },\n\n        _weekdaysShort : \"Sun_Mon_Tue_Wed_Thu_Fri_Sat\".split(\"_\"),\n        weekdaysShort : function (m) {\n            return this._weekdaysShort[m.day()];\n        },\n\n        _weekdaysMin : \"Su_Mo_Tu_We_Th_Fr_Sa\".split(\"_\"),\n        weekdaysMin : function (m) {\n            return this._weekdaysMin[m.day()];\n        },\n\n        _longDateFormat : {\n            LT : \"h:mm A\",\n            L : \"MM/DD/YYYY\",\n            LL : \"MMMM D YYYY\",\n            LLL : \"MMMM D YYYY LT\",\n            LLLL : \"dddd, MMMM D YYYY LT\"\n        },\n        longDateFormat : function (key) {\n            var output = this._longDateFormat[key];\n            if (!output && this._longDateFormat[key.toUpperCase()]) {\n                output = this._longDateFormat[key.toUpperCase()].replace(/MMMM|MM|DD|dddd/g, function (val) {\n                    return val.slice(1);\n                });\n                this._longDateFormat[key] = output;\n            }\n            return output;\n        },\n\n        meridiem : function (hours, minutes, isLower) {\n            if (hours > 11) {\n                return isLower ? 'pm' : 'PM';\n            } else {\n                return isLower ? 'am' : 'AM';\n            }\n        },\n\n        _calendar : {\n            sameDay : '[Today at] LT',\n            nextDay : '[Tomorrow at] LT',\n            nextWeek : 'dddd [at] LT',\n            lastDay : '[Yesterday at] LT',\n            lastWeek : '[last] dddd [at] LT',\n            sameElse : 'L'\n        },\n        calendar : function (key, mom) {\n            var output = this._calendar[key];\n            return typeof output === 'function' ? output.apply(mom) : output;\n        },\n\n        _relativeTime : {\n            future : \"in %s\",\n            past : \"%s ago\",\n            s : \"a few seconds\",\n            m : \"a minute\",\n            mm : \"%d minutes\",\n            h : \"an hour\",\n            hh : \"%d hours\",\n            d : \"a day\",\n            dd : \"%d days\",\n            M : \"a month\",\n            MM : \"%d months\",\n            y : \"a year\",\n            yy : \"%d years\"\n        },\n        relativeTime : function (number, withoutSuffix, string, isFuture) {\n            var output = this._relativeTime[string];\n            return (typeof output === 'function') ?\n                output(number, withoutSuffix, string, isFuture) :\n                output.replace(/%d/i, number);\n        },\n        pastFuture : function (diff, output) {\n            var format = this._relativeTime[diff > 0 ? 'future' : 'past'];\n            return typeof format === 'function' ? format(output) : format.replace(/%s/i, output);\n        },\n\n        ordinal : function (number) {\n            return this._ordinal.replace(\"%d\", number);\n        },\n        _ordinal : \"%d\",\n\n        preparse : function (string) {\n            return string;\n        },\n\n        postformat : function (string) {\n            return string;\n        },\n\n        week : function (mom) {\n            return weekOfYear(mom, this._week.dow, this._week.doy);\n        },\n        _week : {\n            dow : 0, // Sunday is the first day of the week.\n            doy : 6  // The week that contains Jan 1st is the first week of the year.\n        }\n    };\n\n    // Loads a language definition into the `languages` cache.  The function\n    // takes a key and optionally values.  If not in the browser and no values\n    // are provided, it will load the language file module.  As a convenience,\n    // this function also returns the language values.\n    function loadLang(key, values) {\n        values.abbr = key;\n        if (!languages[key]) {\n            languages[key] = new Language();\n        }\n        languages[key].set(values);\n        return languages[key];\n    }\n\n    // Determines which language definition to use and returns it.\n    //\n    // With no parameters, it will return the global language.  If you\n    // pass in a language key, such as 'en', it will return the\n    // definition for 'en', so long as 'en' has already been loaded using\n    // moment.lang.\n    function getLangDefinition(key) {\n        if (!key) {\n            return moment.fn._lang;\n        }\n        if (!languages[key] && hasModule) {\n            require('./lang/' + key);\n        }\n        return languages[key];\n    }\n\n\n    /************************************\n        Formatting\n    ************************************/\n\n\n    function removeFormattingTokens(input) {\n        if (input.match(/\\[.*\\]/)) {\n            return input.replace(/^\\[|\\]$/g, \"\");\n        }\n        return input.replace(/\\\\/g, \"\");\n    }\n\n    function makeFormatFunction(format) {\n        var array = format.match(formattingTokens), i, length;\n\n        for (i = 0, length = array.length; i < length; i++) {\n            if (formatTokenFunctions[array[i]]) {\n                array[i] = formatTokenFunctions[array[i]];\n            } else {\n                array[i] = removeFormattingTokens(array[i]);\n            }\n        }\n\n        return function (mom) {\n            var output = \"\";\n            for (i = 0; i < length; i++) {\n                output += typeof array[i].call === 'function' ? array[i].call(mom, format) : array[i];\n            }\n            return output;\n        };\n    }\n\n    // format date using native date object\n    function formatMoment(m, format) {\n        var i = 5;\n\n        function replaceLongDateFormatTokens(input) {\n            return m.lang().longDateFormat(input) || input;\n        }\n\n        while (i-- && localFormattingTokens.test(format)) {\n            format = format.replace(localFormattingTokens, replaceLongDateFormatTokens);\n        }\n\n        if (!formatFunctions[format]) {\n            formatFunctions[format] = makeFormatFunction(format);\n        }\n\n        return formatFunctions[format](m);\n    }\n\n\n    /************************************\n        Parsing\n    ************************************/\n\n\n    // get the regex to find the next token\n    function getParseRegexForToken(token) {\n        switch (token) {\n        case 'DDDD':\n            return parseTokenThreeDigits;\n        case 'YYYY':\n            return parseTokenFourDigits;\n        case 'YYYYY':\n            return parseTokenSixDigits;\n        case 'S':\n        case 'SS':\n        case 'SSS':\n        case 'DDD':\n            return parseTokenOneToThreeDigits;\n        case 'MMM':\n        case 'MMMM':\n        case 'dd':\n        case 'ddd':\n        case 'dddd':\n        case 'a':\n        case 'A':\n            return parseTokenWord;\n        case 'X':\n            return parseTokenTimestampMs;\n        case 'Z':\n        case 'ZZ':\n            return parseTokenTimezone;\n        case 'T':\n            return parseTokenT;\n        case 'MM':\n        case 'DD':\n        case 'YY':\n        case 'HH':\n        case 'hh':\n        case 'mm':\n        case 'ss':\n        case 'M':\n        case 'D':\n        case 'd':\n        case 'H':\n        case 'h':\n        case 'm':\n        case 's':\n            return parseTokenOneOrTwoDigits;\n        default :\n            return new RegExp(token.replace('\\\\', ''));\n        }\n    }\n\n    // function to convert string input to date\n    function addTimeToArrayFromToken(token, input, config) {\n        var a, b,\n            datePartArray = config._a;\n\n        switch (token) {\n        // MONTH\n        case 'M' : // fall through to MM\n        case 'MM' :\n            datePartArray[1] = (input == null) ? 0 : ~~input - 1;\n            break;\n        case 'MMM' : // fall through to MMMM\n        case 'MMMM' :\n            a = getLangDefinition(config._l).monthsParse(input);\n            // if we didn't find a month name, mark the date as invalid.\n            if (a != null) {\n                datePartArray[1] = a;\n            } else {\n                config._isValid = false;\n            }\n            break;\n        // DAY OF MONTH\n        case 'D' : // fall through to DDDD\n        case 'DD' : // fall through to DDDD\n        case 'DDD' : // fall through to DDDD\n        case 'DDDD' :\n            if (input != null) {\n                datePartArray[2] = ~~input;\n            }\n            break;\n        // YEAR\n        case 'YY' :\n            datePartArray[0] = ~~input + (~~input > 68 ? 1900 : 2000);\n            break;\n        case 'YYYY' :\n        case 'YYYYY' :\n            datePartArray[0] = ~~input;\n            break;\n        // AM / PM\n        case 'a' : // fall through to A\n        case 'A' :\n            config._isPm = ((input + '').toLowerCase() === 'pm');\n            break;\n        // 24 HOUR\n        case 'H' : // fall through to hh\n        case 'HH' : // fall through to hh\n        case 'h' : // fall through to hh\n        case 'hh' :\n            datePartArray[3] = ~~input;\n            break;\n        // MINUTE\n        case 'm' : // fall through to mm\n        case 'mm' :\n            datePartArray[4] = ~~input;\n            break;\n        // SECOND\n        case 's' : // fall through to ss\n        case 'ss' :\n            datePartArray[5] = ~~input;\n            break;\n        // MILLISECOND\n        case 'S' :\n        case 'SS' :\n        case 'SSS' :\n            datePartArray[6] = ~~ (('0.' + input) * 1000);\n            break;\n        // UNIX TIMESTAMP WITH MS\n        case 'X':\n            config._d = new Date(parseFloat(input) * 1000);\n            break;\n        // TIMEZONE\n        case 'Z' : // fall through to ZZ\n        case 'ZZ' :\n            config._useUTC = true;\n            a = (input + '').match(parseTimezoneChunker);\n            if (a && a[1]) {\n                config._tzh = ~~a[1];\n            }\n            if (a && a[2]) {\n                config._tzm = ~~a[2];\n            }\n            // reverse offsets\n            if (a && a[0] === '+') {\n                config._tzh = -config._tzh;\n                config._tzm = -config._tzm;\n            }\n            break;\n        }\n\n        // if the input is null, the date is not valid\n        if (input == null) {\n            config._isValid = false;\n        }\n    }\n\n    // convert an array to a date.\n    // the array should mirror the parameters below\n    // note: all values past the year are optional and will default to the lowest possible value.\n    // [year, month, day , hour, minute, second, millisecond]\n    function dateFromArray(config) {\n        var i, date, input = [];\n\n        if (config._d) {\n            return;\n        }\n\n        for (i = 0; i < 7; i++) {\n            config._a[i] = input[i] = (config._a[i] == null) ? (i === 2 ? 1 : 0) : config._a[i];\n        }\n\n        // add the offsets to the time to be parsed so that we can have a clean array for checking isValid\n        input[3] += config._tzh || 0;\n        input[4] += config._tzm || 0;\n\n        date = new Date(0);\n\n        if (config._useUTC) {\n            date.setUTCFullYear(input[0], input[1], input[2]);\n            date.setUTCHours(input[3], input[4], input[5], input[6]);\n        } else {\n            date.setFullYear(input[0], input[1], input[2]);\n            date.setHours(input[3], input[4], input[5], input[6]);\n        }\n\n        config._d = date;\n    }\n\n    // date from string and format string\n    function makeDateFromStringAndFormat(config) {\n        // This array is used to make a Date, either with `new Date` or `Date.UTC`\n        var tokens = config._f.match(formattingTokens),\n            string = config._i,\n            i, parsedInput;\n\n        config._a = [];\n\n        for (i = 0; i < tokens.length; i++) {\n            parsedInput = (getParseRegexForToken(tokens[i]).exec(string) || [])[0];\n            if (parsedInput) {\n                string = string.slice(string.indexOf(parsedInput) + parsedInput.length);\n            }\n            // don't parse if its not a known token\n            if (formatTokenFunctions[tokens[i]]) {\n                addTimeToArrayFromToken(tokens[i], parsedInput, config);\n            }\n        }\n        // handle am pm\n        if (config._isPm && config._a[3] < 12) {\n            config._a[3] += 12;\n        }\n        // if is 12 am, change hours to 0\n        if (config._isPm === false && config._a[3] === 12) {\n            config._a[3] = 0;\n        }\n        // return\n        dateFromArray(config);\n    }\n\n    // date from string and array of format strings\n    function makeDateFromStringAndArray(config) {\n        var tempConfig,\n            tempMoment,\n            bestMoment,\n\n            scoreToBeat = 99,\n            i,\n            currentScore;\n\n        for (i = config._f.length; i > 0; i--) {\n            tempConfig = extend({}, config);\n            tempConfig._f = config._f[i - 1];\n            makeDateFromStringAndFormat(tempConfig);\n            tempMoment = new Moment(tempConfig);\n\n            if (tempMoment.isValid()) {\n                bestMoment = tempMoment;\n                break;\n            }\n\n            currentScore = compareArrays(tempConfig._a, tempMoment.toArray());\n\n            if (currentScore < scoreToBeat) {\n                scoreToBeat = currentScore;\n                bestMoment = tempMoment;\n            }\n        }\n\n        extend(config, bestMoment);\n    }\n\n    // date from iso format\n    function makeDateFromString(config) {\n        var i,\n            string = config._i;\n        if (isoRegex.exec(string)) {\n            config._f = 'YYYY-MM-DDT';\n            for (i = 0; i < 4; i++) {\n                if (isoTimes[i][1].exec(string)) {\n                    config._f += isoTimes[i][0];\n                    break;\n                }\n            }\n            if (parseTokenTimezone.exec(string)) {\n                config._f += \" Z\";\n            }\n            makeDateFromStringAndFormat(config);\n        } else {\n            config._d = new Date(string);\n        }\n    }\n\n    function makeDateFromInput(config) {\n        var input = config._i,\n            matched = aspNetJsonRegex.exec(input);\n\n        if (input === undefined) {\n            config._d = new Date();\n        } else if (matched) {\n            config._d = new Date(+matched[1]);\n        } else if (typeof input === 'string') {\n            makeDateFromString(config);\n        } else if (isArray(input)) {\n            config._a = input.slice(0);\n            dateFromArray(config);\n        } else {\n            config._d = input instanceof Date ? new Date(+input) : new Date(input);\n        }\n    }\n\n\n    /************************************\n        Relative Time\n    ************************************/\n\n\n    // helper function for moment.fn.from, moment.fn.fromNow, and moment.duration.fn.humanize\n    function substituteTimeAgo(string, number, withoutSuffix, isFuture, lang) {\n        return lang.relativeTime(number || 1, !!withoutSuffix, string, isFuture);\n    }\n\n    function relativeTime(milliseconds, withoutSuffix, lang) {\n        var seconds = round(Math.abs(milliseconds) / 1000),\n            minutes = round(seconds / 60),\n            hours = round(minutes / 60),\n            days = round(hours / 24),\n            years = round(days / 365),\n            args = seconds < 45 && ['s', seconds] ||\n                minutes === 1 && ['m'] ||\n                minutes < 45 && ['mm', minutes] ||\n                hours === 1 && ['h'] ||\n                hours < 22 && ['hh', hours] ||\n                days === 1 && ['d'] ||\n                days <= 25 && ['dd', days] ||\n                days <= 45 && ['M'] ||\n                days < 345 && ['MM', round(days / 30)] ||\n                years === 1 && ['y'] || ['yy', years];\n        args[2] = withoutSuffix;\n        args[3] = milliseconds > 0;\n        args[4] = lang;\n        return substituteTimeAgo.apply({}, args);\n    }\n\n\n    /************************************\n        Week of Year\n    ************************************/\n\n\n    // firstDayOfWeek       0 = sun, 6 = sat\n    //                      the day of the week that starts the week\n    //                      (usually sunday or monday)\n    // firstDayOfWeekOfYear 0 = sun, 6 = sat\n    //                      the first week is the week that contains the first\n    //                      of this day of the week\n    //                      (eg. ISO weeks use thursday (4))\n    function weekOfYear(mom, firstDayOfWeek, firstDayOfWeekOfYear) {\n        var end = firstDayOfWeekOfYear - firstDayOfWeek,\n            daysToDayOfWeek = firstDayOfWeekOfYear - mom.day();\n\n\n        if (daysToDayOfWeek > end) {\n            daysToDayOfWeek -= 7;\n        }\n\n        if (daysToDayOfWeek < end - 7) {\n            daysToDayOfWeek += 7;\n        }\n\n        return Math.ceil(moment(mom).add('d', daysToDayOfWeek).dayOfYear() / 7);\n    }\n\n\n    /************************************\n        Top Level Functions\n    ************************************/\n\n    function makeMoment(config) {\n        var input = config._i,\n            format = config._f;\n\n        if (input === null || input === '') {\n            return null;\n        }\n\n        if (typeof input === 'string') {\n            config._i = input = getLangDefinition().preparse(input);\n        }\n\n        if (moment.isMoment(input)) {\n            config = extend({}, input);\n            config._d = new Date(+input._d);\n        } else if (format) {\n            if (isArray(format)) {\n                makeDateFromStringAndArray(config);\n            } else {\n                makeDateFromStringAndFormat(config);\n            }\n        } else {\n            makeDateFromInput(config);\n        }\n\n        return new Moment(config);\n    }\n\n    moment = function (input, format, lang) {\n        return makeMoment({\n            _i : input,\n            _f : format,\n            _l : lang,\n            _isUTC : false\n        });\n    };\n\n    // creating with utc\n    moment.utc = function (input, format, lang) {\n        return makeMoment({\n            _useUTC : true,\n            _isUTC : true,\n            _l : lang,\n            _i : input,\n            _f : format\n        });\n    };\n\n    // creating with unix timestamp (in seconds)\n    moment.unix = function (input) {\n        return moment(input * 1000);\n    };\n\n    // duration\n    moment.duration = function (input, key) {\n        var isDuration = moment.isDuration(input),\n            isNumber = (typeof input === 'number'),\n            duration = (isDuration ? input._data : (isNumber ? {} : input)),\n            ret;\n\n        if (isNumber) {\n            if (key) {\n                duration[key] = input;\n            } else {\n                duration.milliseconds = input;\n            }\n        }\n\n        ret = new Duration(duration);\n\n        if (isDuration && input.hasOwnProperty('_lang')) {\n            ret._lang = input._lang;\n        }\n\n        return ret;\n    };\n\n    // version number\n    moment.version = VERSION;\n\n    // default format\n    moment.defaultFormat = isoFormat;\n\n    // This function will load languages and then set the global language.  If\n    // no arguments are passed in, it will simply return the current global\n    // language key.\n    moment.lang = function (key, values) {\n        var i;\n\n        if (!key) {\n            return moment.fn._lang._abbr;\n        }\n        if (values) {\n            loadLang(key, values);\n        } else if (!languages[key]) {\n            getLangDefinition(key);\n        }\n        moment.duration.fn._lang = moment.fn._lang = getLangDefinition(key);\n    };\n\n    // returns language data\n    moment.langData = function (key) {\n        if (key && key._lang && key._lang._abbr) {\n            key = key._lang._abbr;\n        }\n        return getLangDefinition(key);\n    };\n\n    // compare moment object\n    moment.isMoment = function (obj) {\n        return obj instanceof Moment;\n    };\n\n    // for typechecking Duration objects\n    moment.isDuration = function (obj) {\n        return obj instanceof Duration;\n    };\n\n\n    /************************************\n        Moment Prototype\n    ************************************/\n\n\n    moment.fn = Moment.prototype = {\n\n        clone : function () {\n            return moment(this);\n        },\n\n        valueOf : function () {\n            return +this._d;\n        },\n\n        unix : function () {\n            return Math.floor(+this._d / 1000);\n        },\n\n        toString : function () {\n            return this.format(\"ddd MMM DD YYYY HH:mm:ss [GMT]ZZ\");\n        },\n\n        toDate : function () {\n            return this._d;\n        },\n\n        toJSON : function () {\n            return moment.utc(this).format('YYYY-MM-DD[T]HH:mm:ss.SSS[Z]');\n        },\n\n        toArray : function () {\n            var m = this;\n            return [\n                m.year(),\n                m.month(),\n                m.date(),\n                m.hours(),\n                m.minutes(),\n                m.seconds(),\n                m.milliseconds()\n            ];\n        },\n\n        isValid : function () {\n            if (this._isValid == null) {\n                if (this._a) {\n                    this._isValid = !compareArrays(this._a, (this._isUTC ? moment.utc(this._a) : moment(this._a)).toArray());\n                } else {\n                    this._isValid = !isNaN(this._d.getTime());\n                }\n            }\n            return !!this._isValid;\n        },\n\n        utc : function () {\n            this._isUTC = true;\n            return this;\n        },\n\n        local : function () {\n            this._isUTC = false;\n            return this;\n        },\n\n        format : function (inputString) {\n            var output = formatMoment(this, inputString || moment.defaultFormat);\n            return this.lang().postformat(output);\n        },\n\n        add : function (input, val) {\n            var dur;\n            // switch args to support add('s', 1) and add(1, 's')\n            if (typeof input === 'string') {\n                dur = moment.duration(+val, input);\n            } else {\n                dur = moment.duration(input, val);\n            }\n            addOrSubtractDurationFromMoment(this, dur, 1);\n            return this;\n        },\n\n        subtract : function (input, val) {\n            var dur;\n            // switch args to support subtract('s', 1) and subtract(1, 's')\n            if (typeof input === 'string') {\n                dur = moment.duration(+val, input);\n            } else {\n                dur = moment.duration(input, val);\n            }\n            addOrSubtractDurationFromMoment(this, dur, -1);\n            return this;\n        },\n\n        diff : function (input, units, asFloat) {\n            var that = this._isUTC ? moment(input).utc() : moment(input).local(),\n                zoneDiff = (this.zone() - that.zone()) * 6e4,\n                diff, output;\n\n            if (units) {\n                // standardize on singular form\n                units = units.replace(/s$/, '');\n            }\n\n            if (units === 'year' || units === 'month') {\n                diff = (this.daysInMonth() + that.daysInMonth()) * 432e5; // 24 * 60 * 60 * 1000 / 2\n                output = ((this.year() - that.year()) * 12) + (this.month() - that.month());\n                output += ((this - moment(this).startOf('month')) - (that - moment(that).startOf('month'))) / diff;\n                if (units === 'year') {\n                    output = output / 12;\n                }\n            } else {\n                diff = (this - that) - zoneDiff;\n                output = units === 'second' ? diff / 1e3 : // 1000\n                    units === 'minute' ? diff / 6e4 : // 1000 * 60\n                    units === 'hour' ? diff / 36e5 : // 1000 * 60 * 60\n                    units === 'day' ? diff / 864e5 : // 1000 * 60 * 60 * 24\n                    units === 'week' ? diff / 6048e5 : // 1000 * 60 * 60 * 24 * 7\n                    diff;\n            }\n            return asFloat ? output : absRound(output);\n        },\n\n        from : function (time, withoutSuffix) {\n            return moment.duration(this.diff(time)).lang(this.lang()._abbr).humanize(!withoutSuffix);\n        },\n\n        fromNow : function (withoutSuffix) {\n            return this.from(moment(), withoutSuffix);\n        },\n\n        calendar : function () {\n            var diff = this.diff(moment().startOf('day'), 'days', true),\n                format = diff < -6 ? 'sameElse' :\n                diff < -1 ? 'lastWeek' :\n                diff < 0 ? 'lastDay' :\n                diff < 1 ? 'sameDay' :\n                diff < 2 ? 'nextDay' :\n                diff < 7 ? 'nextWeek' : 'sameElse';\n            return this.format(this.lang().calendar(format, this));\n        },\n\n        isLeapYear : function () {\n            var year = this.year();\n            return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;\n        },\n\n        isDST : function () {\n            return (this.zone() < moment([this.year()]).zone() ||\n                this.zone() < moment([this.year(), 5]).zone());\n        },\n\n        day : function (input) {\n            var day = this._isUTC ? this._d.getUTCDay() : this._d.getDay();\n            return input == null ? day :\n                this.add({ d : input - day });\n        },\n\n        startOf: function (units) {\n            units = units.replace(/s$/, '');\n            // the following switch intentionally omits break keywords\n            // to utilize falling through the cases.\n            switch (units) {\n            case 'year':\n                this.month(0);\n                /* falls through */\n            case 'month':\n                this.date(1);\n                /* falls through */\n            case 'week':\n            case 'day':\n                this.hours(0);\n                /* falls through */\n            case 'hour':\n                this.minutes(0);\n                /* falls through */\n            case 'minute':\n                this.seconds(0);\n                /* falls through */\n            case 'second':\n                this.milliseconds(0);\n                /* falls through */\n            }\n\n            // weeks are a special case\n            if (units === 'week') {\n                this.day(0);\n            }\n\n            return this;\n        },\n\n        endOf: function (units) {\n            return this.startOf(units).add(units.replace(/s?$/, 's'), 1).subtract('ms', 1);\n        },\n\n        isAfter: function (input, units) {\n            units = typeof units !== 'undefined' ? units : 'millisecond';\n            return +this.clone().startOf(units) > +moment(input).startOf(units);\n        },\n\n        isBefore: function (input, units) {\n            units = typeof units !== 'undefined' ? units : 'millisecond';\n            return +this.clone().startOf(units) < +moment(input).startOf(units);\n        },\n\n        isSame: function (input, units) {\n            units = typeof units !== 'undefined' ? units : 'millisecond';\n            return +this.clone().startOf(units) === +moment(input).startOf(units);\n        },\n\n        zone : function () {\n            return this._isUTC ? 0 : this._d.getTimezoneOffset();\n        },\n\n        daysInMonth : function () {\n            return moment.utc([this.year(), this.month() + 1, 0]).date();\n        },\n\n        dayOfYear : function (input) {\n            var dayOfYear = round((moment(this).startOf('day') - moment(this).startOf('year')) / 864e5) + 1;\n            return input == null ? dayOfYear : this.add(\"d\", (input - dayOfYear));\n        },\n\n        isoWeek : function (input) {\n            var week = weekOfYear(this, 1, 4);\n            return input == null ? week : this.add(\"d\", (input - week) * 7);\n        },\n\n        week : function (input) {\n            var week = this.lang().week(this);\n            return input == null ? week : this.add(\"d\", (input - week) * 7);\n        },\n\n        // If passed a language key, it will set the language for this\n        // instance.  Otherwise, it will return the language configuration\n        // variables for this instance.\n        lang : function (key) {\n            if (key === undefined) {\n                return this._lang;\n            } else {\n                this._lang = getLangDefinition(key);\n                return this;\n            }\n        }\n    };\n\n    // helper for adding shortcuts\n    function makeGetterAndSetter(name, key) {\n        moment.fn[name] = moment.fn[name + 's'] = function (input) {\n            var utc = this._isUTC ? 'UTC' : '';\n            if (input != null) {\n                this._d['set' + utc + key](input);\n                return this;\n            } else {\n                return this._d['get' + utc + key]();\n            }\n        };\n    }\n\n    // loop through and add shortcuts (Month, Date, Hours, Minutes, Seconds, Milliseconds)\n    for (i = 0; i < proxyGettersAndSetters.length; i ++) {\n        makeGetterAndSetter(proxyGettersAndSetters[i].toLowerCase().replace(/s$/, ''), proxyGettersAndSetters[i]);\n    }\n\n    // add shortcut for year (uses different syntax than the getter/setter 'year' == 'FullYear')\n    makeGetterAndSetter('year', 'FullYear');\n\n    // add plural methods\n    moment.fn.days = moment.fn.day;\n    moment.fn.weeks = moment.fn.week;\n    moment.fn.isoWeeks = moment.fn.isoWeek;\n\n    /************************************\n        Duration Prototype\n    ************************************/\n\n\n    moment.duration.fn = Duration.prototype = {\n        weeks : function () {\n            return absRound(this.days() / 7);\n        },\n\n        valueOf : function () {\n            return this._milliseconds +\n              this._days * 864e5 +\n              this._months * 2592e6;\n        },\n\n        humanize : function (withSuffix) {\n            var difference = +this,\n                output = relativeTime(difference, !withSuffix, this.lang());\n\n            if (withSuffix) {\n                output = this.lang().pastFuture(difference, output);\n            }\n\n            return this.lang().postformat(output);\n        },\n\n        lang : moment.fn.lang\n    };\n\n    function makeDurationGetter(name) {\n        moment.duration.fn[name] = function () {\n            return this._data[name];\n        };\n    }\n\n    function makeDurationAsGetter(name, factor) {\n        moment.duration.fn['as' + name] = function () {\n            return +this / factor;\n        };\n    }\n\n    for (i in unitMillisecondFactors) {\n        if (unitMillisecondFactors.hasOwnProperty(i)) {\n            makeDurationAsGetter(i, unitMillisecondFactors[i]);\n            makeDurationGetter(i.toLowerCase());\n        }\n    }\n\n    makeDurationAsGetter('Weeks', 6048e5);\n\n\n    /************************************\n        Default Lang\n    ************************************/\n\n\n    // Set default language, other languages will inherit from English.\n    moment.lang('en', {\n        ordinal : function (number) {\n            var b = number % 10,\n                output = (~~ (number % 100 / 10) === 1) ? 'th' :\n                (b === 1) ? 'st' :\n                (b === 2) ? 'nd' :\n                (b === 3) ? 'rd' : 'th';\n            return number + output;\n        }\n    });\n\n\n    /************************************\n        Exposing Moment\n    ************************************/\n\n\n    // CommonJS module is defined\n    if (hasModule) {\n        module.exports = moment;\n    }\n    /*global ender:false */\n    if (typeof ender === 'undefined') {\n        // here, `this` means `window` in the browser, or `global` on the server\n        // add `moment` as a global object via a string identifier,\n        // for Closure Compiler \"advanced\" mode\n        this['moment'] = moment;\n    }\n    /*global define:false */\n    if (typeof define === \"function\" && define.amd) {\n        define(\"moment\", [], function () {\n            return moment;\n        });\n    }\n}).call(this);\n//@ sourceURL=component-moment/index.js"
-));
-require.register("virtru-components-chai/index.js", Function("exports, require, module",
-"!function (name, context, definition) {\n  module.exports = definition();\n}('chai', this, function () {\n\n  function require(p) {\n    var path = require.resolve(p)\n      , mod = require.modules[path];\n    if (!mod) throw new Error('failed to require \"' + p + '\"');\n    if (!mod.exports) {\n      mod.exports = {};\n      mod.call(mod.exports, mod, mod.exports, require.relative(path));\n    }\n    return mod.exports;\n  }\n\n  require.modules = {};\n\n  require.resolve = function (path) {\n    var orig = path\n      , reg = path + '.js'\n      , index = path + '/index.js';\n    return require.modules[reg] && reg\n      || require.modules[index] && index\n      || orig;\n  };\n\n  require.register = function (path, fn) {\n    require.modules[path] = fn;\n  };\n\n  require.relative = function (parent) {\n    return function(p){\n      if ('.' != p.charAt(0)) return require(p);\n\n      var path = parent.split('/')\n        , segs = p.split('/');\n      path.pop();\n\n      for (var i = 0; i < segs.length; i++) {\n        var seg = segs[i];\n        if ('..' == seg) path.pop();\n        else if ('.' != seg) path.push(seg);\n      }\n\n      return require(path.join('/'));\n    };\n  };\n\n  require.alias = function (from, to) {\n    var fn = require.modules[from];\n    require.modules[to] = fn;\n  };\n\n\n  require.register(\"chai.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    var used = []\n      , exports = module.exports = {};\n\n    /*!\n     * Chai version\n     */\n\n    exports.version = '1.5.0';\n\n    /*!\n     * Primary `Assertion` prototype\n     */\n\n    exports.Assertion = require('./chai/assertion');\n\n    /*!\n     * Assertion Error\n     */\n\n    exports.AssertionError = require('./chai/error');\n\n    /*!\n     * Utils for plugins (not exported)\n     */\n\n    var util = require('./chai/utils');\n\n    /**\n     * # .use(function)\n     *\n     * Provides a way to extend the internals of Chai\n     *\n     * @param {Function}\n     * @returns {this} for chaining\n     * @api public\n     */\n\n    exports.use = function (fn) {\n      if (!~used.indexOf(fn)) {\n        fn(this, util);\n        used.push(fn);\n      }\n\n      return this;\n    };\n\n    /*!\n     * Core Assertions\n     */\n\n    var core = require('./chai/core/assertions');\n    exports.use(core);\n\n    /*!\n     * Expect interface\n     */\n\n    var expect = require('./chai/interface/expect');\n    exports.use(expect);\n\n    /*!\n     * Should interface\n     */\n\n    var should = require('./chai/interface/should');\n    exports.use(should);\n\n    /*!\n     * Assert interface\n     */\n\n    var assert = require('./chai/interface/assert');\n    exports.use(assert);\n\n  }); // module: chai.js\n\n  require.register(\"chai/assertion.js\", function(module, exports, require){\n    /*!\n     * chai\n     * http://chaijs.com\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Module dependencies.\n     */\n\n    var AssertionError = require('./error')\n      , util = require('./utils')\n      , flag = util.flag;\n\n    /*!\n     * Module export.\n     */\n\n    module.exports = Assertion;\n\n\n    /*!\n     * Assertion Constructor\n     *\n     * Creates object for chaining.\n     *\n     * @api private\n     */\n\n    function Assertion (obj, msg, stack) {\n      flag(this, 'ssfi', stack || arguments.callee);\n      flag(this, 'object', obj);\n      flag(this, 'message', msg);\n    }\n\n    /*!\n      * ### Assertion.includeStack\n      *\n      * User configurable property, influences whether stack trace\n      * is included in Assertion error message. Default of false\n      * suppresses stack trace in the error message\n      *\n      *     Assertion.includeStack = true;  // enable stack on error\n      *\n      * @api public\n      */\n\n    Assertion.includeStack = false;\n\n    /*!\n     * ### Assertion.showDiff\n     *\n     * User configurable property, influences whether or not\n     * the `showDiff` flag should be included in the thrown\n     * AssertionErrors. `false` will always be `false`; `true`\n     * will be true when the assertion has requested a diff\n     * be shown.\n     *\n     * @api public\n     */\n\n    Assertion.showDiff = true;\n\n    Assertion.addProperty = function (name, fn) {\n      util.addProperty(this.prototype, name, fn);\n    };\n\n    Assertion.addMethod = function (name, fn) {\n      util.addMethod(this.prototype, name, fn);\n    };\n\n    Assertion.addChainableMethod = function (name, fn, chainingBehavior) {\n      util.addChainableMethod(this.prototype, name, fn, chainingBehavior);\n    };\n\n    Assertion.overwriteProperty = function (name, fn) {\n      util.overwriteProperty(this.prototype, name, fn);\n    };\n\n    Assertion.overwriteMethod = function (name, fn) {\n      util.overwriteMethod(this.prototype, name, fn);\n    };\n\n    /*!\n     * ### .assert(expression, message, negateMessage, expected, actual)\n     *\n     * Executes an expression and check expectations. Throws AssertionError for reporting if test doesn't pass.\n     *\n     * @name assert\n     * @param {Philosophical} expression to be tested\n     * @param {String} message to display if fails\n     * @param {String} negatedMessage to display if negated expression fails\n     * @param {Mixed} expected value (remember to check for negation)\n     * @param {Mixed} actual (optional) will default to `this.obj`\n     * @api private\n     */\n\n    Assertion.prototype.assert = function (expr, msg, negateMsg, expected, _actual, showDiff) {\n      var ok = util.test(this, arguments);\n      if (true !== showDiff) showDiff = false;\n      if (true !== Assertion.showDiff) showDiff = false;\n\n      if (!ok) {\n        var msg = util.getMessage(this, arguments)\n          , actual = util.getActual(this, arguments);\n        throw new AssertionError({\n            message: msg\n          , actual: actual\n          , expected: expected\n          , stackStartFunction: (Assertion.includeStack) ? this.assert : flag(this, 'ssfi')\n          , showDiff: showDiff\n        });\n      }\n    };\n\n    /*!\n     * ### ._obj\n     *\n     * Quick reference to stored `actual` value for plugin developers.\n     *\n     * @api private\n     */\n\n    Object.defineProperty(Assertion.prototype, '_obj',\n      { get: function () {\n          return flag(this, 'object');\n        }\n      , set: function (val) {\n          flag(this, 'object', val);\n        }\n    });\n\n  }); // module: chai/assertion.js\n\n  require.register(\"chai/core/assertions.js\", function(module, exports, require){\n    /*!\n     * chai\n     * http://chaijs.com\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    module.exports = function (chai, _) {\n      var Assertion = chai.Assertion\n        , toString = Object.prototype.toString\n        , flag = _.flag;\n\n      /**\n       * ### Language Chains\n       *\n       * The following are provide as chainable getters to\n       * improve the readability of your assertions. They\n       * do not provide an testing capability unless they\n       * have been overwritten by a plugin.\n       *\n       * **Chains**\n       *\n       * - to\n       * - be\n       * - been\n       * - is\n       * - that\n       * - and\n       * - have\n       * - with\n       * - at\n       * - of\n       *\n       * @name language chains\n       * @api public\n       */\n\n      [ 'to', 'be', 'been'\n      , 'is', 'and', 'have'\n      , 'with', 'that', 'at'\n      , 'of' ].forEach(function (chain) {\n        Assertion.addProperty(chain, function () {\n          return this;\n        });\n      });\n\n      /**\n       * ### .not\n       *\n       * Negates any of assertions following in the chain.\n       *\n       *     expect(foo).to.not.equal('bar');\n       *     expect(goodFn).to.not.throw(Error);\n       *     expect({ foo: 'baz' }).to.have.property('foo')\n       *       .and.not.equal('bar');\n       *\n       * @name not\n       * @api public\n       */\n\n      Assertion.addProperty('not', function () {\n        flag(this, 'negate', true);\n      });\n\n      /**\n       * ### .deep\n       *\n       * Sets the `deep` flag, later used by the `equal` and\n       * `property` assertions.\n       *\n       *     expect(foo).to.deep.equal({ bar: 'baz' });\n       *     expect({ foo: { bar: { baz: 'quux' } } })\n       *       .to.have.deep.property('foo.bar.baz', 'quux');\n       *\n       * @name deep\n       * @api public\n       */\n\n      Assertion.addProperty('deep', function () {\n        flag(this, 'deep', true);\n      });\n\n      /**\n       * ### .a(type)\n       *\n       * The `a` and `an` assertions are aliases that can be\n       * used either as language chains or to assert a value's\n       * type.\n       *\n       *     // typeof\n       *     expect('test').to.be.a('string');\n       *     expect({ foo: 'bar' }).to.be.an('object');\n       *     expect(null).to.be.a('null');\n       *     expect(undefined).to.be.an('undefined');\n       *\n       *     // language chain\n       *     expect(foo).to.be.an.instanceof(Foo);\n       *\n       * @name a\n       * @alias an\n       * @param {String} type\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function an (type, msg) {\n        if (msg) flag(this, 'message', msg);\n        type = type.toLowerCase();\n        var obj = flag(this, 'object')\n          , article = ~[ 'a', 'e', 'i', 'o', 'u' ].indexOf(type.charAt(0)) ? 'an ' : 'a ';\n\n        this.assert(\n            type === _.type(obj)\n          , 'expected #{this} to be ' + article + type\n          , 'expected #{this} not to be ' + article + type\n        );\n      }\n\n      Assertion.addChainableMethod('an', an);\n      Assertion.addChainableMethod('a', an);\n\n      /**\n       * ### .include(value)\n       *\n       * The `include` and `contain` assertions can be used as either property\n       * based language chains or as methods to assert the inclusion of an object\n       * in an array or a substring in a string. When used as language chains,\n       * they toggle the `contain` flag for the `keys` assertion.\n       *\n       *     expect([1,2,3]).to.include(2);\n       *     expect('foobar').to.contain('foo');\n       *     expect({ foo: 'bar', hello: 'universe' }).to.include.keys('foo');\n       *\n       * @name include\n       * @alias contain\n       * @param {Object|String|Number} obj\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function includeChainingBehavior () {\n        flag(this, 'contains', true);\n      }\n\n      function include (val, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object')\n        this.assert(\n            ~obj.indexOf(val)\n          , 'expected #{this} to include ' + _.inspect(val)\n          , 'expected #{this} to not include ' + _.inspect(val));\n      }\n\n      Assertion.addChainableMethod('include', include, includeChainingBehavior);\n      Assertion.addChainableMethod('contain', include, includeChainingBehavior);\n\n      /**\n       * ### .ok\n       *\n       * Asserts that the target is truthy.\n       *\n       *     expect('everthing').to.be.ok;\n       *     expect(1).to.be.ok;\n       *     expect(false).to.not.be.ok;\n       *     expect(undefined).to.not.be.ok;\n       *     expect(null).to.not.be.ok;\n       *\n       * @name ok\n       * @api public\n       */\n\n      Assertion.addProperty('ok', function () {\n        this.assert(\n            flag(this, 'object')\n          , 'expected #{this} to be truthy'\n          , 'expected #{this} to be falsy');\n      });\n\n      /**\n       * ### .true\n       *\n       * Asserts that the target is `true`.\n       *\n       *     expect(true).to.be.true;\n       *     expect(1).to.not.be.true;\n       *\n       * @name true\n       * @api public\n       */\n\n      Assertion.addProperty('true', function () {\n        this.assert(\n            true === flag(this, 'object')\n          , 'expected #{this} to be true'\n          , 'expected #{this} to be false'\n          , this.negate ? false : true\n        );\n      });\n\n      /**\n       * ### .false\n       *\n       * Asserts that the target is `false`.\n       *\n       *     expect(false).to.be.false;\n       *     expect(0).to.not.be.false;\n       *\n       * @name false\n       * @api public\n       */\n\n      Assertion.addProperty('false', function () {\n        this.assert(\n            false === flag(this, 'object')\n          , 'expected #{this} to be false'\n          , 'expected #{this} to be true'\n          , this.negate ? true : false\n        );\n      });\n\n      /**\n       * ### .null\n       *\n       * Asserts that the target is `null`.\n       *\n       *     expect(null).to.be.null;\n       *     expect(undefined).not.to.be.null;\n       *\n       * @name null\n       * @api public\n       */\n\n      Assertion.addProperty('null', function () {\n        this.assert(\n            null === flag(this, 'object')\n          , 'expected #{this} to be null'\n          , 'expected #{this} not to be null'\n        );\n      });\n\n      /**\n       * ### .undefined\n       *\n       * Asserts that the target is `undefined`.\n       *\n       *      expect(undefined).to.be.undefined;\n       *      expect(null).to.not.be.undefined;\n       *\n       * @name undefined\n       * @api public\n       */\n\n      Assertion.addProperty('undefined', function () {\n        this.assert(\n            undefined === flag(this, 'object')\n          , 'expected #{this} to be undefined'\n          , 'expected #{this} not to be undefined'\n        );\n      });\n\n      /**\n       * ### .exist\n       *\n       * Asserts that the target is neither `null` nor `undefined`.\n       *\n       *     var foo = 'hi'\n       *       , bar = null\n       *       , baz;\n       *\n       *     expect(foo).to.exist;\n       *     expect(bar).to.not.exist;\n       *     expect(baz).to.not.exist;\n       *\n       * @name exist\n       * @api public\n       */\n\n      Assertion.addProperty('exist', function () {\n        this.assert(\n            null != flag(this, 'object')\n          , 'expected #{this} to exist'\n          , 'expected #{this} to not exist'\n        );\n      });\n\n\n      /**\n       * ### .empty\n       *\n       * Asserts that the target's length is `0`. For arrays, it checks\n       * the `length` property. For objects, it gets the count of\n       * enumerable keys.\n       *\n       *     expect([]).to.be.empty;\n       *     expect('').to.be.empty;\n       *     expect({}).to.be.empty;\n       *\n       * @name empty\n       * @api public\n       */\n\n      Assertion.addProperty('empty', function () {\n        var obj = flag(this, 'object')\n          , expected = obj;\n\n        if (Array.isArray(obj) || 'string' === typeof object) {\n          expected = obj.length;\n        } else if (typeof obj === 'object') {\n          expected = Object.keys(obj).length;\n        }\n\n        this.assert(\n            !expected\n          , 'expected #{this} to be empty'\n          , 'expected #{this} not to be empty'\n        );\n      });\n\n      /**\n       * ### .arguments\n       *\n       * Asserts that the target is an arguments object.\n       *\n       *     function test () {\n       *       expect(arguments).to.be.arguments;\n       *     }\n       *\n       * @name arguments\n       * @alias Arguments\n       * @api public\n       */\n\n      function checkArguments () {\n        var obj = flag(this, 'object')\n          , type = Object.prototype.toString.call(obj);\n        this.assert(\n            '[object Arguments]' === type\n          , 'expected #{this} to be arguments but got ' + type\n          , 'expected #{this} to not be arguments'\n        );\n      }\n\n      Assertion.addProperty('arguments', checkArguments);\n      Assertion.addProperty('Arguments', checkArguments);\n\n      /**\n       * ### .equal(value)\n       *\n       * Asserts that the target is strictly equal (`===`) to `value`.\n       * Alternately, if the `deep` flag is set, asserts that\n       * the target is deeply equal to `value`.\n       *\n       *     expect('hello').to.equal('hello');\n       *     expect(42).to.equal(42);\n       *     expect(1).to.not.equal(true);\n       *     expect({ foo: 'bar' }).to.not.equal({ foo: 'bar' });\n       *     expect({ foo: 'bar' }).to.deep.equal({ foo: 'bar' });\n       *\n       * @name equal\n       * @alias equals\n       * @alias eq\n       * @alias deep.equal\n       * @param {Mixed} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertEqual (val, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        if (flag(this, 'deep')) {\n          return this.eql(val);\n        } else {\n          this.assert(\n              val === obj\n            , 'expected #{this} to equal #{exp}'\n            , 'expected #{this} to not equal #{exp}'\n            , val\n            , this._obj\n            , true\n          );\n        }\n      }\n\n      Assertion.addMethod('equal', assertEqual);\n      Assertion.addMethod('equals', assertEqual);\n      Assertion.addMethod('eq', assertEqual);\n\n      /**\n       * ### .eql(value)\n       *\n       * Asserts that the target is deeply equal to `value`.\n       *\n       *     expect({ foo: 'bar' }).to.eql({ foo: 'bar' });\n       *     expect([ 1, 2, 3 ]).to.eql([ 1, 2, 3 ]);\n       *\n       * @name eql\n       * @alias eqls\n       * @param {Mixed} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertEql(obj, msg) {\n        if (msg) flag(this, 'message', msg);\n        this.assert(\n            _.eql(obj, flag(this, 'object'))\n          , 'expected #{this} to deeply equal #{exp}'\n          , 'expected #{this} to not deeply equal #{exp}'\n          , obj\n          , this._obj\n          , true\n        );\n      }\n\n      Assertion.addMethod('eql', assertEql);\n      Assertion.addMethod('eqls', assertEql);\n\n      /**\n       * ### .above(value)\n       *\n       * Asserts that the target is greater than `value`.\n       *\n       *     expect(10).to.be.above(5);\n       *\n       * Can also be used in conjunction with `length` to\n       * assert a minimum length. The benefit being a\n       * more informative error message than if the length\n       * was supplied directly.\n       *\n       *     expect('foo').to.have.length.above(2);\n       *     expect([ 1, 2, 3 ]).to.have.length.above(2);\n       *\n       * @name above\n       * @alias gt\n       * @alias greaterThan\n       * @param {Number} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertAbove (n, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        if (flag(this, 'doLength')) {\n          new Assertion(obj, msg).to.have.property('length');\n          var len = obj.length;\n          this.assert(\n              len > n\n            , 'expected #{this} to have a length above #{exp} but got #{act}'\n            , 'expected #{this} to not have a length above #{exp}'\n            , n\n            , len\n          );\n        } else {\n          this.assert(\n              obj > n\n            , 'expected #{this} to be above ' + n\n            , 'expected #{this} to be at most ' + n\n          );\n        }\n      }\n\n      Assertion.addMethod('above', assertAbove);\n      Assertion.addMethod('gt', assertAbove);\n      Assertion.addMethod('greaterThan', assertAbove);\n\n      /**\n       * ### .least(value)\n       *\n       * Asserts that the target is greater than or equal to `value`.\n       *\n       *     expect(10).to.be.at.least(10);\n       *\n       * Can also be used in conjunction with `length` to\n       * assert a minimum length. The benefit being a\n       * more informative error message than if the length\n       * was supplied directly.\n       *\n       *     expect('foo').to.have.length.of.at.least(2);\n       *     expect([ 1, 2, 3 ]).to.have.length.of.at.least(3);\n       *\n       * @name least\n       * @alias gte\n       * @param {Number} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertLeast (n, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        if (flag(this, 'doLength')) {\n          new Assertion(obj, msg).to.have.property('length');\n          var len = obj.length;\n          this.assert(\n              len >= n\n            , 'expected #{this} to have a length at least #{exp} but got #{act}'\n            , 'expected #{this} to have a length below #{exp}'\n            , n\n            , len\n          );\n        } else {\n          this.assert(\n              obj >= n\n            , 'expected #{this} to be at least ' + n\n            , 'expected #{this} to be below ' + n\n          );\n        }\n      }\n\n      Assertion.addMethod('least', assertLeast);\n      Assertion.addMethod('gte', assertLeast);\n\n      /**\n       * ### .below(value)\n       *\n       * Asserts that the target is less than `value`.\n       *\n       *     expect(5).to.be.below(10);\n       *\n       * Can also be used in conjunction with `length` to\n       * assert a maximum length. The benefit being a\n       * more informative error message than if the length\n       * was supplied directly.\n       *\n       *     expect('foo').to.have.length.below(4);\n       *     expect([ 1, 2, 3 ]).to.have.length.below(4);\n       *\n       * @name below\n       * @alias lt\n       * @alias lessThan\n       * @param {Number} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertBelow (n, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        if (flag(this, 'doLength')) {\n          new Assertion(obj, msg).to.have.property('length');\n          var len = obj.length;\n          this.assert(\n              len < n\n            , 'expected #{this} to have a length below #{exp} but got #{act}'\n            , 'expected #{this} to not have a length below #{exp}'\n            , n\n            , len\n          );\n        } else {\n          this.assert(\n              obj < n\n            , 'expected #{this} to be below ' + n\n            , 'expected #{this} to be at least ' + n\n          );\n        }\n      }\n\n      Assertion.addMethod('below', assertBelow);\n      Assertion.addMethod('lt', assertBelow);\n      Assertion.addMethod('lessThan', assertBelow);\n\n      /**\n       * ### .most(value)\n       *\n       * Asserts that the target is less than or equal to `value`.\n       *\n       *     expect(5).to.be.at.most(5);\n       *\n       * Can also be used in conjunction with `length` to\n       * assert a maximum length. The benefit being a\n       * more informative error message than if the length\n       * was supplied directly.\n       *\n       *     expect('foo').to.have.length.of.at.most(4);\n       *     expect([ 1, 2, 3 ]).to.have.length.of.at.most(3);\n       *\n       * @name most\n       * @alias lte\n       * @param {Number} value\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertMost (n, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        if (flag(this, 'doLength')) {\n          new Assertion(obj, msg).to.have.property('length');\n          var len = obj.length;\n          this.assert(\n              len <= n\n            , 'expected #{this} to have a length at most #{exp} but got #{act}'\n            , 'expected #{this} to have a length above #{exp}'\n            , n\n            , len\n          );\n        } else {\n          this.assert(\n              obj <= n\n            , 'expected #{this} to be at most ' + n\n            , 'expected #{this} to be above ' + n\n          );\n        }\n      }\n\n      Assertion.addMethod('most', assertMost);\n      Assertion.addMethod('lte', assertMost);\n\n      /**\n       * ### .within(start, finish)\n       *\n       * Asserts that the target is within a range.\n       *\n       *     expect(7).to.be.within(5,10);\n       *\n       * Can also be used in conjunction with `length` to\n       * assert a length range. The benefit being a\n       * more informative error message than if the length\n       * was supplied directly.\n       *\n       *     expect('foo').to.have.length.within(2,4);\n       *     expect([ 1, 2, 3 ]).to.have.length.within(2,4);\n       *\n       * @name within\n       * @param {Number} start lowerbound inclusive\n       * @param {Number} finish upperbound inclusive\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('within', function (start, finish, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object')\n          , range = start + '..' + finish;\n        if (flag(this, 'doLength')) {\n          new Assertion(obj, msg).to.have.property('length');\n          var len = obj.length;\n          this.assert(\n              len >= start && len <= finish\n            , 'expected #{this} to have a length within ' + range\n            , 'expected #{this} to not have a length within ' + range\n          );\n        } else {\n          this.assert(\n              obj >= start && obj <= finish\n            , 'expected #{this} to be within ' + range\n            , 'expected #{this} to not be within ' + range\n          );\n        }\n      });\n\n      /**\n       * ### .instanceof(constructor)\n       *\n       * Asserts that the target is an instance of `constructor`.\n       *\n       *     var Tea = function (name) { this.name = name; }\n       *       , Chai = new Tea('chai');\n       *\n       *     expect(Chai).to.be.an.instanceof(Tea);\n       *     expect([ 1, 2, 3 ]).to.be.instanceof(Array);\n       *\n       * @name instanceof\n       * @param {Constructor} constructor\n       * @param {String} message _optional_\n       * @alias instanceOf\n       * @api public\n       */\n\n      function assertInstanceOf (constructor, msg) {\n        if (msg) flag(this, 'message', msg);\n        var name = _.getName(constructor);\n        this.assert(\n            flag(this, 'object') instanceof constructor\n          , 'expected #{this} to be an instance of ' + name\n          , 'expected #{this} to not be an instance of ' + name\n        );\n      };\n\n      Assertion.addMethod('instanceof', assertInstanceOf);\n      Assertion.addMethod('instanceOf', assertInstanceOf);\n\n      /**\n       * ### .property(name, [value])\n       *\n       * Asserts that the target has a property `name`, optionally asserting that\n       * the value of that property is strictly equal to  `value`.\n       * If the `deep` flag is set, you can use dot- and bracket-notation for deep\n       * references into objects and arrays.\n       *\n       *     // simple referencing\n       *     var obj = { foo: 'bar' };\n       *     expect(obj).to.have.property('foo');\n       *     expect(obj).to.have.property('foo', 'bar');\n       *\n       *     // deep referencing\n       *     var deepObj = {\n       *         green: { tea: 'matcha' }\n       *       , teas: [ 'chai', 'matcha', { tea: 'konacha' } ]\n       *     };\n\n       *     expect(deepObj).to.have.deep.property('green.tea', 'matcha');\n       *     expect(deepObj).to.have.deep.property('teas[1]', 'matcha');\n       *     expect(deepObj).to.have.deep.property('teas[2].tea', 'konacha');\n       *\n       * You can also use an array as the starting point of a `deep.property`\n       * assertion, or traverse nested arrays.\n       *\n       *     var arr = [\n       *         [ 'chai', 'matcha', 'konacha' ]\n       *       , [ { tea: 'chai' }\n       *         , { tea: 'matcha' }\n       *         , { tea: 'konacha' } ]\n       *     ];\n       *\n       *     expect(arr).to.have.deep.property('[0][1]', 'matcha');\n       *     expect(arr).to.have.deep.property('[1][2].tea', 'konacha');\n       *\n       * Furthermore, `property` changes the subject of the assertion\n       * to be the value of that property from the original object. This\n       * permits for further chainable assertions on that property.\n       *\n       *     expect(obj).to.have.property('foo')\n       *       .that.is.a('string');\n       *     expect(deepObj).to.have.property('green')\n       *       .that.is.an('object')\n       *       .that.deep.equals({ tea: 'matcha' });\n       *     expect(deepObj).to.have.property('teas')\n       *       .that.is.an('array')\n       *       .with.deep.property('[2]')\n       *         .that.deep.equals({ tea: 'konacha' });\n       *\n       * @name property\n       * @alias deep.property\n       * @param {String} name\n       * @param {Mixed} value (optional)\n       * @param {String} message _optional_\n       * @returns value of property for chaining\n       * @api public\n       */\n\n      Assertion.addMethod('property', function (name, val, msg) {\n        if (msg) flag(this, 'message', msg);\n\n        var descriptor = flag(this, 'deep') ? 'deep property ' : 'property '\n          , negate = flag(this, 'negate')\n          , obj = flag(this, 'object')\n          , value = flag(this, 'deep')\n            ? _.getPathValue(name, obj)\n            : obj[name];\n\n        if (negate && undefined !== val) {\n          if (undefined === value) {\n            msg = (msg != null) ? msg + ': ' : '';\n            throw new Error(msg + _.inspect(obj) + ' has no ' + descriptor + _.inspect(name));\n          }\n        } else {\n          this.assert(\n              undefined !== value\n            , 'expected #{this} to have a ' + descriptor + _.inspect(name)\n            , 'expected #{this} to not have ' + descriptor + _.inspect(name));\n        }\n\n        if (undefined !== val) {\n          this.assert(\n              val === value\n            , 'expected #{this} to have a ' + descriptor + _.inspect(name) + ' of #{exp}, but got #{act}'\n            , 'expected #{this} to not have a ' + descriptor + _.inspect(name) + ' of #{act}'\n            , val\n            , value\n          );\n        }\n\n        flag(this, 'object', value);\n      });\n\n\n      /**\n       * ### .ownProperty(name)\n       *\n       * Asserts that the target has an own property `name`.\n       *\n       *     expect('test').to.have.ownProperty('length');\n       *\n       * @name ownProperty\n       * @alias haveOwnProperty\n       * @param {String} name\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertOwnProperty (name, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        this.assert(\n            obj.hasOwnProperty(name)\n          , 'expected #{this} to have own property ' + _.inspect(name)\n          , 'expected #{this} to not have own property ' + _.inspect(name)\n        );\n      }\n\n      Assertion.addMethod('ownProperty', assertOwnProperty);\n      Assertion.addMethod('haveOwnProperty', assertOwnProperty);\n\n      /**\n       * ### .length(value)\n       *\n       * Asserts that the target's `length` property has\n       * the expected value.\n       *\n       *     expect([ 1, 2, 3]).to.have.length(3);\n       *     expect('foobar').to.have.length(6);\n       *\n       * Can also be used as a chain precursor to a value\n       * comparison for the length property.\n       *\n       *     expect('foo').to.have.length.above(2);\n       *     expect([ 1, 2, 3 ]).to.have.length.above(2);\n       *     expect('foo').to.have.length.below(4);\n       *     expect([ 1, 2, 3 ]).to.have.length.below(4);\n       *     expect('foo').to.have.length.within(2,4);\n       *     expect([ 1, 2, 3 ]).to.have.length.within(2,4);\n       *\n       * @name length\n       * @alias lengthOf\n       * @param {Number} length\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      function assertLengthChain () {\n        flag(this, 'doLength', true);\n      }\n\n      function assertLength (n, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        new Assertion(obj, msg).to.have.property('length');\n        var len = obj.length;\n\n        this.assert(\n            len == n\n          , 'expected #{this} to have a length of #{exp} but got #{act}'\n          , 'expected #{this} to not have a length of #{act}'\n          , n\n          , len\n        );\n      }\n\n      Assertion.addChainableMethod('length', assertLength, assertLengthChain);\n      Assertion.addMethod('lengthOf', assertLength, assertLengthChain);\n\n      /**\n       * ### .match(regexp)\n       *\n       * Asserts that the target matches a regular expression.\n       *\n       *     expect('foobar').to.match(/^foo/);\n       *\n       * @name match\n       * @param {RegExp} RegularExpression\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('match', function (re, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        this.assert(\n            re.exec(obj)\n          , 'expected #{this} to match ' + re\n          , 'expected #{this} not to match ' + re\n        );\n      });\n\n      /**\n       * ### .string(string)\n       *\n       * Asserts that the string target contains another string.\n       *\n       *     expect('foobar').to.have.string('bar');\n       *\n       * @name string\n       * @param {String} string\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('string', function (str, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        new Assertion(obj, msg).is.a('string');\n\n        this.assert(\n            ~obj.indexOf(str)\n          , 'expected #{this} to contain ' + _.inspect(str)\n          , 'expected #{this} to not contain ' + _.inspect(str)\n        );\n      });\n\n\n      /**\n       * ### .keys(key1, [key2], [...])\n       *\n       * Asserts that the target has exactly the given keys, or\n       * asserts the inclusion of some keys when using the\n       * `include` or `contain` modifiers.\n       *\n       *     expect({ foo: 1, bar: 2 }).to.have.keys(['foo', 'bar']);\n       *     expect({ foo: 1, bar: 2, baz: 3 }).to.contain.keys('foo', 'bar');\n       *\n       * @name keys\n       * @alias key\n       * @param {String...|Array} keys\n       * @api public\n       */\n\n      function assertKeys (keys) {\n        var obj = flag(this, 'object')\n          , str\n          , ok = true;\n\n        keys = keys instanceof Array\n          ? keys\n          : Array.prototype.slice.call(arguments);\n\n        if (!keys.length) throw new Error('keys required');\n\n        var actual = Object.keys(obj)\n          , len = keys.length;\n\n        // Inclusion\n        ok = keys.every(function(key){\n          return ~actual.indexOf(key);\n        });\n\n        // Strict\n        if (!flag(this, 'negate') && !flag(this, 'contains')) {\n          ok = ok && keys.length == actual.length;\n        }\n\n        // Key string\n        if (len > 1) {\n          keys = keys.map(function(key){\n            return _.inspect(key);\n          });\n          var last = keys.pop();\n          str = keys.join(', ') + ', and ' + last;\n        } else {\n          str = _.inspect(keys[0]);\n        }\n\n        // Form\n        str = (len > 1 ? 'keys ' : 'key ') + str;\n\n        // Have / include\n        str = (flag(this, 'contains') ? 'contain ' : 'have ') + str;\n\n        // Assertion\n        this.assert(\n            ok\n          , 'expected #{this} to ' + str\n          , 'expected #{this} to not ' + str\n        );\n      }\n\n      Assertion.addMethod('keys', assertKeys);\n      Assertion.addMethod('key', assertKeys);\n\n      /**\n       * ### .throw(constructor)\n       *\n       * Asserts that the function target will throw a specific error, or specific type of error\n       * (as determined using `instanceof`), optionally with a RegExp or string inclusion test\n       * for the error's message.\n       *\n       *     var err = new ReferenceError('This is a bad function.');\n       *     var fn = function () { throw err; }\n       *     expect(fn).to.throw(ReferenceError);\n       *     expect(fn).to.throw(Error);\n       *     expect(fn).to.throw(/bad function/);\n       *     expect(fn).to.not.throw('good function');\n       *     expect(fn).to.throw(ReferenceError, /bad function/);\n       *     expect(fn).to.throw(err);\n       *     expect(fn).to.not.throw(new RangeError('Out of range.'));\n       *\n       * Please note that when a throw expectation is negated, it will check each\n       * parameter independently, starting with error constructor type. The appropriate way\n       * to check for the existence of a type of error but for a message that does not match\n       * is to use `and`.\n       *\n       *     expect(fn).to.throw(ReferenceError)\n       *        .and.not.throw(/good function/);\n       *\n       * @name throw\n       * @alias throws\n       * @alias Throw\n       * @param {ErrorConstructor} constructor\n       * @param {String|RegExp} expected error message\n       * @param {String} message _optional_\n       * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types\n       * @api public\n       */\n\n      function assertThrows (constructor, errMsg, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        new Assertion(obj, msg).is.a('function');\n\n        var thrown = false\n          , desiredError = null\n          , name = null\n          , thrownError = null;\n\n        if (arguments.length === 0) {\n          errMsg = null;\n          constructor = null;\n        } else if (constructor && (constructor instanceof RegExp || 'string' === typeof constructor)) {\n          errMsg = constructor;\n          constructor = null;\n        } else if (constructor && constructor instanceof Error) {\n          desiredError = constructor;\n          constructor = null;\n          errMsg = null;\n        } else if (typeof constructor === 'function') {\n          name = (new constructor()).name;\n        } else {\n          constructor = null;\n        }\n\n        try {\n          obj();\n        } catch (err) {\n          // first, check desired error\n          if (desiredError) {\n            this.assert(\n                err === desiredError\n              , 'expected #{this} to throw #{exp} but #{act} was thrown'\n              , 'expected #{this} to not throw #{exp}'\n              , desiredError\n              , err\n            );\n\n            return this;\n          }\n          // next, check constructor\n          if (constructor) {\n            this.assert(\n                err instanceof constructor\n              , 'expected #{this} to throw #{exp} but #{act} was thrown'\n              , 'expected #{this} to not throw #{exp} but #{act} was thrown'\n              , name\n              , err\n            );\n\n            if (!errMsg) return this;\n          }\n          // next, check message\n          var message = 'object' === _.type(err) && \"message\" in err\n            ? err.message\n            : '' + err;\n\n          if ((message != null) && errMsg && errMsg instanceof RegExp) {\n            this.assert(\n                errMsg.exec(message)\n              , 'expected #{this} to throw error matching #{exp} but got #{act}'\n              , 'expected #{this} to throw error not matching #{exp}'\n              , errMsg\n              , message\n            );\n\n            return this;\n          } else if ((message != null) && errMsg && 'string' === typeof errMsg) {\n            this.assert(\n                ~message.indexOf(errMsg)\n              , 'expected #{this} to throw error including #{exp} but got #{act}'\n              , 'expected #{this} to throw error not including #{act}'\n              , errMsg\n              , message\n            );\n\n            return this;\n          } else {\n            thrown = true;\n            thrownError = err;\n          }\n        }\n\n        var actuallyGot = ''\n          , expectedThrown = name !== null\n            ? name\n            : desiredError\n              ? '#{exp}' //_.inspect(desiredError)\n              : 'an error';\n\n        if (thrown) {\n          actuallyGot = ' but #{act} was thrown'\n        }\n\n        this.assert(\n            thrown === true\n          , 'expected #{this} to throw ' + expectedThrown + actuallyGot\n          , 'expected #{this} to not throw ' + expectedThrown + actuallyGot\n          , desiredError\n          , thrownError\n        );\n      };\n\n      Assertion.addMethod('throw', assertThrows);\n      Assertion.addMethod('throws', assertThrows);\n      Assertion.addMethod('Throw', assertThrows);\n\n      /**\n       * ### .respondTo(method)\n       *\n       * Asserts that the object or class target will respond to a method.\n       *\n       *     Klass.prototype.bar = function(){};\n       *     expect(Klass).to.respondTo('bar');\n       *     expect(obj).to.respondTo('bar');\n       *\n       * To check if a constructor will respond to a static function,\n       * set the `itself` flag.\n       *\n       *    Klass.baz = function(){};\n       *    expect(Klass).itself.to.respondTo('baz');\n       *\n       * @name respondTo\n       * @param {String} method\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('respondTo', function (method, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object')\n          , itself = flag(this, 'itself')\n          , context = ('function' === _.type(obj) && !itself)\n            ? obj.prototype[method]\n            : obj[method];\n\n        this.assert(\n            'function' === typeof context\n          , 'expected #{this} to respond to ' + _.inspect(method)\n          , 'expected #{this} to not respond to ' + _.inspect(method)\n        );\n      });\n\n      /**\n       * ### .itself\n       *\n       * Sets the `itself` flag, later used by the `respondTo` assertion.\n       *\n       *    function Foo() {}\n       *    Foo.bar = function() {}\n       *    Foo.prototype.baz = function() {}\n       *\n       *    expect(Foo).itself.to.respondTo('bar');\n       *    expect(Foo).itself.not.to.respondTo('baz');\n       *\n       * @name itself\n       * @api public\n       */\n\n      Assertion.addProperty('itself', function () {\n        flag(this, 'itself', true);\n      });\n\n      /**\n       * ### .satisfy(method)\n       *\n       * Asserts that the target passes a given truth test.\n       *\n       *     expect(1).to.satisfy(function(num) { return num > 0; });\n       *\n       * @name satisfy\n       * @param {Function} matcher\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('satisfy', function (matcher, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        this.assert(\n            matcher(obj)\n          , 'expected #{this} to satisfy ' + _.objDisplay(matcher)\n          , 'expected #{this} to not satisfy' + _.objDisplay(matcher)\n          , this.negate ? false : true\n          , matcher(obj)\n        );\n      });\n\n      /**\n       * ### .closeTo(expected, delta)\n       *\n       * Asserts that the target is equal `expected`, to within a +/- `delta` range.\n       *\n       *     expect(1.5).to.be.closeTo(1, 0.5);\n       *\n       * @name closeTo\n       * @param {Number} expected\n       * @param {Number} delta\n       * @param {String} message _optional_\n       * @api public\n       */\n\n      Assertion.addMethod('closeTo', function (expected, delta, msg) {\n        if (msg) flag(this, 'message', msg);\n        var obj = flag(this, 'object');\n        this.assert(\n            Math.abs(obj - expected) <= delta\n          , 'expected #{this} to be close to ' + expected + ' +/- ' + delta\n          , 'expected #{this} not to be close to ' + expected + ' +/- ' + delta\n        );\n      });\n\n    };\n\n  }); // module: chai/core/assertions.js\n\n  require.register(\"chai/error.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Main export\n     */\n\n    module.exports = AssertionError;\n\n    /**\n     * # AssertionError (constructor)\n     *\n     * Create a new assertion error based on the Javascript\n     * `Error` prototype.\n     *\n     * **Options**\n     * - message\n     * - actual\n     * - expected\n     * - operator\n     * - startStackFunction\n     *\n     * @param {Object} options\n     * @api public\n     */\n\n    function AssertionError (options) {\n      options = options || {};\n      this.message = options.message;\n      this.actual = options.actual;\n      this.expected = options.expected;\n      this.operator = options.operator;\n      this.showDiff = options.showDiff;\n\n      if (options.stackStartFunction && Error.captureStackTrace) {\n        var stackStartFunction = options.stackStartFunction;\n        Error.captureStackTrace(this, stackStartFunction);\n      }\n    }\n\n    /*!\n     * Inherit from Error\n     */\n\n    AssertionError.prototype = Object.create(Error.prototype);\n    AssertionError.prototype.name = 'AssertionError';\n    AssertionError.prototype.constructor = AssertionError;\n\n    /**\n     * # toString()\n     *\n     * Override default to string method\n     */\n\n    AssertionError.prototype.toString = function() {\n      return this.message;\n    };\n\n  }); // module: chai/error.js\n\n  require.register(\"chai/interface/assert.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n\n    module.exports = function (chai, util) {\n\n      /*!\n       * Chai dependencies.\n       */\n\n      var Assertion = chai.Assertion\n        , flag = util.flag;\n\n      /*!\n       * Module export.\n       */\n\n      /**\n       * ### assert(expression, message)\n       *\n       * Write your own test expressions.\n       *\n       *     assert('foo' !== 'bar', 'foo is not bar');\n       *     assert(Array.isArray([]), 'empty arrays are arrays');\n       *\n       * @param {Mixed} expression to test for truthiness\n       * @param {String} message to display on error\n       * @name assert\n       * @api public\n       */\n\n      var assert = chai.assert = function (express, errmsg) {\n        var test = new Assertion(null);\n        test.assert(\n            express\n          , errmsg\n          , '[ negation message unavailable ]'\n        );\n      };\n\n      /**\n       * ### .fail(actual, expected, [message], [operator])\n       *\n       * Throw a failure. Node.js `assert` module-compatible.\n       *\n       * @name fail\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @param {String} operator\n       * @api public\n       */\n\n      assert.fail = function (actual, expected, message, operator) {\n        throw new chai.AssertionError({\n            actual: actual\n          , expected: expected\n          , message: message\n          , operator: operator\n          , stackStartFunction: assert.fail\n        });\n      };\n\n      /**\n       * ### .ok(object, [message])\n       *\n       * Asserts that `object` is truthy.\n       *\n       *     assert.ok('everything', 'everything is ok');\n       *     assert.ok(false, 'this will fail');\n       *\n       * @name ok\n       * @param {Mixed} object to test\n       * @param {String} message\n       * @api public\n       */\n\n      assert.ok = function (val, msg) {\n        new Assertion(val, msg).is.ok;\n      };\n\n      /**\n       * ### .equal(actual, expected, [message])\n       *\n       * Asserts non-strict equality (`==`) of `actual` and `expected`.\n       *\n       *     assert.equal(3, '3', '== coerces values to strings');\n       *\n       * @name equal\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.equal = function (act, exp, msg) {\n        var test = new Assertion(act, msg);\n\n        test.assert(\n            exp == flag(test, 'object')\n          , 'expected #{this} to equal #{exp}'\n          , 'expected #{this} to not equal #{act}'\n          , exp\n          , act\n        );\n      };\n\n      /**\n       * ### .notEqual(actual, expected, [message])\n       *\n       * Asserts non-strict inequality (`!=`) of `actual` and `expected`.\n       *\n       *     assert.notEqual(3, 4, 'these numbers are not equal');\n       *\n       * @name notEqual\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notEqual = function (act, exp, msg) {\n        var test = new Assertion(act, msg);\n\n        test.assert(\n            exp != flag(test, 'object')\n          , 'expected #{this} to not equal #{exp}'\n          , 'expected #{this} to equal #{act}'\n          , exp\n          , act\n        );\n      };\n\n      /**\n       * ### .strictEqual(actual, expected, [message])\n       *\n       * Asserts strict equality (`===`) of `actual` and `expected`.\n       *\n       *     assert.strictEqual(true, true, 'these booleans are strictly equal');\n       *\n       * @name strictEqual\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.strictEqual = function (act, exp, msg) {\n        new Assertion(act, msg).to.equal(exp);\n      };\n\n      /**\n       * ### .notStrictEqual(actual, expected, [message])\n       *\n       * Asserts strict inequality (`!==`) of `actual` and `expected`.\n       *\n       *     assert.notStrictEqual(3, '3', 'no coercion for strict equality');\n       *\n       * @name notStrictEqual\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notStrictEqual = function (act, exp, msg) {\n        new Assertion(act, msg).to.not.equal(exp);\n      };\n\n      /**\n       * ### .deepEqual(actual, expected, [message])\n       *\n       * Asserts that `actual` is deeply equal to `expected`.\n       *\n       *     assert.deepEqual({ tea: 'green' }, { tea: 'green' });\n       *\n       * @name deepEqual\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.deepEqual = function (act, exp, msg) {\n        new Assertion(act, msg).to.eql(exp);\n      };\n\n      /**\n       * ### .notDeepEqual(actual, expected, [message])\n       *\n       * Assert that `actual` is not deeply equal to `expected`.\n       *\n       *     assert.notDeepEqual({ tea: 'green' }, { tea: 'jasmine' });\n       *\n       * @name notDeepEqual\n       * @param {Mixed} actual\n       * @param {Mixed} expected\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notDeepEqual = function (act, exp, msg) {\n        new Assertion(act, msg).to.not.eql(exp);\n      };\n\n      /**\n       * ### .isTrue(value, [message])\n       *\n       * Asserts that `value` is true.\n       *\n       *     var teaServed = true;\n       *     assert.isTrue(teaServed, 'the tea has been served');\n       *\n       * @name isTrue\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isTrue = function (val, msg) {\n        new Assertion(val, msg).is['true'];\n      };\n\n      /**\n       * ### .isFalse(value, [message])\n       *\n       * Asserts that `value` is false.\n       *\n       *     var teaServed = false;\n       *     assert.isFalse(teaServed, 'no tea yet? hmm...');\n       *\n       * @name isFalse\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isFalse = function (val, msg) {\n        new Assertion(val, msg).is['false'];\n      };\n\n      /**\n       * ### .isNull(value, [message])\n       *\n       * Asserts that `value` is null.\n       *\n       *     assert.isNull(err, 'there was no error');\n       *\n       * @name isNull\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNull = function (val, msg) {\n        new Assertion(val, msg).to.equal(null);\n      };\n\n      /**\n       * ### .isNotNull(value, [message])\n       *\n       * Asserts that `value` is not null.\n       *\n       *     var tea = 'tasty chai';\n       *     assert.isNotNull(tea, 'great, time for tea!');\n       *\n       * @name isNotNull\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotNull = function (val, msg) {\n        new Assertion(val, msg).to.not.equal(null);\n      };\n\n      /**\n       * ### .isUndefined(value, [message])\n       *\n       * Asserts that `value` is `undefined`.\n       *\n       *     var tea;\n       *     assert.isUndefined(tea, 'no tea defined');\n       *\n       * @name isUndefined\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isUndefined = function (val, msg) {\n        new Assertion(val, msg).to.equal(undefined);\n      };\n\n      /**\n       * ### .isDefined(value, [message])\n       *\n       * Asserts that `value` is not `undefined`.\n       *\n       *     var tea = 'cup of chai';\n       *     assert.isDefined(tea, 'tea has been defined');\n       *\n       * @name isUndefined\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isDefined = function (val, msg) {\n        new Assertion(val, msg).to.not.equal(undefined);\n      };\n\n      /**\n       * ### .isFunction(value, [message])\n       *\n       * Asserts that `value` is a function.\n       *\n       *     function serveTea() { return 'cup of tea'; };\n       *     assert.isFunction(serveTea, 'great, we can have tea now');\n       *\n       * @name isFunction\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isFunction = function (val, msg) {\n        new Assertion(val, msg).to.be.a('function');\n      };\n\n      /**\n       * ### .isNotFunction(value, [message])\n       *\n       * Asserts that `value` is _not_ a function.\n       *\n       *     var serveTea = [ 'heat', 'pour', 'sip' ];\n       *     assert.isNotFunction(serveTea, 'great, we have listed the steps');\n       *\n       * @name isNotFunction\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotFunction = function (val, msg) {\n        new Assertion(val, msg).to.not.be.a('function');\n      };\n\n      /**\n       * ### .isObject(value, [message])\n       *\n       * Asserts that `value` is an object (as revealed by\n       * `Object.prototype.toString`).\n       *\n       *     var selection = { name: 'Chai', serve: 'with spices' };\n       *     assert.isObject(selection, 'tea selection is an object');\n       *\n       * @name isObject\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isObject = function (val, msg) {\n        new Assertion(val, msg).to.be.a('object');\n      };\n\n      /**\n       * ### .isNotObject(value, [message])\n       *\n       * Asserts that `value` is _not_ an object.\n       *\n       *     var selection = 'chai'\n       *     assert.isObject(selection, 'tea selection is not an object');\n       *     assert.isObject(null, 'null is not an object');\n       *\n       * @name isNotObject\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotObject = function (val, msg) {\n        new Assertion(val, msg).to.not.be.a('object');\n      };\n\n      /**\n       * ### .isArray(value, [message])\n       *\n       * Asserts that `value` is an array.\n       *\n       *     var menu = [ 'green', 'chai', 'oolong' ];\n       *     assert.isArray(menu, 'what kind of tea do we want?');\n       *\n       * @name isArray\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isArray = function (val, msg) {\n        new Assertion(val, msg).to.be.an('array');\n      };\n\n      /**\n       * ### .isNotArray(value, [message])\n       *\n       * Asserts that `value` is _not_ an array.\n       *\n       *     var menu = 'green|chai|oolong';\n       *     assert.isNotArray(menu, 'what kind of tea do we want?');\n       *\n       * @name isNotArray\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotArray = function (val, msg) {\n        new Assertion(val, msg).to.not.be.an('array');\n      };\n\n      /**\n       * ### .isString(value, [message])\n       *\n       * Asserts that `value` is a string.\n       *\n       *     var teaOrder = 'chai';\n       *     assert.isString(teaOrder, 'order placed');\n       *\n       * @name isString\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isString = function (val, msg) {\n        new Assertion(val, msg).to.be.a('string');\n      };\n\n      /**\n       * ### .isNotString(value, [message])\n       *\n       * Asserts that `value` is _not_ a string.\n       *\n       *     var teaOrder = 4;\n       *     assert.isNotString(teaOrder, 'order placed');\n       *\n       * @name isNotString\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotString = function (val, msg) {\n        new Assertion(val, msg).to.not.be.a('string');\n      };\n\n      /**\n       * ### .isNumber(value, [message])\n       *\n       * Asserts that `value` is a number.\n       *\n       *     var cups = 2;\n       *     assert.isNumber(cups, 'how many cups');\n       *\n       * @name isNumber\n       * @param {Number} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNumber = function (val, msg) {\n        new Assertion(val, msg).to.be.a('number');\n      };\n\n      /**\n       * ### .isNotNumber(value, [message])\n       *\n       * Asserts that `value` is _not_ a number.\n       *\n       *     var cups = '2 cups please';\n       *     assert.isNotNumber(cups, 'how many cups');\n       *\n       * @name isNotNumber\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotNumber = function (val, msg) {\n        new Assertion(val, msg).to.not.be.a('number');\n      };\n\n      /**\n       * ### .isBoolean(value, [message])\n       *\n       * Asserts that `value` is a boolean.\n       *\n       *     var teaReady = true\n       *       , teaServed = false;\n       *\n       *     assert.isBoolean(teaReady, 'is the tea ready');\n       *     assert.isBoolean(teaServed, 'has tea been served');\n       *\n       * @name isBoolean\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isBoolean = function (val, msg) {\n        new Assertion(val, msg).to.be.a('boolean');\n      };\n\n      /**\n       * ### .isNotBoolean(value, [message])\n       *\n       * Asserts that `value` is _not_ a boolean.\n       *\n       *     var teaReady = 'yep'\n       *       , teaServed = 'nope';\n       *\n       *     assert.isNotBoolean(teaReady, 'is the tea ready');\n       *     assert.isNotBoolean(teaServed, 'has tea been served');\n       *\n       * @name isNotBoolean\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.isNotBoolean = function (val, msg) {\n        new Assertion(val, msg).to.not.be.a('boolean');\n      };\n\n      /**\n       * ### .typeOf(value, name, [message])\n       *\n       * Asserts that `value`'s type is `name`, as determined by\n       * `Object.prototype.toString`.\n       *\n       *     assert.typeOf({ tea: 'chai' }, 'object', 'we have an object');\n       *     assert.typeOf(['chai', 'jasmine'], 'array', 'we have an array');\n       *     assert.typeOf('tea', 'string', 'we have a string');\n       *     assert.typeOf(/tea/, 'regexp', 'we have a regular expression');\n       *     assert.typeOf(null, 'null', 'we have a null');\n       *     assert.typeOf(undefined, 'undefined', 'we have an undefined');\n       *\n       * @name typeOf\n       * @param {Mixed} value\n       * @param {String} name\n       * @param {String} message\n       * @api public\n       */\n\n      assert.typeOf = function (val, type, msg) {\n        new Assertion(val, msg).to.be.a(type);\n      };\n\n      /**\n       * ### .notTypeOf(value, name, [message])\n       *\n       * Asserts that `value`'s type is _not_ `name`, as determined by\n       * `Object.prototype.toString`.\n       *\n       *     assert.notTypeOf('tea', 'number', 'strings are not numbers');\n       *\n       * @name notTypeOf\n       * @param {Mixed} value\n       * @param {String} typeof name\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notTypeOf = function (val, type, msg) {\n        new Assertion(val, msg).to.not.be.a(type);\n      };\n\n      /**\n       * ### .instanceOf(object, constructor, [message])\n       *\n       * Asserts that `value` is an instance of `constructor`.\n       *\n       *     var Tea = function (name) { this.name = name; }\n       *       , chai = new Tea('chai');\n       *\n       *     assert.instanceOf(chai, Tea, 'chai is an instance of tea');\n       *\n       * @name instanceOf\n       * @param {Object} object\n       * @param {Constructor} constructor\n       * @param {String} message\n       * @api public\n       */\n\n      assert.instanceOf = function (val, type, msg) {\n        new Assertion(val, msg).to.be.instanceOf(type);\n      };\n\n      /**\n       * ### .notInstanceOf(object, constructor, [message])\n       *\n       * Asserts `value` is not an instance of `constructor`.\n       *\n       *     var Tea = function (name) { this.name = name; }\n       *       , chai = new String('chai');\n       *\n       *     assert.notInstanceOf(chai, Tea, 'chai is not an instance of tea');\n       *\n       * @name notInstanceOf\n       * @param {Object} object\n       * @param {Constructor} constructor\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notInstanceOf = function (val, type, msg) {\n        new Assertion(val, msg).to.not.be.instanceOf(type);\n      };\n\n      /**\n       * ### .include(haystack, needle, [message])\n       *\n       * Asserts that `haystack` includes `needle`. Works\n       * for strings and arrays.\n       *\n       *     assert.include('foobar', 'bar', 'foobar contains string \"bar\"');\n       *     assert.include([ 1, 2, 3 ], 3, 'array contains value');\n       *\n       * @name include\n       * @param {Array|String} haystack\n       * @param {Mixed} needle\n       * @param {String} message\n       * @api public\n       */\n\n      assert.include = function (exp, inc, msg) {\n        var obj = new Assertion(exp, msg);\n\n        if (Array.isArray(exp)) {\n          obj.to.include(inc);\n        } else if ('string' === typeof exp) {\n          obj.to.contain.string(inc);\n        }\n      };\n\n      /**\n       * ### .match(value, regexp, [message])\n       *\n       * Asserts that `value` matches the regular expression `regexp`.\n       *\n       *     assert.match('foobar', /^foo/, 'regexp matches');\n       *\n       * @name match\n       * @param {Mixed} value\n       * @param {RegExp} regexp\n       * @param {String} message\n       * @api public\n       */\n\n      assert.match = function (exp, re, msg) {\n        new Assertion(exp, msg).to.match(re);\n      };\n\n      /**\n       * ### .notMatch(value, regexp, [message])\n       *\n       * Asserts that `value` does not match the regular expression `regexp`.\n       *\n       *     assert.notMatch('foobar', /^foo/, 'regexp does not match');\n       *\n       * @name notMatch\n       * @param {Mixed} value\n       * @param {RegExp} regexp\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notMatch = function (exp, re, msg) {\n        new Assertion(exp, msg).to.not.match(re);\n      };\n\n      /**\n       * ### .property(object, property, [message])\n       *\n       * Asserts that `object` has a property named by `property`.\n       *\n       *     assert.property({ tea: { green: 'matcha' }}, 'tea');\n       *\n       * @name property\n       * @param {Object} object\n       * @param {String} property\n       * @param {String} message\n       * @api public\n       */\n\n      assert.property = function (obj, prop, msg) {\n        new Assertion(obj, msg).to.have.property(prop);\n      };\n\n      /**\n       * ### .notProperty(object, property, [message])\n       *\n       * Asserts that `object` does _not_ have a property named by `property`.\n       *\n       *     assert.notProperty({ tea: { green: 'matcha' }}, 'coffee');\n       *\n       * @name notProperty\n       * @param {Object} object\n       * @param {String} property\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notProperty = function (obj, prop, msg) {\n        new Assertion(obj, msg).to.not.have.property(prop);\n      };\n\n      /**\n       * ### .deepProperty(object, property, [message])\n       *\n       * Asserts that `object` has a property named by `property`, which can be a\n       * string using dot- and bracket-notation for deep reference.\n       *\n       *     assert.deepProperty({ tea: { green: 'matcha' }}, 'tea.green');\n       *\n       * @name deepProperty\n       * @param {Object} object\n       * @param {String} property\n       * @param {String} message\n       * @api public\n       */\n\n      assert.deepProperty = function (obj, prop, msg) {\n        new Assertion(obj, msg).to.have.deep.property(prop);\n      };\n\n      /**\n       * ### .notDeepProperty(object, property, [message])\n       *\n       * Asserts that `object` does _not_ have a property named by `property`, which\n       * can be a string using dot- and bracket-notation for deep reference.\n       *\n       *     assert.notDeepProperty({ tea: { green: 'matcha' }}, 'tea.oolong');\n       *\n       * @name notDeepProperty\n       * @param {Object} object\n       * @param {String} property\n       * @param {String} message\n       * @api public\n       */\n\n      assert.notDeepProperty = function (obj, prop, msg) {\n        new Assertion(obj, msg).to.not.have.deep.property(prop);\n      };\n\n      /**\n       * ### .propertyVal(object, property, value, [message])\n       *\n       * Asserts that `object` has a property named by `property` with value given\n       * by `value`.\n       *\n       *     assert.propertyVal({ tea: 'is good' }, 'tea', 'is good');\n       *\n       * @name propertyVal\n       * @param {Object} object\n       * @param {String} property\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.propertyVal = function (obj, prop, val, msg) {\n        new Assertion(obj, msg).to.have.property(prop, val);\n      };\n\n      /**\n       * ### .propertyNotVal(object, property, value, [message])\n       *\n       * Asserts that `object` has a property named by `property`, but with a value\n       * different from that given by `value`.\n       *\n       *     assert.propertyNotVal({ tea: 'is good' }, 'tea', 'is bad');\n       *\n       * @name propertyNotVal\n       * @param {Object} object\n       * @param {String} property\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.propertyNotVal = function (obj, prop, val, msg) {\n        new Assertion(obj, msg).to.not.have.property(prop, val);\n      };\n\n      /**\n       * ### .deepPropertyVal(object, property, value, [message])\n       *\n       * Asserts that `object` has a property named by `property` with value given\n       * by `value`. `property` can use dot- and bracket-notation for deep\n       * reference.\n       *\n       *     assert.deepPropertyVal({ tea: { green: 'matcha' }}, 'tea.green', 'matcha');\n       *\n       * @name deepPropertyVal\n       * @param {Object} object\n       * @param {String} property\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.deepPropertyVal = function (obj, prop, val, msg) {\n        new Assertion(obj, msg).to.have.deep.property(prop, val);\n      };\n\n      /**\n       * ### .deepPropertyNotVal(object, property, value, [message])\n       *\n       * Asserts that `object` has a property named by `property`, but with a value\n       * different from that given by `value`. `property` can use dot- and\n       * bracket-notation for deep reference.\n       *\n       *     assert.deepPropertyNotVal({ tea: { green: 'matcha' }}, 'tea.green', 'konacha');\n       *\n       * @name deepPropertyNotVal\n       * @param {Object} object\n       * @param {String} property\n       * @param {Mixed} value\n       * @param {String} message\n       * @api public\n       */\n\n      assert.deepPropertyNotVal = function (obj, prop, val, msg) {\n        new Assertion(obj, msg).to.not.have.deep.property(prop, val);\n      };\n\n      /**\n       * ### .lengthOf(object, length, [message])\n       *\n       * Asserts that `object` has a `length` property with the expected value.\n       *\n       *     assert.lengthOf([1,2,3], 3, 'array has length of 3');\n       *     assert.lengthOf('foobar', 5, 'string has length of 6');\n       *\n       * @name lengthOf\n       * @param {Mixed} object\n       * @param {Number} length\n       * @param {String} message\n       * @api public\n       */\n\n      assert.lengthOf = function (exp, len, msg) {\n        new Assertion(exp, msg).to.have.length(len);\n      };\n\n      /**\n       * ### .throws(function, [constructor/string/regexp], [string/regexp], [message])\n       *\n       * Asserts that `function` will throw an error that is an instance of\n       * `constructor`, or alternately that it will throw an error with message\n       * matching `regexp`.\n       *\n       *     assert.throw(fn, 'function throws a reference error');\n       *     assert.throw(fn, /function throws a reference error/);\n       *     assert.throw(fn, ReferenceError);\n       *     assert.throw(fn, ReferenceError, 'function throws a reference error');\n       *     assert.throw(fn, ReferenceError, /function throws a reference error/);\n       *\n       * @name throws\n       * @alias throw\n       * @alias Throw\n       * @param {Function} function\n       * @param {ErrorConstructor} constructor\n       * @param {RegExp} regexp\n       * @param {String} message\n       * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types\n       * @api public\n       */\n\n      assert.Throw = function (fn, errt, errs, msg) {\n        if ('string' === typeof errt || errt instanceof RegExp) {\n          errs = errt;\n          errt = null;\n        }\n\n        new Assertion(fn, msg).to.Throw(errt, errs);\n      };\n\n      /**\n       * ### .doesNotThrow(function, [constructor/regexp], [message])\n       *\n       * Asserts that `function` will _not_ throw an error that is an instance of\n       * `constructor`, or alternately that it will not throw an error with message\n       * matching `regexp`.\n       *\n       *     assert.doesNotThrow(fn, Error, 'function does not throw');\n       *\n       * @name doesNotThrow\n       * @param {Function} function\n       * @param {ErrorConstructor} constructor\n       * @param {RegExp} regexp\n       * @param {String} message\n       * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Error#Error_types\n       * @api public\n       */\n\n      assert.doesNotThrow = function (fn, type, msg) {\n        if ('string' === typeof type) {\n          msg = type;\n          type = null;\n        }\n\n        new Assertion(fn, msg).to.not.Throw(type);\n      };\n\n      /**\n       * ### .operator(val1, operator, val2, [message])\n       *\n       * Compares two values using `operator`.\n       *\n       *     assert.operator(1, '<', 2, 'everything is ok');\n       *     assert.operator(1, '>', 2, 'this will fail');\n       *\n       * @name operator\n       * @param {Mixed} val1\n       * @param {String} operator\n       * @param {Mixed} val2\n       * @param {String} message\n       * @api public\n       */\n\n      assert.operator = function (val, operator, val2, msg) {\n        if (!~['==', '===', '>', '>=', '<', '<=', '!=', '!=='].indexOf(operator)) {\n          throw new Error('Invalid operator \"' + operator + '\"');\n        }\n        var test = new Assertion(eval(val + operator + val2), msg);\n        test.assert(\n            true === flag(test, 'object')\n          , 'expected ' + util.inspect(val) + ' to be ' + operator + ' ' + util.inspect(val2)\n          , 'expected ' + util.inspect(val) + ' to not be ' + operator + ' ' + util.inspect(val2) );\n      };\n\n      /**\n       * ### .closeTo(actual, expected, delta, [message])\n       *\n       * Asserts that the target is equal `expected`, to within a +/- `delta` range.\n       *\n       *     assert.closeTo(1.5, 1, 0.5, 'numbers are close');\n       *\n       * @name closeTo\n       * @param {Number} actual\n       * @param {Number} expected\n       * @param {Number} delta\n       * @param {String} message\n       * @api public\n       */\n\n      assert.closeTo = function (act, exp, delta, msg) {\n        new Assertion(act, msg).to.be.closeTo(exp, delta);\n      };\n\n      /*!\n       * Undocumented / untested\n       */\n\n      assert.ifError = function (val, msg) {\n        new Assertion(val, msg).to.not.be.ok;\n      };\n\n      /*!\n       * Aliases.\n       */\n\n      (function alias(name, as){\n        assert[as] = assert[name];\n        return alias;\n      })\n      ('Throw', 'throw')\n      ('Throw', 'throws');\n    };\n\n  }); // module: chai/interface/assert.js\n\n  require.register(\"chai/interface/expect.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    module.exports = function (chai, util) {\n      chai.expect = function (val, message) {\n        return new chai.Assertion(val, message);\n      };\n    };\n\n\n  }); // module: chai/interface/expect.js\n\n  require.register(\"chai/interface/should.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    module.exports = function (chai, util) {\n      var Assertion = chai.Assertion;\n\n      function loadShould () {\n        // modify Object.prototype to have `should`\n        Object.defineProperty(Object.prototype, 'should',\n          {\n            set: function (value) {\n              // See https://github.com/chaijs/chai/issues/86: this makes\n              // `whatever.should = someValue` actually set `someValue`, which is\n              // especially useful for `global.should = require('chai').should()`.\n              //\n              // Note that we have to use [[DefineProperty]] instead of [[Put]]\n              // since otherwise we would trigger this very setter!\n              Object.defineProperty(this, 'should', {\n                value: value,\n                enumerable: true,\n                configurable: true,\n                writable: true\n              });\n            }\n          , get: function(){\n              if (this instanceof String || this instanceof Number) {\n                return new Assertion(this.constructor(this));\n              } else if (this instanceof Boolean) {\n                return new Assertion(this == true);\n              }\n              return new Assertion(this);\n            }\n          , configurable: true\n        });\n\n        var should = {};\n\n        should.equal = function (val1, val2, msg) {\n          new Assertion(val1, msg).to.equal(val2);\n        };\n\n        should.Throw = function (fn, errt, errs, msg) {\n          new Assertion(fn, msg).to.Throw(errt, errs);\n        };\n\n        should.exist = function (val, msg) {\n          new Assertion(val, msg).to.exist;\n        }\n\n        // negation\n        should.not = {}\n\n        should.not.equal = function (val1, val2, msg) {\n          new Assertion(val1, msg).to.not.equal(val2);\n        };\n\n        should.not.Throw = function (fn, errt, errs, msg) {\n          new Assertion(fn, msg).to.not.Throw(errt, errs);\n        };\n\n        should.not.exist = function (val, msg) {\n          new Assertion(val, msg).to.not.exist;\n        }\n\n        should['throw'] = should['Throw'];\n        should.not['throw'] = should.not['Throw'];\n\n        return should;\n      };\n\n      chai.should = loadShould;\n      chai.Should = loadShould;\n    };\n\n  }); // module: chai/interface/should.js\n\n  require.register(\"chai/utils/addChainableMethod.js\", function(module, exports, require){\n    /*!\n     * Chai - addChainingMethod utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Module dependencies\n     */\n\n    var transferFlags = require('./transferFlags');\n\n    /*!\n     * Module variables\n     */\n\n    // Check whether `__proto__` is supported\n    var hasProtoSupport = '__proto__' in Object;\n\n    // Without `__proto__` support, this module will need to add properties to a function.\n    // However, some Function.prototype methods cannot be overwritten,\n    // and there seems no easy cross-platform way to detect them (@see chaijs/chai/issues/69).\n    var excludeNames = /^(?:length|name|arguments|caller)$/;\n\n    /**\n     * ### addChainableMethod (ctx, name, method, chainingBehavior)\n     *\n     * Adds a method to an object, such that the method can also be chained.\n     *\n     *     utils.addChainableMethod(chai.Assertion.prototype, 'foo', function (str) {\n     *       var obj = utils.flag(this, 'object');\n     *       new chai.Assertion(obj).to.be.equal(str);\n     *     });\n     *\n     * Can also be accessed directly from `chai.Assertion`.\n     *\n     *     chai.Assertion.addChainableMethod('foo', fn, chainingBehavior);\n     *\n     * The result can then be used as both a method assertion, executing both `method` and\n     * `chainingBehavior`, or as a language chain, which only executes `chainingBehavior`.\n     *\n     *     expect(fooStr).to.be.foo('bar');\n     *     expect(fooStr).to.be.foo.equal('foo');\n     *\n     * @param {Object} ctx object to which the method is added\n     * @param {String} name of method to add\n     * @param {Function} method function to be used for `name`, when called\n     * @param {Function} chainingBehavior function to be called every time the property is accessed\n     * @name addChainableMethod\n     * @api public\n     */\n\n    module.exports = function (ctx, name, method, chainingBehavior) {\n      if (typeof chainingBehavior !== 'function')\n        chainingBehavior = function () { };\n\n      Object.defineProperty(ctx, name,\n        { get: function () {\n            chainingBehavior.call(this);\n\n            var assert = function () {\n              var result = method.apply(this, arguments);\n              return result === undefined ? this : result;\n            };\n\n            // Use `__proto__` if available\n            if (hasProtoSupport) {\n              assert.__proto__ = this;\n            }\n            // Otherwise, redefine all properties (slow!)\n            else {\n              var asserterNames = Object.getOwnPropertyNames(ctx);\n              asserterNames.forEach(function (asserterName) {\n                if (!excludeNames.test(asserterName)) {\n                  var pd = Object.getOwnPropertyDescriptor(ctx, asserterName);\n                  Object.defineProperty(assert, asserterName, pd);\n                }\n              });\n            }\n\n            transferFlags(this, assert);\n            return assert;\n          }\n        , configurable: true\n      });\n    };\n\n  }); // module: chai/utils/addChainableMethod.js\n\n  require.register(\"chai/utils/addMethod.js\", function(module, exports, require){\n    /*!\n     * Chai - addMethod utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### .addMethod (ctx, name, method)\n     *\n     * Adds a method to the prototype of an object.\n     *\n     *     utils.addMethod(chai.Assertion.prototype, 'foo', function (str) {\n     *       var obj = utils.flag(this, 'object');\n     *       new chai.Assertion(obj).to.be.equal(str);\n     *     });\n     *\n     * Can also be accessed directly from `chai.Assertion`.\n     *\n     *     chai.Assertion.addMethod('foo', fn);\n     *\n     * Then can be used as any other assertion.\n     *\n     *     expect(fooStr).to.be.foo('bar');\n     *\n     * @param {Object} ctx object to which the method is added\n     * @param {String} name of method to add\n     * @param {Function} method function to be used for name\n     * @name addMethod\n     * @api public\n     */\n\n    module.exports = function (ctx, name, method) {\n      ctx[name] = function () {\n        var result = method.apply(this, arguments);\n        return result === undefined ? this : result;\n      };\n    };\n\n  }); // module: chai/utils/addMethod.js\n\n  require.register(\"chai/utils/addProperty.js\", function(module, exports, require){\n    /*!\n     * Chai - addProperty utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### addProperty (ctx, name, getter)\n     *\n     * Adds a property to the prototype of an object.\n     *\n     *     utils.addProperty(chai.Assertion.prototype, 'foo', function () {\n     *       var obj = utils.flag(this, 'object');\n     *       new chai.Assertion(obj).to.be.instanceof(Foo);\n     *     });\n     *\n     * Can also be accessed directly from `chai.Assertion`.\n     *\n     *     chai.Assertion.addProperty('foo', fn);\n     *\n     * Then can be used as any other assertion.\n     *\n     *     expect(myFoo).to.be.foo;\n     *\n     * @param {Object} ctx object to which the property is added\n     * @param {String} name of property to add\n     * @param {Function} getter function to be used for name\n     * @name addProperty\n     * @api public\n     */\n\n    module.exports = function (ctx, name, getter) {\n      Object.defineProperty(ctx, name,\n        { get: function () {\n            var result = getter.call(this);\n            return result === undefined ? this : result;\n          }\n        , configurable: true\n      });\n    };\n\n  }); // module: chai/utils/addProperty.js\n\n  require.register(\"chai/utils/eql.js\", function(module, exports, require){\n    // This is (almost) directly from Node.js assert\n    // https://github.com/joyent/node/blob/f8c335d0caf47f16d31413f89aa28eda3878e3aa/lib/assert.js\n\n    module.exports = _deepEqual;\n\n    var getEnumerableProperties = require('./getEnumerableProperties');\n\n    // for the browser\n    var Buffer;\n    try {\n      Buffer = require('buffer').Buffer;\n    } catch (ex) {\n      Buffer = {\n        isBuffer: function () { return false; }\n      };\n    }\n\n    function _deepEqual(actual, expected, memos) {\n\n      // 7.1. All identical values are equivalent, as determined by ===.\n      if (actual === expected) {\n        return true;\n\n      } else if (Buffer.isBuffer(actual) && Buffer.isBuffer(expected)) {\n        if (actual.length != expected.length) return false;\n\n        for (var i = 0; i < actual.length; i++) {\n          if (actual[i] !== expected[i]) return false;\n        }\n\n        return true;\n\n      // 7.2. If the expected value is a Date object, the actual value is\n      // equivalent if it is also a Date object that refers to the same time.\n      } else if (actual instanceof Date && expected instanceof Date) {\n        return actual.getTime() === expected.getTime();\n\n      // 7.3. Other pairs that do not both pass typeof value == 'object',\n      // equivalence is determined by ==.\n      } else if (typeof actual != 'object' && typeof expected != 'object') {\n        return actual === expected;\n\n      // 7.4. For all other Object pairs, including Array objects, equivalence is\n      // determined by having the same number of owned properties (as verified\n      // with Object.prototype.hasOwnProperty.call), the same set of keys\n      // (although not necessarily the same order), equivalent values for every\n      // corresponding key, and an identical 'prototype' property. Note: this\n      // accounts for both named and indexed properties on Arrays.\n      } else {\n        return objEquiv(actual, expected, memos);\n      }\n    }\n\n    function isUndefinedOrNull(value) {\n      return value === null || value === undefined;\n    }\n\n    function isArguments(object) {\n      return Object.prototype.toString.call(object) == '[object Arguments]';\n    }\n\n    function objEquiv(a, b, memos) {\n      if (isUndefinedOrNull(a) || isUndefinedOrNull(b))\n        return false;\n\n      // an identical 'prototype' property.\n      if (a.prototype !== b.prototype) return false;\n\n      // check if we have already compared a and b\n      var i;\n      if (memos) {\n        for(i = 0; i < memos.length; i++) {\n          if ((memos[i][0] === a && memos[i][1] === b) ||\n              (memos[i][0] === b && memos[i][1] === a))\n            return true;\n        }\n      } else {\n        memos = [];\n      }\n\n      //~~~I've managed to break Object.keys through screwy arguments passing.\n      //   Converting to array solves the problem.\n      if (isArguments(a)) {\n        if (!isArguments(b)) {\n          return false;\n        }\n        a = pSlice.call(a);\n        b = pSlice.call(b);\n        return _deepEqual(a, b, memos);\n      }\n      try {\n        var ka = getEnumerableProperties(a),\n            kb = getEnumerableProperties(b),\n            key;\n      } catch (e) {//happens when one is a string literal and the other isn't\n        return false;\n      }\n\n      // having the same number of owned properties (keys incorporates\n      // hasOwnProperty)\n      if (ka.length != kb.length)\n        return false;\n\n      //the same set of keys (although not necessarily the same order),\n      ka.sort();\n      kb.sort();\n      //~~~cheap key test\n      for (i = ka.length - 1; i >= 0; i--) {\n        if (ka[i] != kb[i])\n          return false;\n      }\n\n      // remember objects we have compared to guard against circular references\n      memos.push([ a, b ]);\n\n      //equivalent values for every corresponding key, and\n      //~~~possibly expensive deep test\n      for (i = ka.length - 1; i >= 0; i--) {\n        key = ka[i];\n        if (!_deepEqual(a[key], b[key], memos)) return false;\n      }\n\n      return true;\n    }\n\n  }); // module: chai/utils/eql.js\n\n  require.register(\"chai/utils/flag.js\", function(module, exports, require){\n    /*!\n     * Chai - flag utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### flag(object ,key, [value])\n     *\n     * Get or set a flag value on an object. If a\n     * value is provided it will be set, else it will\n     * return the currently set value or `undefined` if\n     * the value is not set.\n     *\n     *     utils.flag(this, 'foo', 'bar'); // setter\n     *     utils.flag(this, 'foo'); // getter, returns `bar`\n     *\n     * @param {Object} object (constructed Assertion\n     * @param {String} key\n     * @param {Mixed} value (optional)\n     * @name flag\n     * @api private\n     */\n\n    module.exports = function (obj, key, value) {\n      var flags = obj.__flags || (obj.__flags = Object.create(null));\n      if (arguments.length === 3) {\n        flags[key] = value;\n      } else {\n        return flags[key];\n      }\n    };\n\n  }); // module: chai/utils/flag.js\n\n  require.register(\"chai/utils/getActual.js\", function(module, exports, require){\n    /*!\n     * Chai - getActual utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * # getActual(object, [actual])\n     *\n     * Returns the `actual` value for an Assertion\n     *\n     * @param {Object} object (constructed Assertion)\n     * @param {Arguments} chai.Assertion.prototype.assert arguments\n     */\n\n    module.exports = function (obj, args) {\n      var actual = args[4];\n      return 'undefined' !== typeof actual ? actual : obj._obj;\n    };\n\n  }); // module: chai/utils/getActual.js\n\n  require.register(\"chai/utils/getEnumerableProperties.js\", function(module, exports, require){\n    /*!\n     * Chai - getEnumerableProperties utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### .getEnumerableProperties(object)\n     *\n     * This allows the retrieval of enumerable property names of an object,\n     * inherited or not.\n     *\n     * @param {Object} object\n     * @returns {Array}\n     * @name getEnumerableProperties\n     * @api public\n     */\n\n    module.exports = function getEnumerableProperties(object) {\n      var result = [];\n      for (var name in object) {\n        result.push(name);\n      }\n      return result;\n    };\n\n  }); // module: chai/utils/getEnumerableProperties.js\n\n  require.register(\"chai/utils/getMessage.js\", function(module, exports, require){\n    /*!\n     * Chai - message composition utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Module dependancies\n     */\n\n    var flag = require('./flag')\n      , getActual = require('./getActual')\n      , inspect = require('./inspect')\n      , objDisplay = require('./objDisplay');\n\n    /**\n     * ### .getMessage(object, message, negateMessage)\n     *\n     * Construct the error message based on flags\n     * and template tags. Template tags will return\n     * a stringified inspection of the object referenced.\n     *\n     * Messsage template tags:\n     * - `#{this}` current asserted object\n     * - `#{act}` actual value\n     * - `#{exp}` expected value\n     *\n     * @param {Object} object (constructed Assertion)\n     * @param {Arguments} chai.Assertion.prototype.assert arguments\n     * @name getMessage\n     * @api public\n     */\n\n    module.exports = function (obj, args) {\n      var negate = flag(obj, 'negate')\n        , val = flag(obj, 'object')\n        , expected = args[3]\n        , actual = getActual(obj, args)\n        , msg = negate ? args[2] : args[1]\n        , flagMsg = flag(obj, 'message');\n\n      msg = msg || '';\n      msg = msg\n        .replace(/#{this}/g, objDisplay(val))\n        .replace(/#{act}/g, objDisplay(actual))\n        .replace(/#{exp}/g, objDisplay(expected));\n\n      return flagMsg ? flagMsg + ': ' + msg : msg;\n    };\n\n  }); // module: chai/utils/getMessage.js\n\n  require.register(\"chai/utils/getName.js\", function(module, exports, require){\n    /*!\n     * Chai - getName utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * # getName(func)\n     *\n     * Gets the name of a function, in a cross-browser way.\n     *\n     * @param {Function} a function (usually a constructor)\n     */\n\n    module.exports = function (func) {\n      if (func.name) return func.name;\n\n      var match = /^\\s?function ([^(]*)\\(/.exec(func);\n      return match && match[1] ? match[1] : \"\";\n    };\n\n  }); // module: chai/utils/getName.js\n\n  require.register(\"chai/utils/getPathValue.js\", function(module, exports, require){\n    /*!\n     * Chai - getPathValue utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * @see https://github.com/logicalparadox/filtr\n     * MIT Licensed\n     */\n\n    /**\n     * ### .getPathValue(path, object)\n     *\n     * This allows the retrieval of values in an\n     * object given a string path.\n     *\n     *     var obj = {\n     *         prop1: {\n     *             arr: ['a', 'b', 'c']\n     *           , str: 'Hello'\n     *         }\n     *       , prop2: {\n     *             arr: [ { nested: 'Universe' } ]\n     *           , str: 'Hello again!'\n     *         }\n     *     }\n     *\n     * The following would be the results.\n     *\n     *     getPathValue('prop1.str', obj); // Hello\n     *     getPathValue('prop1.att[2]', obj); // b\n     *     getPathValue('prop2.arr[0].nested', obj); // Universe\n     *\n     * @param {String} path\n     * @param {Object} object\n     * @returns {Object} value or `undefined`\n     * @name getPathValue\n     * @api public\n     */\n\n    var getPathValue = module.exports = function (path, obj) {\n      var parsed = parsePath(path);\n      return _getPathValue(parsed, obj);\n    };\n\n    /*!\n     * ## parsePath(path)\n     *\n     * Helper function used to parse string object\n     * paths. Use in conjunction with `_getPathValue`.\n     *\n     *      var parsed = parsePath('myobject.property.subprop');\n     *\n     * ### Paths:\n     *\n     * * Can be as near infinitely deep and nested\n     * * Arrays are also valid using the formal `myobject.document[3].property`.\n     *\n     * @param {String} path\n     * @returns {Object} parsed\n     * @api private\n     */\n\n    function parsePath (path) {\n      var str = path.replace(/\\[/g, '.[')\n        , parts = str.match(/(\\\\\\.|[^.]+?)+/g);\n      return parts.map(function (value) {\n        var re = /\\[(\\d+)\\]$/\n          , mArr = re.exec(value)\n        if (mArr) return { i: parseFloat(mArr[1]) };\n        else return { p: value };\n      });\n    };\n\n    /*!\n     * ## _getPathValue(parsed, obj)\n     *\n     * Helper companion function for `.parsePath` that returns\n     * the value located at the parsed address.\n     *\n     *      var value = getPathValue(parsed, obj);\n     *\n     * @param {Object} parsed definition from `parsePath`.\n     * @param {Object} object to search against\n     * @returns {Object|Undefined} value\n     * @api private\n     */\n\n    function _getPathValue (parsed, obj) {\n      var tmp = obj\n        , res;\n      for (var i = 0, l = parsed.length; i < l; i++) {\n        var part = parsed[i];\n        if (tmp) {\n          if ('undefined' !== typeof part.p)\n            tmp = tmp[part.p];\n          else if ('undefined' !== typeof part.i)\n            tmp = tmp[part.i];\n          if (i == (l - 1)) res = tmp;\n        } else {\n          res = undefined;\n        }\n      }\n      return res;\n    };\n\n  }); // module: chai/utils/getPathValue.js\n\n  require.register(\"chai/utils/getProperties.js\", function(module, exports, require){\n    /*!\n     * Chai - getProperties utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### .getProperties(object)\n     *\n     * This allows the retrieval of property names of an object, enumerable or not,\n     * inherited or not.\n     *\n     * @param {Object} object\n     * @returns {Array}\n     * @name getProperties\n     * @api public\n     */\n\n    module.exports = function getProperties(object) {\n      var result = Object.getOwnPropertyNames(subject);\n\n      function addProperty(property) {\n        if (result.indexOf(property) === -1) {\n          result.push(property);\n        }\n      }\n\n      var proto = Object.getPrototypeOf(subject);\n      while (proto !== null) {\n        Object.getOwnPropertyNames(proto).forEach(addProperty);\n        proto = Object.getPrototypeOf(proto);\n      }\n\n      return result;\n    };\n\n  }); // module: chai/utils/getProperties.js\n\n  require.register(\"chai/utils/index.js\", function(module, exports, require){\n    /*!\n     * chai\n     * Copyright(c) 2011 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Main exports\n     */\n\n    var exports = module.exports = {};\n\n    /*!\n     * test utility\n     */\n\n    exports.test = require('./test');\n\n    /*!\n     * type utility\n     */\n\n    exports.type = require('./type');\n\n    /*!\n     * message utility\n     */\n\n    exports.getMessage = require('./getMessage');\n\n    /*!\n     * actual utility\n     */\n\n    exports.getActual = require('./getActual');\n\n    /*!\n     * Inspect util\n     */\n\n    exports.inspect = require('./inspect');\n\n    /*!\n     * Object Display util\n     */\n\n    exports.objDisplay = require('./objDisplay');\n\n    /*!\n     * Flag utility\n     */\n\n    exports.flag = require('./flag');\n\n    /*!\n     * Flag transferring utility\n     */\n\n    exports.transferFlags = require('./transferFlags');\n\n    /*!\n     * Deep equal utility\n     */\n\n    exports.eql = require('./eql');\n\n    /*!\n     * Deep path value\n     */\n\n    exports.getPathValue = require('./getPathValue');\n\n    /*!\n     * Function name\n     */\n\n    exports.getName = require('./getName');\n\n    /*!\n     * add Property\n     */\n\n    exports.addProperty = require('./addProperty');\n\n    /*!\n     * add Method\n     */\n\n    exports.addMethod = require('./addMethod');\n\n    /*!\n     * overwrite Property\n     */\n\n    exports.overwriteProperty = require('./overwriteProperty');\n\n    /*!\n     * overwrite Method\n     */\n\n    exports.overwriteMethod = require('./overwriteMethod');\n\n    /*!\n     * Add a chainable method\n     */\n\n    exports.addChainableMethod = require('./addChainableMethod');\n\n\n  }); // module: chai/utils/index.js\n\n  require.register(\"chai/utils/inspect.js\", function(module, exports, require){\n    // This is (almost) directly from Node.js utils\n    // https://github.com/joyent/node/blob/f8c335d0caf47f16d31413f89aa28eda3878e3aa/lib/util.js\n\n    var getName = require('./getName');\n    var getProperties = require('./getProperties');\n    var getEnumerableProperties = require('./getEnumerableProperties');\n\n    module.exports = inspect;\n\n    /**\n     * Echos the value of a value. Trys to print the value out\n     * in the best way possible given the different types.\n     *\n     * @param {Object} obj The object to print out.\n     * @param {Boolean} showHidden Flag that shows hidden (not enumerable)\n     *    properties of objects.\n     * @param {Number} depth Depth in which to descend in object. Default is 2.\n     * @param {Boolean} colors Flag to turn on ANSI escape codes to color the\n     *    output. Default is false (no coloring).\n     */\n    function inspect(obj, showHidden, depth, colors) {\n      var ctx = {\n        showHidden: showHidden,\n        seen: [],\n        stylize: function (str) { return str; }\n      };\n      return formatValue(ctx, obj, (typeof depth === 'undefined' ? 2 : depth));\n    }\n\n    // https://gist.github.com/1044128/\n    var getOuterHTML = function(element) {\n      if ('outerHTML' in element) return element.outerHTML;\n      var ns = \"http://www.w3.org/1999/xhtml\";\n      var container = document.createElementNS(ns, '_');\n      var elemProto = (window.HTMLElement || window.Element).prototype;\n      var xmlSerializer = new XMLSerializer();\n      var html;\n      if (document.xmlVersion) {\n        return xmlSerializer.serializeToString(element);\n      } else {\n        container.appendChild(element.cloneNode(false));\n        html = container.innerHTML.replace('><', '>' + element.innerHTML + '<');\n        container.innerHTML = '';\n        return html;\n      }\n    };\n\n    // Returns true if object is a DOM element.\n    var isDOMElement = function (object) {\n      if (typeof HTMLElement === 'object') {\n        return object instanceof HTMLElement;\n      } else {\n        return object &&\n          typeof object === 'object' &&\n          object.nodeType === 1 &&\n          typeof object.nodeName === 'string';\n      }\n    };\n\n    function formatValue(ctx, value, recurseTimes) {\n      // Provide a hook for user-specified inspect functions.\n      // Check that value is an object with an inspect function on it\n      if (value && typeof value.inspect === 'function' &&\n          // Filter out the util module, it's inspect function is special\n          value.inspect !== exports.inspect &&\n          // Also filter out any prototype objects using the circular check.\n          !(value.constructor && value.constructor.prototype === value)) {\n        return value.inspect(recurseTimes);\n      }\n\n      // Primitive types cannot have properties\n      var primitive = formatPrimitive(ctx, value);\n      if (primitive) {\n        return primitive;\n      }\n\n      // If it's DOM elem, get outer HTML.\n      if (isDOMElement(value)) {\n        return getOuterHTML(value);\n      }\n\n      // Look up the keys of the object.\n      var visibleKeys = getEnumerableProperties(value);\n      var keys = ctx.showHidden ? getProperties(value) : visibleKeys;\n\n      // Some type of object without properties can be shortcutted.\n      // In IE, errors have a single `stack` property, or if they are vanilla `Error`,\n      // a `stack` plus `description` property; ignore those for consistency.\n      if (keys.length === 0 || (isError(value) && (\n          (keys.length === 1 && keys[0] === 'stack') ||\n          (keys.length === 2 && keys[0] === 'description' && keys[1] === 'stack')\n         ))) {\n        if (typeof value === 'function') {\n          var name = getName(value);\n          var nameSuffix = name ? ': ' + name : '';\n          return ctx.stylize('[Function' + nameSuffix + ']', 'special');\n        }\n        if (isRegExp(value)) {\n          return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');\n        }\n        if (isDate(value)) {\n          return ctx.stylize(Date.prototype.toUTCString.call(value), 'date');\n        }\n        if (isError(value)) {\n          return formatError(value);\n        }\n      }\n\n      var base = '', array = false, braces = ['{', '}'];\n\n      // Make Array say that they are Array\n      if (isArray(value)) {\n        array = true;\n        braces = ['[', ']'];\n      }\n\n      // Make functions say that they are functions\n      if (typeof value === 'function') {\n        var name = getName(value);\n        var nameSuffix = name ? ': ' + name : '';\n        base = ' [Function' + nameSuffix + ']';\n      }\n\n      // Make RegExps say that they are RegExps\n      if (isRegExp(value)) {\n        base = ' ' + RegExp.prototype.toString.call(value);\n      }\n\n      // Make dates with properties first say the date\n      if (isDate(value)) {\n        base = ' ' + Date.prototype.toUTCString.call(value);\n      }\n\n      // Make error with message first say the error\n      if (isError(value)) {\n        return formatError(value);\n      }\n\n      if (keys.length === 0 && (!array || value.length == 0)) {\n        return braces[0] + base + braces[1];\n      }\n\n      if (recurseTimes < 0) {\n        if (isRegExp(value)) {\n          return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');\n        } else {\n          return ctx.stylize('[Object]', 'special');\n        }\n      }\n\n      ctx.seen.push(value);\n\n      var output;\n      if (array) {\n        output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);\n      } else {\n        output = keys.map(function(key) {\n          return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);\n        });\n      }\n\n      ctx.seen.pop();\n\n      return reduceToSingleString(output, base, braces);\n    }\n\n\n    function formatPrimitive(ctx, value) {\n      switch (typeof value) {\n        case 'undefined':\n          return ctx.stylize('undefined', 'undefined');\n\n        case 'string':\n          var simple = '\\'' + JSON.stringify(value).replace(/^\"|\"$/g, '')\n                                                   .replace(/'/g, \"\\\\'\")\n                                                   .replace(/\\\\\"/g, '\"') + '\\'';\n          return ctx.stylize(simple, 'string');\n\n        case 'number':\n          return ctx.stylize('' + value, 'number');\n\n        case 'boolean':\n          return ctx.stylize('' + value, 'boolean');\n      }\n      // For some reason typeof null is \"object\", so special case here.\n      if (value === null) {\n        return ctx.stylize('null', 'null');\n      }\n    }\n\n\n    function formatError(value) {\n      return '[' + Error.prototype.toString.call(value) + ']';\n    }\n\n\n    function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {\n      var output = [];\n      for (var i = 0, l = value.length; i < l; ++i) {\n        if (Object.prototype.hasOwnProperty.call(value, String(i))) {\n          output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,\n              String(i), true));\n        } else {\n          output.push('');\n        }\n      }\n      keys.forEach(function(key) {\n        if (!key.match(/^\\d+$/)) {\n          output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,\n              key, true));\n        }\n      });\n      return output;\n    }\n\n\n    function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {\n      var name, str;\n      if (value.__lookupGetter__) {\n        if (value.__lookupGetter__(key)) {\n          if (value.__lookupSetter__(key)) {\n            str = ctx.stylize('[Getter/Setter]', 'special');\n          } else {\n            str = ctx.stylize('[Getter]', 'special');\n          }\n        } else {\n          if (value.__lookupSetter__(key)) {\n            str = ctx.stylize('[Setter]', 'special');\n          }\n        }\n      }\n      if (visibleKeys.indexOf(key) < 0) {\n        name = '[' + key + ']';\n      }\n      if (!str) {\n        if (ctx.seen.indexOf(value[key]) < 0) {\n          if (recurseTimes === null) {\n            str = formatValue(ctx, value[key], null);\n          } else {\n            str = formatValue(ctx, value[key], recurseTimes - 1);\n          }\n          if (str.indexOf('\\n') > -1) {\n            if (array) {\n              str = str.split('\\n').map(function(line) {\n                return '  ' + line;\n              }).join('\\n').substr(2);\n            } else {\n              str = '\\n' + str.split('\\n').map(function(line) {\n                return '   ' + line;\n              }).join('\\n');\n            }\n          }\n        } else {\n          str = ctx.stylize('[Circular]', 'special');\n        }\n      }\n      if (typeof name === 'undefined') {\n        if (array && key.match(/^\\d+$/)) {\n          return str;\n        }\n        name = JSON.stringify('' + key);\n        if (name.match(/^\"([a-zA-Z_][a-zA-Z_0-9]*)\"$/)) {\n          name = name.substr(1, name.length - 2);\n          name = ctx.stylize(name, 'name');\n        } else {\n          name = name.replace(/'/g, \"\\\\'\")\n                     .replace(/\\\\\"/g, '\"')\n                     .replace(/(^\"|\"$)/g, \"'\");\n          name = ctx.stylize(name, 'string');\n        }\n      }\n\n      return name + ': ' + str;\n    }\n\n\n    function reduceToSingleString(output, base, braces) {\n      var numLinesEst = 0;\n      var length = output.reduce(function(prev, cur) {\n        numLinesEst++;\n        if (cur.indexOf('\\n') >= 0) numLinesEst++;\n        return prev + cur.length + 1;\n      }, 0);\n\n      if (length > 60) {\n        return braces[0] +\n               (base === '' ? '' : base + '\\n ') +\n               ' ' +\n               output.join(',\\n  ') +\n               ' ' +\n               braces[1];\n      }\n\n      return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];\n    }\n\n    function isArray(ar) {\n      return Array.isArray(ar) ||\n             (typeof ar === 'object' && objectToString(ar) === '[object Array]');\n    }\n\n    function isRegExp(re) {\n      return typeof re === 'object' && objectToString(re) === '[object RegExp]';\n    }\n\n    function isDate(d) {\n      return typeof d === 'object' && objectToString(d) === '[object Date]';\n    }\n\n    function isError(e) {\n      return typeof e === 'object' && objectToString(e) === '[object Error]';\n    }\n\n    function objectToString(o) {\n      return Object.prototype.toString.call(o);\n    }\n\n  }); // module: chai/utils/inspect.js\n\n  require.register(\"chai/utils/objDisplay.js\", function(module, exports, require){\n    /*!\n     * Chai - flag utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Module dependancies\n     */\n\n    var inspect = require('./inspect');\n\n    /**\n     * ### .objDisplay (object)\n     *\n     * Determines if an object or an array matches\n     * criteria to be inspected in-line for error\n     * messages or should be truncated.\n     *\n     * @param {Mixed} javascript object to inspect\n     * @name objDisplay\n     * @api public\n     */\n\n    module.exports = function (obj) {\n      var str = inspect(obj)\n        , type = Object.prototype.toString.call(obj);\n\n      if (str.length >= 40) {\n        if (type === '[object Function]') {\n          return !obj.name || obj.name === ''\n            ? '[Function]'\n            : '[Function: ' + obj.name + ']';\n        } else if (type === '[object Array]') {\n          return '[ Array(' + obj.length + ') ]';\n        } else if (type === '[object Object]') {\n          var keys = Object.keys(obj)\n            , kstr = keys.length > 2\n              ? keys.splice(0, 2).join(', ') + ', ...'\n              : keys.join(', ');\n          return '{ Object (' + kstr + ') }';\n        } else {\n          return str;\n        }\n      } else {\n        return str;\n      }\n    };\n\n  }); // module: chai/utils/objDisplay.js\n\n  require.register(\"chai/utils/overwriteMethod.js\", function(module, exports, require){\n    /*!\n     * Chai - overwriteMethod utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### overwriteMethod (ctx, name, fn)\n     *\n     * Overwites an already existing method and provides\n     * access to previous function. Must return function\n     * to be used for name.\n     *\n     *     utils.overwriteMethod(chai.Assertion.prototype, 'equal', function (_super) {\n     *       return function (str) {\n     *         var obj = utils.flag(this, 'object');\n     *         if (obj instanceof Foo) {\n     *           new chai.Assertion(obj.value).to.equal(str);\n     *         } else {\n     *           _super.apply(this, arguments);\n     *         }\n     *       }\n     *     });\n     *\n     * Can also be accessed directly from `chai.Assertion`.\n     *\n     *     chai.Assertion.overwriteMethod('foo', fn);\n     *\n     * Then can be used as any other assertion.\n     *\n     *     expect(myFoo).to.equal('bar');\n     *\n     * @param {Object} ctx object whose method is to be overwritten\n     * @param {String} name of method to overwrite\n     * @param {Function} method function that returns a function to be used for name\n     * @name overwriteMethod\n     * @api public\n     */\n\n    module.exports = function (ctx, name, method) {\n      var _method = ctx[name]\n        , _super = function () { return this; };\n\n      if (_method && 'function' === typeof _method)\n        _super = _method;\n\n      ctx[name] = function () {\n        var result = method(_super).apply(this, arguments);\n        return result === undefined ? this : result;\n      }\n    };\n\n  }); // module: chai/utils/overwriteMethod.js\n\n  require.register(\"chai/utils/overwriteProperty.js\", function(module, exports, require){\n    /*!\n     * Chai - overwriteProperty utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### overwriteProperty (ctx, name, fn)\n     *\n     * Overwites an already existing property getter and provides\n     * access to previous value. Must return function to use as getter.\n     *\n     *     utils.overwriteProperty(chai.Assertion.prototype, 'ok', function (_super) {\n     *       return function () {\n     *         var obj = utils.flag(this, 'object');\n     *         if (obj instanceof Foo) {\n     *           new chai.Assertion(obj.name).to.equal('bar');\n     *         } else {\n     *           _super.call(this);\n     *         }\n     *       }\n     *     });\n     *\n     *\n     * Can also be accessed directly from `chai.Assertion`.\n     *\n     *     chai.Assertion.overwriteProperty('foo', fn);\n     *\n     * Then can be used as any other assertion.\n     *\n     *     expect(myFoo).to.be.ok;\n     *\n     * @param {Object} ctx object whose property is to be overwritten\n     * @param {String} name of property to overwrite\n     * @param {Function} getter function that returns a getter function to be used for name\n     * @name overwriteProperty\n     * @api public\n     */\n\n    module.exports = function (ctx, name, getter) {\n      var _get = Object.getOwnPropertyDescriptor(ctx, name)\n        , _super = function () {};\n\n      if (_get && 'function' === typeof _get.get)\n        _super = _get.get\n\n      Object.defineProperty(ctx, name,\n        { get: function () {\n            var result = getter(_super).call(this);\n            return result === undefined ? this : result;\n          }\n        , configurable: true\n      });\n    };\n\n  }); // module: chai/utils/overwriteProperty.js\n\n  require.register(\"chai/utils/test.js\", function(module, exports, require){\n    /*!\n     * Chai - test utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Module dependancies\n     */\n\n    var flag = require('./flag');\n\n    /**\n     * # test(object, expression)\n     *\n     * Test and object for expression.\n     *\n     * @param {Object} object (constructed Assertion)\n     * @param {Arguments} chai.Assertion.prototype.assert arguments\n     */\n\n    module.exports = function (obj, args) {\n      var negate = flag(obj, 'negate')\n        , expr = args[0];\n      return negate ? !expr : expr;\n    };\n\n  }); // module: chai/utils/test.js\n\n  require.register(\"chai/utils/transferFlags.js\", function(module, exports, require){\n    /*!\n     * Chai - transferFlags utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /**\n     * ### transferFlags(assertion, object, includeAll = true)\n     *\n     * Transfer all the flags for `assertion` to `object`. If\n     * `includeAll` is set to `false`, then the base Chai\n     * assertion flags (namely `object`, `ssfi`, and `message`)\n     * will not be transferred.\n     *\n     *\n     *     var newAssertion = new Assertion();\n     *     utils.transferFlags(assertion, newAssertion);\n     *\n     *     var anotherAsseriton = new Assertion(myObj);\n     *     utils.transferFlags(assertion, anotherAssertion, false);\n     *\n     * @param {Assertion} assertion the assertion to transfer the flags from\n     * @param {Object} object the object to transfer the flags too; usually a new assertion\n     * @param {Boolean} includeAll\n     * @name getAllFlags\n     * @api private\n     */\n\n    module.exports = function (assertion, object, includeAll) {\n      var flags = assertion.__flags || (assertion.__flags = Object.create(null));\n\n      if (!object.__flags) {\n        object.__flags = Object.create(null);\n      }\n\n      includeAll = arguments.length === 3 ? includeAll : true;\n\n      for (var flag in flags) {\n        if (includeAll ||\n            (flag !== 'object' && flag !== 'ssfi' && flag != 'message')) {\n          object.__flags[flag] = flags[flag];\n        }\n      }\n    };\n\n  }); // module: chai/utils/transferFlags.js\n\n  require.register(\"chai/utils/type.js\", function(module, exports, require){\n    /*!\n     * Chai - type utility\n     * Copyright(c) 2012-2013 Jake Luer <jake@alogicalparadox.com>\n     * MIT Licensed\n     */\n\n    /*!\n     * Detectable javascript natives\n     */\n\n    var natives = {\n        '[object Arguments]': 'arguments'\n      , '[object Array]': 'array'\n      , '[object Date]': 'date'\n      , '[object Function]': 'function'\n      , '[object Number]': 'number'\n      , '[object RegExp]': 'regexp'\n      , '[object String]': 'string'\n    };\n\n    /**\n     * ### type(object)\n     *\n     * Better implementation of `typeof` detection that can\n     * be used cross-browser. Handles the inconsistencies of\n     * Array, `null`, and `undefined` detection.\n     *\n     *     utils.type({}) // 'object'\n     *     utils.type(null) // `null'\n     *     utils.type(undefined) // `undefined`\n     *     utils.type([]) // `array`\n     *\n     * @param {Mixed} object to detect type of\n     * @name type\n     * @api private\n     */\n\n    module.exports = function (obj) {\n      var str = Object.prototype.toString.call(obj);\n      if (natives[str]) return natives[str];\n      if (obj === null) return 'null';\n      if (obj === undefined) return 'undefined';\n      if (obj === Object(obj)) return 'object';\n      return typeof obj;\n    };\n\n  }); // module: chai/utils/type.js\n\n  require.alias(\"./chai.js\", \"chai\");\n\n  return require('chai');\n});\n//@ sourceURL=virtru-components-chai/index.js"
-));
-require.register("visionmedia-mocha/mocha.js", Function("exports, require, module",
-";(function(){\n\n// CommonJS require()\n\nfunction require(p){\n    var path = require.resolve(p)\n      , mod = require.modules[path];\n    if (!mod) throw new Error('failed to require \"' + p + '\"');\n    if (!mod.exports) {\n      mod.exports = {};\n      mod.call(mod.exports, mod, mod.exports, require.relative(path));\n    }\n    return mod.exports;\n  }\n\nrequire.modules = {};\n\nrequire.resolve = function (path){\n    var orig = path\n      , reg = path + '.js'\n      , index = path + '/index.js';\n    return require.modules[reg] && reg\n      || require.modules[index] && index\n      || orig;\n  };\n\nrequire.register = function (path, fn){\n    require.modules[path] = fn;\n  };\n\nrequire.relative = function (parent) {\n    return function(p){\n      if ('.' != p.charAt(0)) return require(p);\n\n      var path = parent.split('/')\n        , segs = p.split('/');\n      path.pop();\n\n      for (var i = 0; i < segs.length; i++) {\n        var seg = segs[i];\n        if ('..' == seg) path.pop();\n        else if ('.' != seg) path.push(seg);\n      }\n\n      return require(path.join('/'));\n    };\n  };\n\n\nrequire.register(\"browser/debug.js\", function(module, exports, require){\n\nmodule.exports = function(type){\n  return function(){\n  }\n};\n\n}); // module: browser/debug.js\n\nrequire.register(\"browser/diff.js\", function(module, exports, require){\n/* See license.txt for terms of usage */\n\n/*\n * Text diff implementation.\n * \n * This library supports the following APIS:\n * JsDiff.diffChars: Character by character diff\n * JsDiff.diffWords: Word (as defined by \\b regex) diff which ignores whitespace\n * JsDiff.diffLines: Line based diff\n * \n * JsDiff.diffCss: Diff targeted at CSS content\n * \n * These methods are based on the implementation proposed in\n * \"An O(ND) Difference Algorithm and its Variations\" (Myers, 1986).\n * http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.4.6927\n */\nvar JsDiff = (function() {\n  function clonePath(path) {\n    return { newPos: path.newPos, components: path.components.slice(0) };\n  }\n  function removeEmpty(array) {\n    var ret = [];\n    for (var i = 0; i < array.length; i++) {\n      if (array[i]) {\n        ret.push(array[i]);\n      }\n    }\n    return ret;\n  }\n  function escapeHTML(s) {\n    var n = s;\n    n = n.replace(/&/g, \"&amp;\");\n    n = n.replace(/</g, \"&lt;\");\n    n = n.replace(/>/g, \"&gt;\");\n    n = n.replace(/\"/g, \"&quot;\");\n\n    return n;\n  }\n\n\n  var fbDiff = function(ignoreWhitespace) {\n    this.ignoreWhitespace = ignoreWhitespace;\n  };\n  fbDiff.prototype = {\n      diff: function(oldString, newString) {\n        // Handle the identity case (this is due to unrolling editLength == 0\n        if (newString == oldString) {\n          return [{ value: newString }];\n        }\n        if (!newString) {\n          return [{ value: oldString, removed: true }];\n        }\n        if (!oldString) {\n          return [{ value: newString, added: true }];\n        }\n\n        newString = this.tokenize(newString);\n        oldString = this.tokenize(oldString);\n\n        var newLen = newString.length, oldLen = oldString.length;\n        var maxEditLength = newLen + oldLen;\n        var bestPath = [{ newPos: -1, components: [] }];\n\n        // Seed editLength = 0\n        var oldPos = this.extractCommon(bestPath[0], newString, oldString, 0);\n        if (bestPath[0].newPos+1 >= newLen && oldPos+1 >= oldLen) {\n          return bestPath[0].components;\n        }\n\n        for (var editLength = 1; editLength <= maxEditLength; editLength++) {\n          for (var diagonalPath = -1*editLength; diagonalPath <= editLength; diagonalPath+=2) {\n            var basePath;\n            var addPath = bestPath[diagonalPath-1],\n                removePath = bestPath[diagonalPath+1];\n            oldPos = (removePath ? removePath.newPos : 0) - diagonalPath;\n            if (addPath) {\n              // No one else is going to attempt to use this value, clear it\n              bestPath[diagonalPath-1] = undefined;\n            }\n\n            var canAdd = addPath && addPath.newPos+1 < newLen;\n            var canRemove = removePath && 0 <= oldPos && oldPos < oldLen;\n            if (!canAdd && !canRemove) {\n              bestPath[diagonalPath] = undefined;\n              continue;\n            }\n\n            // Select the diagonal that we want to branch from. We select the prior\n            // path whose position in the new string is the farthest from the origin\n            // and does not pass the bounds of the diff graph\n            if (!canAdd || (canRemove && addPath.newPos < removePath.newPos)) {\n              basePath = clonePath(removePath);\n              this.pushComponent(basePath.components, oldString[oldPos], undefined, true);\n            } else {\n              basePath = clonePath(addPath);\n              basePath.newPos++;\n              this.pushComponent(basePath.components, newString[basePath.newPos], true, undefined);\n            }\n\n            var oldPos = this.extractCommon(basePath, newString, oldString, diagonalPath);\n\n            if (basePath.newPos+1 >= newLen && oldPos+1 >= oldLen) {\n              return basePath.components;\n            } else {\n              bestPath[diagonalPath] = basePath;\n            }\n          }\n        }\n      },\n\n      pushComponent: function(components, value, added, removed) {\n        var last = components[components.length-1];\n        if (last && last.added === added && last.removed === removed) {\n          // We need to clone here as the component clone operation is just\n          // as shallow array clone\n          components[components.length-1] =\n            {value: this.join(last.value, value), added: added, removed: removed };\n        } else {\n          components.push({value: value, added: added, removed: removed });\n        }\n      },\n      extractCommon: function(basePath, newString, oldString, diagonalPath) {\n        var newLen = newString.length,\n            oldLen = oldString.length,\n            newPos = basePath.newPos,\n            oldPos = newPos - diagonalPath;\n        while (newPos+1 < newLen && oldPos+1 < oldLen && this.equals(newString[newPos+1], oldString[oldPos+1])) {\n          newPos++;\n          oldPos++;\n          \n          this.pushComponent(basePath.components, newString[newPos], undefined, undefined);\n        }\n        basePath.newPos = newPos;\n        return oldPos;\n      },\n\n      equals: function(left, right) {\n        var reWhitespace = /\\S/;\n        if (this.ignoreWhitespace && !reWhitespace.test(left) && !reWhitespace.test(right)) {\n          return true;\n        } else {\n          return left == right;\n        }\n      },\n      join: function(left, right) {\n        return left + right;\n      },\n      tokenize: function(value) {\n        return value;\n      }\n  };\n  \n  var CharDiff = new fbDiff();\n  \n  var WordDiff = new fbDiff(true);\n  WordDiff.tokenize = function(value) {\n    return removeEmpty(value.split(/(\\s+|\\b)/));\n  };\n  \n  var CssDiff = new fbDiff(true);\n  CssDiff.tokenize = function(value) {\n    return removeEmpty(value.split(/([{}:;,]|\\s+)/));\n  };\n  \n  var LineDiff = new fbDiff();\n  LineDiff.tokenize = function(value) {\n    return value.split(/^/m);\n  };\n  \n  return {\n    diffChars: function(oldStr, newStr) { return CharDiff.diff(oldStr, newStr); },\n    diffWords: function(oldStr, newStr) { return WordDiff.diff(oldStr, newStr); },\n    diffLines: function(oldStr, newStr) { return LineDiff.diff(oldStr, newStr); },\n\n    diffCss: function(oldStr, newStr) { return CssDiff.diff(oldStr, newStr); },\n\n    createPatch: function(fileName, oldStr, newStr, oldHeader, newHeader) {\n      var ret = [];\n\n      ret.push(\"Index: \" + fileName);\n      ret.push(\"===================================================================\");\n      ret.push(\"--- \" + fileName + (typeof oldHeader === \"undefined\" ? \"\" : \"\\t\" + oldHeader));\n      ret.push(\"+++ \" + fileName + (typeof newHeader === \"undefined\" ? \"\" : \"\\t\" + newHeader));\n\n      var diff = LineDiff.diff(oldStr, newStr);\n      if (!diff[diff.length-1].value) {\n        diff.pop();   // Remove trailing newline add\n      }\n      diff.push({value: \"\", lines: []});   // Append an empty value to make cleanup easier\n\n      function contextLines(lines) {\n        return lines.map(function(entry) { return ' ' + entry; });\n      }\n      function eofNL(curRange, i, current) {\n        var last = diff[diff.length-2],\n            isLast = i === diff.length-2,\n            isLastOfType = i === diff.length-3 && (current.added === !last.added || current.removed === !last.removed);\n\n        // Figure out if this is the last line for the given file and missing NL\n        if (!/\\n$/.test(current.value) && (isLast || isLastOfType)) {\n          curRange.push('\\\\ No newline at end of file');\n        }\n      }\n\n      var oldRangeStart = 0, newRangeStart = 0, curRange = [],\n          oldLine = 1, newLine = 1;\n      for (var i = 0; i < diff.length; i++) {\n        var current = diff[i],\n            lines = current.lines || current.value.replace(/\\n$/, \"\").split(\"\\n\");\n        current.lines = lines;\n\n        if (current.added || current.removed) {\n          if (!oldRangeStart) {\n            var prev = diff[i-1];\n            oldRangeStart = oldLine;\n            newRangeStart = newLine;\n            \n            if (prev) {\n              curRange = contextLines(prev.lines.slice(-4));\n              oldRangeStart -= curRange.length;\n              newRangeStart -= curRange.length;\n            }\n          }\n          curRange.push.apply(curRange, lines.map(function(entry) { return (current.added?\"+\":\"-\") + entry; }));\n          eofNL(curRange, i, current);\n\n          if (current.added) {\n            newLine += lines.length;\n          } else {\n            oldLine += lines.length;\n          }\n        } else {\n          if (oldRangeStart) {\n            // Close out any changes that have been output (or join overlapping)\n            if (lines.length <= 8 && i < diff.length-2) {\n              // Overlapping\n              curRange.push.apply(curRange, contextLines(lines));\n            } else {\n              // end the range and output\n              var contextSize = Math.min(lines.length, 4);\n              ret.push(\n                  \"@@ -\" + oldRangeStart + \",\" + (oldLine-oldRangeStart+contextSize)\n                  + \" +\" + newRangeStart + \",\" + (newLine-newRangeStart+contextSize)\n                  + \" @@\");\n              ret.push.apply(ret, curRange);\n              ret.push.apply(ret, contextLines(lines.slice(0, contextSize)));\n              if (lines.length <= 4) {\n                eofNL(ret, i, current);\n              }\n\n              oldRangeStart = 0;  newRangeStart = 0; curRange = [];\n            }\n          }\n          oldLine += lines.length;\n          newLine += lines.length;\n        }\n      }\n\n      return ret.join('\\n') + '\\n';\n    },\n\n    convertChangesToXML: function(changes){\n      var ret = [];\n      for ( var i = 0; i < changes.length; i++) {\n        var change = changes[i];\n        if (change.added) {\n          ret.push(\"<ins>\");\n        } else if (change.removed) {\n          ret.push(\"<del>\");\n        }\n\n        ret.push(escapeHTML(change.value));\n\n        if (change.added) {\n          ret.push(\"</ins>\");\n        } else if (change.removed) {\n          ret.push(\"</del>\");\n        }\n      }\n      return ret.join(\"\");\n    }\n  };\n})();\n\nif (typeof module !== \"undefined\") {\n    module.exports = JsDiff;\n}\n\n}); // module: browser/diff.js\n\nrequire.register(\"browser/events.js\", function(module, exports, require){\n\n/**\n * Module exports.\n */\n\nexports.EventEmitter = EventEmitter;\n\n/**\n * Check if `obj` is an array.\n */\n\nfunction isArray(obj) {\n  return '[object Array]' == {}.toString.call(obj);\n}\n\n/**\n * Event emitter constructor.\n *\n * @api public\n */\n\nfunction EventEmitter(){};\n\n/**\n * Adds a listener.\n *\n * @api public\n */\n\nEventEmitter.prototype.on = function (name, fn) {\n  if (!this.$events) {\n    this.$events = {};\n  }\n\n  if (!this.$events[name]) {\n    this.$events[name] = fn;\n  } else if (isArray(this.$events[name])) {\n    this.$events[name].push(fn);\n  } else {\n    this.$events[name] = [this.$events[name], fn];\n  }\n\n  return this;\n};\n\nEventEmitter.prototype.addListener = EventEmitter.prototype.on;\n\n/**\n * Adds a volatile listener.\n *\n * @api public\n */\n\nEventEmitter.prototype.once = function (name, fn) {\n  var self = this;\n\n  function on () {\n    self.removeListener(name, on);\n    fn.apply(this, arguments);\n  };\n\n  on.listener = fn;\n  this.on(name, on);\n\n  return this;\n};\n\n/**\n * Removes a listener.\n *\n * @api public\n */\n\nEventEmitter.prototype.removeListener = function (name, fn) {\n  if (this.$events && this.$events[name]) {\n    var list = this.$events[name];\n\n    if (isArray(list)) {\n      var pos = -1;\n\n      for (var i = 0, l = list.length; i < l; i++) {\n        if (list[i] === fn || (list[i].listener && list[i].listener === fn)) {\n          pos = i;\n          break;\n        }\n      }\n\n      if (pos < 0) {\n        return this;\n      }\n\n      list.splice(pos, 1);\n\n      if (!list.length) {\n        delete this.$events[name];\n      }\n    } else if (list === fn || (list.listener && list.listener === fn)) {\n      delete this.$events[name];\n    }\n  }\n\n  return this;\n};\n\n/**\n * Removes all listeners for an event.\n *\n * @api public\n */\n\nEventEmitter.prototype.removeAllListeners = function (name) {\n  if (name === undefined) {\n    this.$events = {};\n    return this;\n  }\n\n  if (this.$events && this.$events[name]) {\n    this.$events[name] = null;\n  }\n\n  return this;\n};\n\n/**\n * Gets all listeners for a certain event.\n *\n * @api public\n */\n\nEventEmitter.prototype.listeners = function (name) {\n  if (!this.$events) {\n    this.$events = {};\n  }\n\n  if (!this.$events[name]) {\n    this.$events[name] = [];\n  }\n\n  if (!isArray(this.$events[name])) {\n    this.$events[name] = [this.$events[name]];\n  }\n\n  return this.$events[name];\n};\n\n/**\n * Emits an event.\n *\n * @api public\n */\n\nEventEmitter.prototype.emit = function (name) {\n  if (!this.$events) {\n    return false;\n  }\n\n  var handler = this.$events[name];\n\n  if (!handler) {\n    return false;\n  }\n\n  var args = [].slice.call(arguments, 1);\n\n  if ('function' == typeof handler) {\n    handler.apply(this, args);\n  } else if (isArray(handler)) {\n    var listeners = handler.slice();\n\n    for (var i = 0, l = listeners.length; i < l; i++) {\n      listeners[i].apply(this, args);\n    }\n  } else {\n    return false;\n  }\n\n  return true;\n};\n}); // module: browser/events.js\n\nrequire.register(\"browser/fs.js\", function(module, exports, require){\n\n}); // module: browser/fs.js\n\nrequire.register(\"browser/path.js\", function(module, exports, require){\n\n}); // module: browser/path.js\n\nrequire.register(\"browser/progress.js\", function(module, exports, require){\n\n/**\n * Expose `Progress`.\n */\n\nmodule.exports = Progress;\n\n/**\n * Initialize a new `Progress` indicator.\n */\n\nfunction Progress() {\n  this.percent = 0;\n  this.size(0);\n  this.fontSize(11);\n  this.font('helvetica, arial, sans-serif');\n}\n\n/**\n * Set progress size to `n`.\n *\n * @param {Number} n\n * @return {Progress} for chaining\n * @api public\n */\n\nProgress.prototype.size = function(n){\n  this._size = n;\n  return this;\n};\n\n/**\n * Set text to `str`.\n *\n * @param {String} str\n * @return {Progress} for chaining\n * @api public\n */\n\nProgress.prototype.text = function(str){\n  this._text = str;\n  return this;\n};\n\n/**\n * Set font size to `n`.\n *\n * @param {Number} n\n * @return {Progress} for chaining\n * @api public\n */\n\nProgress.prototype.fontSize = function(n){\n  this._fontSize = n;\n  return this;\n};\n\n/**\n * Set font `family`.\n *\n * @param {String} family\n * @return {Progress} for chaining\n */\n\nProgress.prototype.font = function(family){\n  this._font = family;\n  return this;\n};\n\n/**\n * Update percentage to `n`.\n *\n * @param {Number} n\n * @return {Progress} for chaining\n */\n\nProgress.prototype.update = function(n){\n  this.percent = n;\n  return this;\n};\n\n/**\n * Draw on `ctx`.\n *\n * @param {CanvasRenderingContext2d} ctx\n * @return {Progress} for chaining\n */\n\nProgress.prototype.draw = function(ctx){\n  var percent = Math.min(this.percent, 100)\n    , size = this._size\n    , half = size / 2\n    , x = half\n    , y = half\n    , rad = half - 1\n    , fontSize = this._fontSize;\n\n  ctx.font = fontSize + 'px ' + this._font;\n\n  var angle = Math.PI * 2 * (percent / 100);\n  ctx.clearRect(0, 0, size, size);\n\n  // outer circle\n  ctx.strokeStyle = '#9f9f9f';\n  ctx.beginPath();\n  ctx.arc(x, y, rad, 0, angle, false);\n  ctx.stroke();\n\n  // inner circle\n  ctx.strokeStyle = '#eee';\n  ctx.beginPath();\n  ctx.arc(x, y, rad - 1, 0, angle, true);\n  ctx.stroke();\n\n  // text\n  var text = this._text || (percent | 0) + '%'\n    , w = ctx.measureText(text).width;\n\n  ctx.fillText(\n      text\n    , x - w / 2 + 1\n    , y + fontSize / 2 - 1);\n\n  return this;\n};\n\n}); // module: browser/progress.js\n\nrequire.register(\"browser/tty.js\", function(module, exports, require){\n\nexports.isatty = function(){\n  return true;\n};\n\nexports.getWindowSize = function(){\n  return [window.innerHeight, window.innerWidth];\n};\n}); // module: browser/tty.js\n\nrequire.register(\"context.js\", function(module, exports, require){\n\n/**\n * Expose `Context`.\n */\n\nmodule.exports = Context;\n\n/**\n * Initialize a new `Context`.\n *\n * @api private\n */\n\nfunction Context(){}\n\n/**\n * Set or get the context `Runnable` to `runnable`.\n *\n * @param {Runnable} runnable\n * @return {Context}\n * @api private\n */\n\nContext.prototype.runnable = function(runnable){\n  if (0 == arguments.length) return this._runnable;\n  this.test = this._runnable = runnable;\n  return this;\n};\n\n/**\n * Set test timeout `ms`.\n *\n * @param {Number} ms\n * @return {Context} self\n * @api private\n */\n\nContext.prototype.timeout = function(ms){\n  this.runnable().timeout(ms);\n  return this;\n};\n\n/**\n * Set test slowness threshold `ms`.\n *\n * @param {Number} ms\n * @return {Context} self\n * @api private\n */\n\nContext.prototype.slow = function(ms){\n  this.runnable().slow(ms);\n  return this;\n};\n\n/**\n * Inspect the context void of `._runnable`.\n *\n * @return {String}\n * @api private\n */\n\nContext.prototype.inspect = function(){\n  return JSON.stringify(this, function(key, val){\n    if ('_runnable' == key) return;\n    if ('test' == key) return;\n    return val;\n  }, 2);\n};\n\n}); // module: context.js\n\nrequire.register(\"hook.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Runnable = require('./runnable');\n\n/**\n * Expose `Hook`.\n */\n\nmodule.exports = Hook;\n\n/**\n * Initialize a new `Hook` with the given `title` and callback `fn`.\n *\n * @param {String} title\n * @param {Function} fn\n * @api private\n */\n\nfunction Hook(title, fn) {\n  Runnable.call(this, title, fn);\n  this.type = 'hook';\n}\n\n/**\n * Inherit from `Runnable.prototype`.\n */\n\nfunction F(){};\nF.prototype = Runnable.prototype;\nHook.prototype = new F;\nHook.prototype.constructor = Hook;\n\n\n/**\n * Get or set the test `err`.\n *\n * @param {Error} err\n * @return {Error}\n * @api public\n */\n\nHook.prototype.error = function(err){\n  if (0 == arguments.length) {\n    var err = this._error;\n    this._error = null;\n    return err;\n  }\n\n  this._error = err;\n};\n\n}); // module: hook.js\n\nrequire.register(\"interfaces/bdd.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Suite = require('../suite')\n  , Test = require('../test');\n\n/**\n * BDD-style interface:\n *\n *      describe('Array', function(){\n *        describe('#indexOf()', function(){\n *          it('should return -1 when not present', function(){\n *\n *          });\n *\n *          it('should return the index when present', function(){\n *\n *          });\n *        });\n *      });\n *\n */\n\nmodule.exports = function(suite){\n  var suites = [suite];\n\n  suite.on('pre-require', function(context, file, mocha){\n\n    /**\n     * Execute before running tests.\n     */\n\n    context.before = function(fn){\n      suites[0].beforeAll(fn);\n    };\n\n    /**\n     * Execute after running tests.\n     */\n\n    context.after = function(fn){\n      suites[0].afterAll(fn);\n    };\n\n    /**\n     * Execute before each test case.\n     */\n\n    context.beforeEach = function(fn){\n      suites[0].beforeEach(fn);\n    };\n\n    /**\n     * Execute after each test case.\n     */\n\n    context.afterEach = function(fn){\n      suites[0].afterEach(fn);\n    };\n\n    /**\n     * Describe a \"suite\" with the given `title`\n     * and callback `fn` containing nested suites\n     * and/or tests.\n     */\n\n    context.describe = context.context = function(title, fn){\n      var suite = Suite.create(suites[0], title);\n      suites.unshift(suite);\n      fn.call(suite);\n      suites.shift();\n      return suite;\n    };\n\n    /**\n     * Pending describe.\n     */\n\n    context.xdescribe =\n    context.xcontext =\n    context.describe.skip = function(title, fn){\n      var suite = Suite.create(suites[0], title);\n      suite.pending = true;\n      suites.unshift(suite);\n      fn.call(suite);\n      suites.shift();\n    };\n\n    /**\n     * Exclusive suite.\n     */\n\n    context.describe.only = function(title, fn){\n      var suite = context.describe(title, fn);\n      mocha.grep(suite.fullTitle());\n    };\n\n    /**\n     * Describe a specification or test-case\n     * with the given `title` and callback `fn`\n     * acting as a thunk.\n     */\n\n    context.it = context.specify = function(title, fn){\n      var suite = suites[0];\n      if (suite.pending) var fn = null;\n      var test = new Test(title, fn);\n      suite.addTest(test);\n      return test;\n    };\n\n    /**\n     * Exclusive test-case.\n     */\n\n    context.it.only = function(title, fn){\n      var test = context.it(title, fn);\n      mocha.grep(test.fullTitle());\n    };\n\n    /**\n     * Pending test case.\n     */\n\n    context.xit =\n    context.xspecify =\n    context.it.skip = function(title){\n      context.it(title);\n    };\n  });\n};\n\n}); // module: interfaces/bdd.js\n\nrequire.register(\"interfaces/exports.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Suite = require('../suite')\n  , Test = require('../test');\n\n/**\n * TDD-style interface:\n *\n *     exports.Array = {\n *       '#indexOf()': {\n *         'should return -1 when the value is not present': function(){\n *\n *         },\n *\n *         'should return the correct index when the value is present': function(){\n *\n *         }\n *       }\n *     };\n *\n */\n\nmodule.exports = function(suite){\n  var suites = [suite];\n\n  suite.on('require', visit);\n\n  function visit(obj) {\n    var suite;\n    for (var key in obj) {\n      if ('function' == typeof obj[key]) {\n        var fn = obj[key];\n        switch (key) {\n          case 'before':\n            suites[0].beforeAll(fn);\n            break;\n          case 'after':\n            suites[0].afterAll(fn);\n            break;\n          case 'beforeEach':\n            suites[0].beforeEach(fn);\n            break;\n          case 'afterEach':\n            suites[0].afterEach(fn);\n            break;\n          default:\n            suites[0].addTest(new Test(key, fn));\n        }\n      } else {\n        var suite = Suite.create(suites[0], key);\n        suites.unshift(suite);\n        visit(obj[key]);\n        suites.shift();\n      }\n    }\n  }\n};\n\n}); // module: interfaces/exports.js\n\nrequire.register(\"interfaces/index.js\", function(module, exports, require){\n\nexports.bdd = require('./bdd');\nexports.tdd = require('./tdd');\nexports.qunit = require('./qunit');\nexports.exports = require('./exports');\n\n}); // module: interfaces/index.js\n\nrequire.register(\"interfaces/qunit.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Suite = require('../suite')\n  , Test = require('../test');\n\n/**\n * QUnit-style interface:\n *\n *     suite('Array');\n *\n *     test('#length', function(){\n *       var arr = [1,2,3];\n *       ok(arr.length == 3);\n *     });\n *\n *     test('#indexOf()', function(){\n *       var arr = [1,2,3];\n *       ok(arr.indexOf(1) == 0);\n *       ok(arr.indexOf(2) == 1);\n *       ok(arr.indexOf(3) == 2);\n *     });\n *\n *     suite('String');\n *\n *     test('#length', function(){\n *       ok('foo'.length == 3);\n *     });\n *\n */\n\nmodule.exports = function(suite){\n  var suites = [suite];\n\n  suite.on('pre-require', function(context, file, mocha){\n\n    /**\n     * Execute before running tests.\n     */\n\n    context.before = function(fn){\n      suites[0].beforeAll(fn);\n    };\n\n    /**\n     * Execute after running tests.\n     */\n\n    context.after = function(fn){\n      suites[0].afterAll(fn);\n    };\n\n    /**\n     * Execute before each test case.\n     */\n\n    context.beforeEach = function(fn){\n      suites[0].beforeEach(fn);\n    };\n\n    /**\n     * Execute after each test case.\n     */\n\n    context.afterEach = function(fn){\n      suites[0].afterEach(fn);\n    };\n\n    /**\n     * Describe a \"suite\" with the given `title`.\n     */\n\n    context.suite = function(title){\n      if (suites.length > 1) suites.shift();\n      var suite = Suite.create(suites[0], title);\n      suites.unshift(suite);\n      return suite;\n    };\n\n    /**\n     * Exclusive test-case.\n     */\n\n    context.suite.only = function(title, fn){\n      var suite = context.suite(title, fn);\n      mocha.grep(suite.fullTitle());\n    };\n\n    /**\n     * Describe a specification or test-case\n     * with the given `title` and callback `fn`\n     * acting as a thunk.\n     */\n\n    context.test = function(title, fn){\n      var test = new Test(title, fn);\n      suites[0].addTest(test);\n      return test;\n    };\n\n    /**\n     * Exclusive test-case.\n     */\n\n    context.test.only = function(title, fn){\n      var test = context.test(title, fn);\n      mocha.grep(test.fullTitle());\n    };\n\n    /**\n     * Pending test case.\n     */\n\n    context.test.skip = function(title){\n      context.test(title);\n    };\n  });\n};\n\n}); // module: interfaces/qunit.js\n\nrequire.register(\"interfaces/tdd.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Suite = require('../suite')\n  , Test = require('../test');\n\n/**\n * TDD-style interface:\n *\n *      suite('Array', function(){\n *        suite('#indexOf()', function(){\n *          suiteSetup(function(){\n *\n *          });\n *\n *          test('should return -1 when not present', function(){\n *\n *          });\n *\n *          test('should return the index when present', function(){\n *\n *          });\n *\n *          suiteTeardown(function(){\n *\n *          });\n *        });\n *      });\n *\n */\n\nmodule.exports = function(suite){\n  var suites = [suite];\n\n  suite.on('pre-require', function(context, file, mocha){\n\n    /**\n     * Execute before each test case.\n     */\n\n    context.setup = function(fn){\n      suites[0].beforeEach(fn);\n    };\n\n    /**\n     * Execute after each test case.\n     */\n\n    context.teardown = function(fn){\n      suites[0].afterEach(fn);\n    };\n\n    /**\n     * Execute before the suite.\n     */\n\n    context.suiteSetup = function(fn){\n      suites[0].beforeAll(fn);\n    };\n\n    /**\n     * Execute after the suite.\n     */\n\n    context.suiteTeardown = function(fn){\n      suites[0].afterAll(fn);\n    };\n\n    /**\n     * Describe a \"suite\" with the given `title`\n     * and callback `fn` containing nested suites\n     * and/or tests.\n     */\n\n    context.suite = function(title, fn){\n      var suite = Suite.create(suites[0], title);\n      suites.unshift(suite);\n      fn.call(suite);\n      suites.shift();\n      return suite;\n    };\n\n    /**\n     * Exclusive test-case.\n     */\n\n    context.suite.only = function(title, fn){\n      var suite = context.suite(title, fn);\n      mocha.grep(suite.fullTitle());\n    };\n\n    /**\n     * Describe a specification or test-case\n     * with the given `title` and callback `fn`\n     * acting as a thunk.\n     */\n\n    context.test = function(title, fn){\n      var test = new Test(title, fn);\n      suites[0].addTest(test);\n      return test;\n    };\n\n    /**\n     * Exclusive test-case.\n     */\n\n    context.test.only = function(title, fn){\n      var test = context.test(title, fn);\n      mocha.grep(test.fullTitle());\n    };\n\n    /**\n     * Pending test case.\n     */\n\n    context.test.skip = function(title){\n      context.test(title);\n    };\n  });\n};\n\n}); // module: interfaces/tdd.js\n\nrequire.register(\"mocha.js\", function(module, exports, require){\n/*!\n * mocha\n * Copyright(c) 2011 TJ Holowaychuk <tj@vision-media.ca>\n * MIT Licensed\n */\n\n/**\n * Module dependencies.\n */\n\nvar path = require('browser/path')\n  , utils = require('./utils');\n\n/**\n * Expose `Mocha`.\n */\n\nexports = module.exports = Mocha;\n\n/**\n * Expose internals.\n */\n\nexports.utils = utils;\nexports.interfaces = require('./interfaces');\nexports.reporters = require('./reporters');\nexports.Runnable = require('./runnable');\nexports.Context = require('./context');\nexports.Runner = require('./runner');\nexports.Suite = require('./suite');\nexports.Hook = require('./hook');\nexports.Test = require('./test');\n\n/**\n * Return image `name` path.\n *\n * @param {String} name\n * @return {String}\n * @api private\n */\n\nfunction image(name) {\n  return __dirname + '/../images/' + name + '.png';\n}\n\n/**\n * Setup mocha with `options`.\n *\n * Options:\n *\n *   - `ui` name \"bdd\", \"tdd\", \"exports\" etc\n *   - `reporter` reporter instance, defaults to `mocha.reporters.Dot`\n *   - `globals` array of accepted globals\n *   - `timeout` timeout in milliseconds\n *   - `bail` bail on the first test failure\n *   - `slow` milliseconds to wait before considering a test slow\n *   - `ignoreLeaks` ignore global leaks\n *   - `grep` string or regexp to filter tests with\n *\n * @param {Object} options\n * @api public\n */\n\nfunction Mocha(options) {\n  options = options || {};\n  this.files = [];\n  this.options = options;\n  this.grep(options.grep);\n  this.suite = new exports.Suite('', new exports.Context);\n  this.ui(options.ui);\n  this.bail(options.bail);\n  this.reporter(options.reporter);\n  if (options.timeout) this.timeout(options.timeout);\n  if (options.slow) this.slow(options.slow);\n}\n\n/**\n * Enable or disable bailing on the first failure.\n *\n * @param {Boolean} [bail]\n * @api public\n */\n\nMocha.prototype.bail = function(bail){\n  if (0 == arguments.length) bail = true;\n  this.suite.bail(bail);\n  return this;\n};\n\n/**\n * Add test `file`.\n *\n * @param {String} file\n * @api public\n */\n\nMocha.prototype.addFile = function(file){\n  this.files.push(file);\n  return this;\n};\n\n/**\n * Set reporter to `reporter`, defaults to \"dot\".\n *\n * @param {String|Function} reporter name or constructor\n * @api public\n */\n\nMocha.prototype.reporter = function(reporter){\n  if ('function' == typeof reporter) {\n    this._reporter = reporter;\n  } else {\n    reporter = reporter || 'dot';\n    try {\n      this._reporter = require('./reporters/' + reporter);\n    } catch (err) {\n      this._reporter = require(reporter);\n    }\n    if (!this._reporter) throw new Error('invalid reporter \"' + reporter + '\"');\n  }\n  return this;\n};\n\n/**\n * Set test UI `name`, defaults to \"bdd\".\n *\n * @param {String} bdd\n * @api public\n */\n\nMocha.prototype.ui = function(name){\n  name = name || 'bdd';\n  this._ui = exports.interfaces[name];\n  if (!this._ui) throw new Error('invalid interface \"' + name + '\"');\n  this._ui = this._ui(this.suite);\n  return this;\n};\n\n/**\n * Load registered files.\n *\n * @api private\n */\n\nMocha.prototype.loadFiles = function(fn){\n  var self = this;\n  var suite = this.suite;\n  var pending = this.files.length;\n  this.files.forEach(function(file){\n    file = path.resolve(file);\n    suite.emit('pre-require', global, file, self);\n    suite.emit('require', require(file), file, self);\n    suite.emit('post-require', global, file, self);\n    --pending || (fn && fn());\n  });\n};\n\n/**\n * Enable growl support.\n *\n * @api private\n */\n\nMocha.prototype._growl = function(runner, reporter) {\n  var notify = require('growl');\n\n  runner.on('end', function(){\n    var stats = reporter.stats;\n    if (stats.failures) {\n      var msg = stats.failures + ' of ' + runner.total + ' tests failed';\n      notify(msg, { name: 'mocha', title: 'Failed', image: image('error') });\n    } else {\n      notify(stats.passes + ' tests passed in ' + stats.duration + 'ms', {\n          name: 'mocha'\n        , title: 'Passed'\n        , image: image('ok')\n      });\n    }\n  });\n};\n\n/**\n * Add regexp to grep, if `re` is a string it is escaped.\n *\n * @param {RegExp|String} re\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.grep = function(re){\n  this.options.grep = 'string' == typeof re\n    ? new RegExp(utils.escapeRegexp(re))\n    : re;\n  return this;\n};\n\n/**\n * Invert `.grep()` matches.\n *\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.invert = function(){\n  this.options.invert = true;\n  return this;\n};\n\n/**\n * Ignore global leaks.\n *\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.ignoreLeaks = function(){\n  this.options.ignoreLeaks = true;\n  return this;\n};\n\n/**\n * Enable global leak checking.\n *\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.checkLeaks = function(){\n  this.options.ignoreLeaks = false;\n  return this;\n};\n\n/**\n * Enable growl support.\n *\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.growl = function(){\n  this.options.growl = true;\n  return this;\n};\n\n/**\n * Ignore `globals` array or string.\n *\n * @param {Array|String} globals\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.globals = function(globals){\n  this.options.globals = (this.options.globals || []).concat(globals);\n  return this;\n};\n\n/**\n * Set the timeout in milliseconds.\n *\n * @param {Number} timeout\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.timeout = function(timeout){\n  this.suite.timeout(timeout);\n  return this;\n};\n\n/**\n * Set slowness threshold in milliseconds.\n *\n * @param {Number} slow\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.slow = function(slow){\n  this.suite.slow(slow);\n  return this;\n};\n\n/**\n * Makes all tests async (accepting a callback)\n *\n * @return {Mocha}\n * @api public\n */\n\nMocha.prototype.asyncOnly = function(){\n  this.options.asyncOnly = true;\n  return this;\n};\n\n/**\n * Run tests and invoke `fn()` when complete.\n *\n * @param {Function} fn\n * @return {Runner}\n * @api public\n */\n\nMocha.prototype.run = function(fn){\n  if (this.files.length) this.loadFiles();\n  var suite = this.suite;\n  var options = this.options;\n  var runner = new exports.Runner(suite);\n  var reporter = new this._reporter(runner);\n  runner.ignoreLeaks = false !== options.ignoreLeaks;\n  runner.asyncOnly = options.asyncOnly;\n  if (options.grep) runner.grep(options.grep, options.invert);\n  if (options.globals) runner.globals(options.globals);\n  if (options.growl) this._growl(runner, reporter);\n  return runner.run(fn);\n};\n\n}); // module: mocha.js\n\nrequire.register(\"ms.js\", function(module, exports, require){\n\n/**\n * Helpers.\n */\n\nvar s = 1000;\nvar m = s * 60;\nvar h = m * 60;\nvar d = h * 24;\n\n/**\n * Parse or format the given `val`.\n *\n * @param {String|Number} val\n * @return {String|Number}\n * @api public\n */\n\nmodule.exports = function(val){\n  if ('string' == typeof val) return parse(val);\n  return format(val);\n}\n\n/**\n * Parse the given `str` and return milliseconds.\n *\n * @param {String} str\n * @return {Number}\n * @api private\n */\n\nfunction parse(str) {\n  var m = /^((?:\\d+)?\\.?\\d+) *(ms|seconds?|s|minutes?|m|hours?|h|days?|d|years?|y)?$/i.exec(str);\n  if (!m) return;\n  var n = parseFloat(m[1]);\n  var type = (m[2] || 'ms').toLowerCase();\n  switch (type) {\n    case 'years':\n    case 'year':\n    case 'y':\n      return n * 31557600000;\n    case 'days':\n    case 'day':\n    case 'd':\n      return n * 86400000;\n    case 'hours':\n    case 'hour':\n    case 'h':\n      return n * 3600000;\n    case 'minutes':\n    case 'minute':\n    case 'm':\n      return n * 60000;\n    case 'seconds':\n    case 'second':\n    case 's':\n      return n * 1000;\n    case 'ms':\n      return n;\n  }\n}\n\n/**\n * Format the given `ms`.\n *\n * @param {Number} ms\n * @return {String}\n * @api public\n */\n\nfunction format(ms) {\n  if (ms == d) return Math.round(ms / d) + ' day';\n  if (ms > d) return Math.round(ms / d) + ' days';\n  if (ms == h) return Math.round(ms / h) + ' hour';\n  if (ms > h) return Math.round(ms / h) + ' hours';\n  if (ms == m) return Math.round(ms / m) + ' minute';\n  if (ms > m) return Math.round(ms / m) + ' minutes';\n  if (ms == s) return Math.round(ms / s) + ' second';\n  if (ms > s) return Math.round(ms / s) + ' seconds';\n  return ms + ' ms';\n}\n}); // module: ms.js\n\nrequire.register(\"reporters/base.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar tty = require('browser/tty')\n  , diff = require('browser/diff')\n  , ms = require('../ms');\n\n/**\n * Save timer references to avoid Sinon interfering (see GH-237).\n */\n\nvar Date = global.Date\n  , setTimeout = global.setTimeout\n  , setInterval = global.setInterval\n  , clearTimeout = global.clearTimeout\n  , clearInterval = global.clearInterval;\n\n/**\n * Check if both stdio streams are associated with a tty.\n */\n\nvar isatty = tty.isatty(1) && tty.isatty(2);\n\n/**\n * Expose `Base`.\n */\n\nexports = module.exports = Base;\n\n/**\n * Enable coloring by default.\n */\n\nexports.useColors = isatty;\n\n/**\n * Default color map.\n */\n\nexports.colors = {\n    'pass': 90\n  , 'fail': 31\n  , 'bright pass': 92\n  , 'bright fail': 91\n  , 'bright yellow': 93\n  , 'pending': 36\n  , 'suite': 0\n  , 'error title': 0\n  , 'error message': 31\n  , 'error stack': 90\n  , 'checkmark': 32\n  , 'fast': 90\n  , 'medium': 33\n  , 'slow': 31\n  , 'green': 32\n  , 'light': 90\n  , 'diff gutter': 90\n  , 'diff added': 42\n  , 'diff removed': 41\n};\n\n/**\n * Default symbol map.\n */\n\nexports.symbols = {\n  ok: '✓',\n  err: '✖',\n  dot: '․'\n};\n\n// With node.js on Windows: use symbols available in terminal default fonts\nif ('win32' == process.platform) {\n  exports.symbols.ok = '\\u221A';\n  exports.symbols.err = '\\u00D7';\n  exports.symbols.dot = '.';\n}\n\n/**\n * Color `str` with the given `type`,\n * allowing colors to be disabled,\n * as well as user-defined color\n * schemes.\n *\n * @param {String} type\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nvar color = exports.color = function(type, str) {\n  if (!exports.useColors) return str;\n  return '\\u001b[' + exports.colors[type] + 'm' + str + '\\u001b[0m';\n};\n\n/**\n * Expose term window size, with some\n * defaults for when stderr is not a tty.\n */\n\nexports.window = {\n  width: isatty\n    ? process.stdout.getWindowSize\n      ? process.stdout.getWindowSize(1)[0]\n      : tty.getWindowSize()[1]\n    : 75\n};\n\n/**\n * Expose some basic cursor interactions\n * that are common among reporters.\n */\n\nexports.cursor = {\n  hide: function(){\n    process.stdout.write('\\u001b[?25l');\n  },\n\n  show: function(){\n    process.stdout.write('\\u001b[?25h');\n  },\n\n  deleteLine: function(){\n    process.stdout.write('\\u001b[2K');\n  },\n\n  beginningOfLine: function(){\n    process.stdout.write('\\u001b[0G');\n  },\n\n  CR: function(){\n    exports.cursor.deleteLine();\n    exports.cursor.beginningOfLine();\n  }\n};\n\n/**\n * Outut the given `failures` as a list.\n *\n * @param {Array} failures\n * @api public\n */\n\nexports.list = function(failures){\n  console.error();\n  failures.forEach(function(test, i){\n    // format\n    var fmt = color('error title', '  %s) %s:\\n')\n      + color('error message', '     %s')\n      + color('error stack', '\\n%s\\n');\n\n    // msg\n    var err = test.err\n      , message = err.message || ''\n      , stack = err.stack || message\n      , index = stack.indexOf(message) + message.length\n      , msg = stack.slice(0, index)\n      , actual = err.actual\n      , expected = err.expected\n      , escape = true;\n\n    // explicitly show diff\n    if (err.showDiff) {\n      escape = false;\n      err.actual = actual = JSON.stringify(actual, null, 2);\n      err.expected = expected = JSON.stringify(expected, null, 2);\n    }\n\n    // actual / expected diff\n    if ('string' == typeof actual && 'string' == typeof expected) {\n      msg = errorDiff(err, 'Words', escape);\n\n      // linenos\n      var lines = msg.split('\\n');\n      if (lines.length > 4) {\n        var width = String(lines.length).length;\n        msg = lines.map(function(str, i){\n          return pad(++i, width) + ' |' + ' ' + str;\n        }).join('\\n');\n      }\n\n      // legend\n      msg = '\\n'\n        + color('diff removed', 'actual')\n        + ' '\n        + color('diff added', 'expected')\n        + '\\n\\n'\n        + msg\n        + '\\n';\n\n      // indent\n      msg = msg.replace(/^/gm, '      ');\n\n      fmt = color('error title', '  %s) %s:\\n%s')\n        + color('error stack', '\\n%s\\n');\n    }\n\n    // indent stack trace without msg\n    stack = stack.slice(index ? index + 1 : index)\n      .replace(/^/gm, '  ');\n\n    console.error(fmt, (i + 1), test.fullTitle(), msg, stack);\n  });\n};\n\n/**\n * Initialize a new `Base` reporter.\n *\n * All other reporters generally\n * inherit from this reporter, providing\n * stats such as test duration, number\n * of tests passed / failed etc.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Base(runner) {\n  var self = this\n    , stats = this.stats = { suites: 0, tests: 0, passes: 0, pending: 0, failures: 0 }\n    , failures = this.failures = [];\n\n  if (!runner) return;\n  this.runner = runner;\n\n  runner.stats = stats;\n\n  runner.on('start', function(){\n    stats.start = new Date;\n  });\n\n  runner.on('suite', function(suite){\n    stats.suites = stats.suites || 0;\n    suite.root || stats.suites++;\n  });\n\n  runner.on('test end', function(test){\n    stats.tests = stats.tests || 0;\n    stats.tests++;\n  });\n\n  runner.on('pass', function(test){\n    stats.passes = stats.passes || 0;\n\n    var medium = test.slow() / 2;\n    test.speed = test.duration > test.slow()\n      ? 'slow'\n      : test.duration > medium\n        ? 'medium'\n        : 'fast';\n\n    stats.passes++;\n  });\n\n  runner.on('fail', function(test, err){\n    stats.failures = stats.failures || 0;\n    stats.failures++;\n    test.err = err;\n    failures.push(test);\n  });\n\n  runner.on('end', function(){\n    stats.end = new Date;\n    stats.duration = new Date - stats.start;\n  });\n\n  runner.on('pending', function(){\n    stats.pending++;\n  });\n}\n\n/**\n * Output common epilogue used by many of\n * the bundled reporters.\n *\n * @api public\n */\n\nBase.prototype.epilogue = function(){\n  var stats = this.stats\n    , fmt\n    , tests;\n\n  console.log();\n\n  function pluralize(n) {\n    return 1 == n ? 'test' : 'tests';\n  }\n\n  // failure\n  if (stats.failures) {\n    fmt = color('bright fail', '  ' + exports.symbols.err)\n      + color('fail', ' %d of %d %s failed')\n      + color('light', ':')\n\n    console.error(fmt,\n      stats.failures,\n      this.runner.total,\n      pluralize(this.runner.total));\n\n    Base.list(this.failures);\n    console.error();\n    return;\n  }\n\n  // pass\n  fmt = color('bright pass', ' ')\n    + color('green', ' %d %s complete')\n    + color('light', ' (%s)');\n\n  console.log(fmt,\n    stats.tests || 0,\n    pluralize(stats.tests),\n    ms(stats.duration));\n\n  // pending\n  if (stats.pending) {\n    fmt = color('pending', ' ')\n      + color('pending', ' %d %s pending');\n\n    console.log(fmt, stats.pending, pluralize(stats.pending));\n  }\n\n  console.log();\n};\n\n/**\n * Pad the given `str` to `len`.\n *\n * @param {String} str\n * @param {String} len\n * @return {String}\n * @api private\n */\n\nfunction pad(str, len) {\n  str = String(str);\n  return Array(len - str.length + 1).join(' ') + str;\n}\n\n/**\n * Return a character diff for `err`.\n *\n * @param {Error} err\n * @return {String}\n * @api private\n */\n\nfunction errorDiff(err, type, escape) {\n  return diff['diff' + type](err.actual, err.expected).map(function(str){\n    if (escape) {\n      str.value = str.value\n        .replace(/\\t/g, '<tab>')\n        .replace(/\\r/g, '<CR>')\n        .replace(/\\n/g, '<LF>\\n');\n    }\n    if (str.added) return colorLines('diff added', str.value);\n    if (str.removed) return colorLines('diff removed', str.value);\n    return str.value;\n  }).join('');\n}\n\n/**\n * Color lines for `str`, using the color `name`.\n *\n * @param {String} name\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nfunction colorLines(name, str) {\n  return str.split('\\n').map(function(str){\n    return color(name, str);\n  }).join('\\n');\n}\n\n}); // module: reporters/base.js\n\nrequire.register(\"reporters/doc.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , utils = require('../utils');\n\n/**\n * Expose `Doc`.\n */\n\nexports = module.exports = Doc;\n\n/**\n * Initialize a new `Doc` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Doc(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , total = runner.total\n    , indents = 2;\n\n  function indent() {\n    return Array(indents).join('  ');\n  }\n\n  runner.on('suite', function(suite){\n    if (suite.root) return;\n    ++indents;\n    console.log('%s<section class=\"suite\">', indent());\n    ++indents;\n    console.log('%s<h1>%s</h1>', indent(), utils.escape(suite.title));\n    console.log('%s<dl>', indent());\n  });\n\n  runner.on('suite end', function(suite){\n    if (suite.root) return;\n    console.log('%s</dl>', indent());\n    --indents;\n    console.log('%s</section>', indent());\n    --indents;\n  });\n\n  runner.on('pass', function(test){\n    console.log('%s  <dt>%s</dt>', indent(), utils.escape(test.title));\n    var code = utils.escape(utils.clean(test.fn.toString()));\n    console.log('%s  <dd><pre><code>%s</code></pre></dd>', indent(), code);\n  });\n}\n\n}); // module: reporters/doc.js\n\nrequire.register(\"reporters/dot.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , color = Base.color;\n\n/**\n * Expose `Dot`.\n */\n\nexports = module.exports = Dot;\n\n/**\n * Initialize a new `Dot` matrix test reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Dot(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , width = Base.window.width * .75 | 0\n    , n = 0;\n\n  runner.on('start', function(){\n    process.stdout.write('\\n  ');\n  });\n\n  runner.on('pending', function(test){\n    process.stdout.write(color('pending', Base.symbols.dot));\n  });\n\n  runner.on('pass', function(test){\n    if (++n % width == 0) process.stdout.write('\\n  ');\n    if ('slow' == test.speed) {\n      process.stdout.write(color('bright yellow', Base.symbols.dot));\n    } else {\n      process.stdout.write(color(test.speed, Base.symbols.dot));\n    }\n  });\n\n  runner.on('fail', function(test, err){\n    if (++n % width == 0) process.stdout.write('\\n  ');\n    process.stdout.write(color('fail', Base.symbols.dot));\n  });\n\n  runner.on('end', function(){\n    console.log();\n    self.epilogue();\n  });\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nDot.prototype = new F;\nDot.prototype.constructor = Dot;\n\n}); // module: reporters/dot.js\n\nrequire.register(\"reporters/html-cov.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar JSONCov = require('./json-cov')\n  , fs = require('browser/fs');\n\n/**\n * Expose `HTMLCov`.\n */\n\nexports = module.exports = HTMLCov;\n\n/**\n * Initialize a new `JsCoverage` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction HTMLCov(runner) {\n  var jade = require('jade')\n    , file = __dirname + '/templates/coverage.jade'\n    , str = fs.readFileSync(file, 'utf8')\n    , fn = jade.compile(str, { filename: file })\n    , self = this;\n\n  JSONCov.call(this, runner, false);\n\n  runner.on('end', function(){\n    process.stdout.write(fn({\n        cov: self.cov\n      , coverageClass: coverageClass\n    }));\n  });\n}\n\n/**\n * Return coverage class for `n`.\n *\n * @return {String}\n * @api private\n */\n\nfunction coverageClass(n) {\n  if (n >= 75) return 'high';\n  if (n >= 50) return 'medium';\n  if (n >= 25) return 'low';\n  return 'terrible';\n}\n}); // module: reporters/html-cov.js\n\nrequire.register(\"reporters/html.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , utils = require('../utils')\n  , Progress = require('../browser/progress')\n  , escape = utils.escape;\n\n/**\n * Save timer references to avoid Sinon interfering (see GH-237).\n */\n\nvar Date = global.Date\n  , setTimeout = global.setTimeout\n  , setInterval = global.setInterval\n  , clearTimeout = global.clearTimeout\n  , clearInterval = global.clearInterval;\n\n/**\n * Expose `Doc`.\n */\n\nexports = module.exports = HTML;\n\n/**\n * Stats template.\n */\n\nvar statsTemplate = '<ul id=\"mocha-stats\">'\n  + '<li class=\"progress\"><canvas width=\"40\" height=\"40\"></canvas></li>'\n  + '<li class=\"passes\"><a href=\"#\">passes:</a> <em>0</em></li>'\n  + '<li class=\"failures\"><a href=\"#\">failures:</a> <em>0</em></li>'\n  + '<li class=\"duration\">duration: <em>0</em>s</li>'\n  + '</ul>';\n\n/**\n * Initialize a new `Doc` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction HTML(runner, root) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , total = runner.total\n    , stat = fragment(statsTemplate)\n    , items = stat.getElementsByTagName('li')\n    , passes = items[1].getElementsByTagName('em')[0]\n    , passesLink = items[1].getElementsByTagName('a')[0]\n    , failures = items[2].getElementsByTagName('em')[0]\n    , failuresLink = items[2].getElementsByTagName('a')[0]\n    , duration = items[3].getElementsByTagName('em')[0]\n    , canvas = stat.getElementsByTagName('canvas')[0]\n    , report = fragment('<ul id=\"mocha-report\"></ul>')\n    , stack = [report]\n    , progress\n    , ctx\n\n  root = root || document.getElementById('mocha');\n\n  if (canvas.getContext) {\n    var ratio = window.devicePixelRatio || 1;\n    canvas.style.width = canvas.width;\n    canvas.style.height = canvas.height;\n    canvas.width *= ratio;\n    canvas.height *= ratio;\n    ctx = canvas.getContext('2d');\n    ctx.scale(ratio, ratio);\n    progress = new Progress;\n  }\n\n  if (!root) return error('#mocha div missing, add it to your document');\n\n  // pass toggle\n  on(passesLink, 'click', function(){\n    unhide();\n    var name = /pass/.test(report.className) ? '' : ' pass';\n    report.className = report.className.replace(/fail|pass/g, '') + name;\n    if (report.className.trim()) hideSuitesWithout('test pass');\n  });\n\n  // failure toggle\n  on(failuresLink, 'click', function(){\n    unhide();\n    var name = /fail/.test(report.className) ? '' : ' fail';\n    report.className = report.className.replace(/fail|pass/g, '') + name;\n    if (report.className.trim()) hideSuitesWithout('test fail');\n  });\n\n  root.appendChild(stat);\n  root.appendChild(report);\n\n  if (progress) progress.size(40);\n\n  runner.on('suite', function(suite){\n    if (suite.root) return;\n\n    // suite\n    var url = '?grep=' + encodeURIComponent(suite.fullTitle());\n    var el = fragment('<li class=\"suite\"><h1><a href=\"%s\">%s</a></h1></li>', url, escape(suite.title));\n\n    // container\n    stack[0].appendChild(el);\n    stack.unshift(document.createElement('ul'));\n    el.appendChild(stack[0]);\n  });\n\n  runner.on('suite end', function(suite){\n    if (suite.root) return;\n    stack.shift();\n  });\n\n  runner.on('fail', function(test, err){\n    if ('hook' == test.type) runner.emit('test end', test);\n  });\n\n  runner.on('test end', function(test){\n    // TODO: add to stats\n    var percent = stats.tests / this.total * 100 | 0;\n    if (progress) progress.update(percent).draw(ctx);\n\n    // update stats\n    var ms = new Date - stats.start;\n    text(passes, stats.passes);\n    text(failures, stats.failures);\n    text(duration, (ms / 1000).toFixed(2));\n\n    // test\n    if ('passed' == test.state) {\n      var el = fragment('<li class=\"test pass %e\"><h2>%e<span class=\"duration\">%ems</span> <a href=\"?grep=%e\" class=\"replay\">‣</a></h2></li>', test.speed, test.title, test.duration, encodeURIComponent(test.fullTitle()));\n    } else if (test.pending) {\n      var el = fragment('<li class=\"test pass pending\"><h2>%e</h2></li>', test.title);\n    } else {\n      var el = fragment('<li class=\"test fail\"><h2>%e <a href=\"?grep=%e\" class=\"replay\">‣</a></h2></li>', test.title, encodeURIComponent(test.fullTitle()));\n      var str = test.err.stack || test.err.toString();\n\n      // FF / Opera do not add the message\n      if (!~str.indexOf(test.err.message)) {\n        str = test.err.message + '\\n' + str;\n      }\n\n      // <=IE7 stringifies to [Object Error]. Since it can be overloaded, we\n      // check for the result of the stringifying.\n      if ('[object Error]' == str) str = test.err.message;\n\n      // Safari doesn't give you a stack. Let's at least provide a source line.\n      if (!test.err.stack && test.err.sourceURL && test.err.line !== undefined) {\n        str += \"\\n(\" + test.err.sourceURL + \":\" + test.err.line + \")\";\n      }\n\n      el.appendChild(fragment('<pre class=\"error\">%e</pre>', str));\n    }\n\n    // toggle code\n    // TODO: defer\n    if (!test.pending) {\n      var h2 = el.getElementsByTagName('h2')[0];\n\n      on(h2, 'click', function(){\n        pre.style.display = 'none' == pre.style.display\n          ? 'block'\n          : 'none';\n      });\n\n      var pre = fragment('<pre><code>%e</code></pre>', utils.clean(test.fn.toString()));\n      el.appendChild(pre);\n      pre.style.display = 'none';\n    }\n\n    // Don't call .appendChild if #mocha-report was already .shift()'ed off the stack.\n    if (stack[0]) stack[0].appendChild(el);\n  });\n}\n\n/**\n * Display error `msg`.\n */\n\nfunction error(msg) {\n  document.body.appendChild(fragment('<div id=\"mocha-error\">%s</div>', msg));\n}\n\n/**\n * Return a DOM fragment from `html`.\n */\n\nfunction fragment(html) {\n  var args = arguments\n    , div = document.createElement('div')\n    , i = 1;\n\n  div.innerHTML = html.replace(/%([se])/g, function(_, type){\n    switch (type) {\n      case 's': return String(args[i++]);\n      case 'e': return escape(args[i++]);\n    }\n  });\n\n  return div.firstChild;\n}\n\n/**\n * Check for suites that do not have elements\n * with `classname`, and hide them.\n */\n\nfunction hideSuitesWithout(classname) {\n  var suites = document.getElementsByClassName('suite');\n  for (var i = 0; i < suites.length; i++) {\n    var els = suites[i].getElementsByClassName(classname);\n    if (0 == els.length) suites[i].className += ' hidden';\n  }\n}\n\n/**\n * Unhide .hidden suites.\n */\n\nfunction unhide() {\n  var els = document.getElementsByClassName('suite hidden');\n  for (var i = 0; i < els.length; ++i) {\n    els[i].className = els[i].className.replace('suite hidden', 'suite');\n  }\n}\n\n/**\n * Set `el` text to `str`.\n */\n\nfunction text(el, str) {\n  if (el.textContent) {\n    el.textContent = str;\n  } else {\n    el.innerText = str;\n  }\n}\n\n/**\n * Listen on `event` with callback `fn`.\n */\n\nfunction on(el, event, fn) {\n  if (el.addEventListener) {\n    el.addEventListener(event, fn, false);\n  } else {\n    el.attachEvent('on' + event, fn);\n  }\n}\n\n}); // module: reporters/html.js\n\nrequire.register(\"reporters/index.js\", function(module, exports, require){\n\nexports.Base = require('./base');\nexports.Dot = require('./dot');\nexports.Doc = require('./doc');\nexports.TAP = require('./tap');\nexports.JSON = require('./json');\nexports.HTML = require('./html');\nexports.List = require('./list');\nexports.Min = require('./min');\nexports.Spec = require('./spec');\nexports.Nyan = require('./nyan');\nexports.XUnit = require('./xunit');\nexports.Markdown = require('./markdown');\nexports.Progress = require('./progress');\nexports.Landing = require('./landing');\nexports.JSONCov = require('./json-cov');\nexports.HTMLCov = require('./html-cov');\nexports.JSONStream = require('./json-stream');\nexports.Teamcity = require('./teamcity');\n\n}); // module: reporters/index.js\n\nrequire.register(\"reporters/json-cov.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base');\n\n/**\n * Expose `JSONCov`.\n */\n\nexports = module.exports = JSONCov;\n\n/**\n * Initialize a new `JsCoverage` reporter.\n *\n * @param {Runner} runner\n * @param {Boolean} output\n * @api public\n */\n\nfunction JSONCov(runner, output) {\n  var self = this\n    , output = 1 == arguments.length ? true : output;\n\n  Base.call(this, runner);\n\n  var tests = []\n    , failures = []\n    , passes = [];\n\n  runner.on('test end', function(test){\n    tests.push(test);\n  });\n\n  runner.on('pass', function(test){\n    passes.push(test);\n  });\n\n  runner.on('fail', function(test){\n    failures.push(test);\n  });\n\n  runner.on('end', function(){\n    var cov = global._$jscoverage || {};\n    var result = self.cov = map(cov);\n    result.stats = self.stats;\n    result.tests = tests.map(clean);\n    result.failures = failures.map(clean);\n    result.passes = passes.map(clean);\n    if (!output) return;\n    process.stdout.write(JSON.stringify(result, null, 2 ));\n  });\n}\n\n/**\n * Map jscoverage data to a JSON structure\n * suitable for reporting.\n *\n * @param {Object} cov\n * @return {Object}\n * @api private\n */\n\nfunction map(cov) {\n  var ret = {\n      instrumentation: 'node-jscoverage'\n    , sloc: 0\n    , hits: 0\n    , misses: 0\n    , coverage: 0\n    , files: []\n  };\n\n  for (var filename in cov) {\n    var data = coverage(filename, cov[filename]);\n    ret.files.push(data);\n    ret.hits += data.hits;\n    ret.misses += data.misses;\n    ret.sloc += data.sloc;\n  }\n\n  ret.files.sort(function(a, b) {\n    return a.filename.localeCompare(b.filename);\n  });\n\n  if (ret.sloc > 0) {\n    ret.coverage = (ret.hits / ret.sloc) * 100;\n  }\n\n  return ret;\n};\n\n/**\n * Map jscoverage data for a single source file\n * to a JSON structure suitable for reporting.\n *\n * @param {String} filename name of the source file\n * @param {Object} data jscoverage coverage data\n * @return {Object}\n * @api private\n */\n\nfunction coverage(filename, data) {\n  var ret = {\n    filename: filename,\n    coverage: 0,\n    hits: 0,\n    misses: 0,\n    sloc: 0,\n    source: {}\n  };\n\n  data.source.forEach(function(line, num){\n    num++;\n\n    if (data[num] === 0) {\n      ret.misses++;\n      ret.sloc++;\n    } else if (data[num] !== undefined) {\n      ret.hits++;\n      ret.sloc++;\n    }\n\n    ret.source[num] = {\n        source: line\n      , coverage: data[num] === undefined\n        ? ''\n        : data[num]\n    };\n  });\n\n  ret.coverage = ret.hits / ret.sloc * 100;\n\n  return ret;\n}\n\n/**\n * Return a plain-object representation of `test`\n * free of cyclic properties etc.\n *\n * @param {Object} test\n * @return {Object}\n * @api private\n */\n\nfunction clean(test) {\n  return {\n      title: test.title\n    , fullTitle: test.fullTitle()\n    , duration: test.duration\n  }\n}\n\n}); // module: reporters/json-cov.js\n\nrequire.register(\"reporters/json-stream.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , color = Base.color;\n\n/**\n * Expose `List`.\n */\n\nexports = module.exports = List;\n\n/**\n * Initialize a new `List` test reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction List(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , total = runner.total;\n\n  runner.on('start', function(){\n    console.log(JSON.stringify(['start', { total: total }]));\n  });\n\n  runner.on('pass', function(test){\n    console.log(JSON.stringify(['pass', clean(test)]));\n  });\n\n  runner.on('fail', function(test, err){\n    console.log(JSON.stringify(['fail', clean(test)]));\n  });\n\n  runner.on('end', function(){\n    process.stdout.write(JSON.stringify(['end', self.stats]));\n  });\n}\n\n/**\n * Return a plain-object representation of `test`\n * free of cyclic properties etc.\n *\n * @param {Object} test\n * @return {Object}\n * @api private\n */\n\nfunction clean(test) {\n  return {\n      title: test.title\n    , fullTitle: test.fullTitle()\n    , duration: test.duration\n  }\n}\n}); // module: reporters/json-stream.js\n\nrequire.register(\"reporters/json.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `JSON`.\n */\n\nexports = module.exports = JSONReporter;\n\n/**\n * Initialize a new `JSON` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction JSONReporter(runner) {\n  var self = this;\n  Base.call(this, runner);\n\n  var tests = []\n    , failures = []\n    , passes = [];\n\n  runner.on('test end', function(test){\n    tests.push(test);\n  });\n\n  runner.on('pass', function(test){\n    passes.push(test);\n  });\n\n  runner.on('fail', function(test){\n    failures.push(test);\n  });\n\n  runner.on('end', function(){\n    var obj = {\n        stats: self.stats\n      , tests: tests.map(clean)\n      , failures: failures.map(clean)\n      , passes: passes.map(clean)\n    };\n\n    process.stdout.write(JSON.stringify(obj, null, 2));\n  });\n}\n\n/**\n * Return a plain-object representation of `test`\n * free of cyclic properties etc.\n *\n * @param {Object} test\n * @return {Object}\n * @api private\n */\n\nfunction clean(test) {\n  return {\n      title: test.title\n    , fullTitle: test.fullTitle()\n    , duration: test.duration\n  }\n}\n}); // module: reporters/json.js\n\nrequire.register(\"reporters/landing.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `Landing`.\n */\n\nexports = module.exports = Landing;\n\n/**\n * Airplane color.\n */\n\nBase.colors.plane = 0;\n\n/**\n * Airplane crash color.\n */\n\nBase.colors['plane crash'] = 31;\n\n/**\n * Runway color.\n */\n\nBase.colors.runway = 90;\n\n/**\n * Initialize a new `Landing` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Landing(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , width = Base.window.width * .75 | 0\n    , total = runner.total\n    , stream = process.stdout\n    , plane = color('plane', '✈')\n    , crashed = -1\n    , n = 0;\n\n  function runway() {\n    var buf = Array(width).join('-');\n    return '  ' + color('runway', buf);\n  }\n\n  runner.on('start', function(){\n    stream.write('\\n  ');\n    cursor.hide();\n  });\n\n  runner.on('test end', function(test){\n    // check if the plane crashed\n    var col = -1 == crashed\n      ? width * ++n / total | 0\n      : crashed;\n\n    // show the crash\n    if ('failed' == test.state) {\n      plane = color('plane crash', '✈');\n      crashed = col;\n    }\n\n    // render landing strip\n    stream.write('\\u001b[4F\\n\\n');\n    stream.write(runway());\n    stream.write('\\n  ');\n    stream.write(color('runway', Array(col).join('⋅')));\n    stream.write(plane)\n    stream.write(color('runway', Array(width - col).join('⋅') + '\\n'));\n    stream.write(runway());\n    stream.write('\\u001b[0m');\n  });\n\n  runner.on('end', function(){\n    cursor.show();\n    console.log();\n    self.epilogue();\n  });\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nLanding.prototype = new F;\nLanding.prototype.constructor = Landing;\n\n}); // module: reporters/landing.js\n\nrequire.register(\"reporters/list.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `List`.\n */\n\nexports = module.exports = List;\n\n/**\n * Initialize a new `List` test reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction List(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , n = 0;\n\n  runner.on('start', function(){\n    console.log();\n  });\n\n  runner.on('test', function(test){\n    process.stdout.write(color('pass', '    ' + test.fullTitle() + ': '));\n  });\n\n  runner.on('pending', function(test){\n    var fmt = color('checkmark', '  -')\n      + color('pending', ' %s');\n    console.log(fmt, test.fullTitle());\n  });\n\n  runner.on('pass', function(test){\n    var fmt = color('checkmark', '  '+Base.symbols.dot)\n      + color('pass', ' %s: ')\n      + color(test.speed, '%dms');\n    cursor.CR();\n    console.log(fmt, test.fullTitle(), test.duration);\n  });\n\n  runner.on('fail', function(test, err){\n    cursor.CR();\n    console.log(color('fail', '  %d) %s'), ++n, test.fullTitle());\n  });\n\n  runner.on('end', self.epilogue.bind(self));\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nList.prototype = new F;\nList.prototype.constructor = List;\n\n\n}); // module: reporters/list.js\n\nrequire.register(\"reporters/markdown.js\", function(module, exports, require){\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , utils = require('../utils');\n\n/**\n * Expose `Markdown`.\n */\n\nexports = module.exports = Markdown;\n\n/**\n * Initialize a new `Markdown` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Markdown(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , level = 0\n    , buf = '';\n\n  function title(str) {\n    return Array(level).join('#') + ' ' + str;\n  }\n\n  function indent() {\n    return Array(level).join('  ');\n  }\n\n  function mapTOC(suite, obj) {\n    var ret = obj;\n    obj = obj[suite.title] = obj[suite.title] || { suite: suite };\n    suite.suites.forEach(function(suite){\n      mapTOC(suite, obj);\n    });\n    return ret;\n  }\n\n  function stringifyTOC(obj, level) {\n    ++level;\n    var buf = '';\n    var link;\n    for (var key in obj) {\n      if ('suite' == key) continue;\n      if (key) link = ' - [' + key + '](#' + utils.slug(obj[key].suite.fullTitle()) + ')\\n';\n      if (key) buf += Array(level).join('  ') + link;\n      buf += stringifyTOC(obj[key], level);\n    }\n    --level;\n    return buf;\n  }\n\n  function generateTOC(suite) {\n    var obj = mapTOC(suite, {});\n    return stringifyTOC(obj, 0);\n  }\n\n  generateTOC(runner.suite);\n\n  runner.on('suite', function(suite){\n    ++level;\n    var slug = utils.slug(suite.fullTitle());\n    buf += '<a name=\"' + slug + '\"></a>' + '\\n';\n    buf += title(suite.title) + '\\n';\n  });\n\n  runner.on('suite end', function(suite){\n    --level;\n  });\n\n  runner.on('pass', function(test){\n    var code = utils.clean(test.fn.toString());\n    buf += test.title + '.\\n';\n    buf += '\\n```js\\n';\n    buf += code + '\\n';\n    buf += '```\\n\\n';\n  });\n\n  runner.on('end', function(){\n    process.stdout.write('# TOC\\n');\n    process.stdout.write(generateTOC(runner.suite));\n    process.stdout.write(buf);\n  });\n}\n}); // module: reporters/markdown.js\n\nrequire.register(\"reporters/min.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base');\n\n/**\n * Expose `Min`.\n */\n\nexports = module.exports = Min;\n\n/**\n * Initialize a new `Min` minimal test reporter (best used with --watch).\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Min(runner) {\n  Base.call(this, runner);\n\n  runner.on('start', function(){\n    // clear screen\n    process.stdout.write('\\u001b[2J');\n    // set cursor position\n    process.stdout.write('\\u001b[1;3H');\n  });\n\n  runner.on('end', this.epilogue.bind(this));\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nMin.prototype = new F;\nMin.prototype.constructor = Min;\n\n\n}); // module: reporters/min.js\n\nrequire.register(\"reporters/nyan.js\", function(module, exports, require){\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , color = Base.color;\n\n/**\n * Expose `Dot`.\n */\n\nexports = module.exports = NyanCat;\n\n/**\n * Initialize a new `Dot` matrix test reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction NyanCat(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , width = Base.window.width * .75 | 0\n    , rainbowColors = this.rainbowColors = self.generateColors()\n    , colorIndex = this.colorIndex = 0\n    , numerOfLines = this.numberOfLines = 4\n    , trajectories = this.trajectories = [[], [], [], []]\n    , nyanCatWidth = this.nyanCatWidth = 11\n    , trajectoryWidthMax = this.trajectoryWidthMax = (width - nyanCatWidth)\n    , scoreboardWidth = this.scoreboardWidth = 5\n    , tick = this.tick = 0\n    , n = 0;\n\n  runner.on('start', function(){\n    Base.cursor.hide();\n    self.draw('start');\n  });\n\n  runner.on('pending', function(test){\n    self.draw('pending');\n  });\n\n  runner.on('pass', function(test){\n    self.draw('pass');\n  });\n\n  runner.on('fail', function(test, err){\n    self.draw('fail');\n  });\n\n  runner.on('end', function(){\n    Base.cursor.show();\n    for (var i = 0; i < self.numberOfLines; i++) write('\\n');\n    self.epilogue();\n  });\n}\n\n/**\n * Draw the nyan cat with runner `status`.\n *\n * @param {String} status\n * @api private\n */\n\nNyanCat.prototype.draw = function(status){\n  this.appendRainbow();\n  this.drawScoreboard();\n  this.drawRainbow();\n  this.drawNyanCat(status);\n  this.tick = !this.tick;\n};\n\n/**\n * Draw the \"scoreboard\" showing the number\n * of passes, failures and pending tests.\n *\n * @api private\n */\n\nNyanCat.prototype.drawScoreboard = function(){\n  var stats = this.stats;\n  var colors = Base.colors;\n\n  function draw(color, n) {\n    write(' ');\n    write('\\u001b[' + color + 'm' + n + '\\u001b[0m');\n    write('\\n');\n  }\n\n  draw(colors.green, stats.passes);\n  draw(colors.fail, stats.failures);\n  draw(colors.pending, stats.pending);\n  write('\\n');\n\n  this.cursorUp(this.numberOfLines);\n};\n\n/**\n * Append the rainbow.\n *\n * @api private\n */\n\nNyanCat.prototype.appendRainbow = function(){\n  var segment = this.tick ? '_' : '-';\n  var rainbowified = this.rainbowify(segment);\n\n  for (var index = 0; index < this.numberOfLines; index++) {\n    var trajectory = this.trajectories[index];\n    if (trajectory.length >= this.trajectoryWidthMax) trajectory.shift();\n    trajectory.push(rainbowified);\n  }\n};\n\n/**\n * Draw the rainbow.\n *\n * @api private\n */\n\nNyanCat.prototype.drawRainbow = function(){\n  var self = this;\n\n  this.trajectories.forEach(function(line, index) {\n    write('\\u001b[' + self.scoreboardWidth + 'C');\n    write(line.join(''));\n    write('\\n');\n  });\n\n  this.cursorUp(this.numberOfLines);\n};\n\n/**\n * Draw the nyan cat with `status`.\n *\n * @param {String} status\n * @api private\n */\n\nNyanCat.prototype.drawNyanCat = function(status) {\n  var self = this;\n  var startWidth = this.scoreboardWidth + this.trajectories[0].length;\n  var color = '\\u001b[' + startWidth + 'C';\n  var padding = '';\n  \n  write(color);\n  write('_,------,');\n  write('\\n');\n  \n  write(color);\n  padding = self.tick ? '  ' : '   ';\n  write('_|' + padding + '/\\\\_/\\\\ ');\n  write('\\n');\n  \n  write(color);\n  padding = self.tick ? '_' : '__';\n  var tail = self.tick ? '~' : '^';\n  var face;\n  switch (status) {\n    case 'pass':\n      face = '( ^ .^)';\n      break;\n    case 'fail':\n      face = '( o .o)';\n      break;\n    default:\n      face = '( - .-)';\n  }\n  write(tail + '|' + padding + face + ' ');\n  write('\\n');\n  \n  write(color);\n  padding = self.tick ? ' ' : '  ';\n  write(padding + '\"\"  \"\" ');\n  write('\\n');\n\n  this.cursorUp(this.numberOfLines);\n};\n\n/**\n * Move cursor up `n`.\n *\n * @param {Number} n\n * @api private\n */\n\nNyanCat.prototype.cursorUp = function(n) {\n  write('\\u001b[' + n + 'A');\n};\n\n/**\n * Move cursor down `n`.\n *\n * @param {Number} n\n * @api private\n */\n\nNyanCat.prototype.cursorDown = function(n) {\n  write('\\u001b[' + n + 'B');\n};\n\n/**\n * Generate rainbow colors.\n *\n * @return {Array}\n * @api private\n */\n\nNyanCat.prototype.generateColors = function(){\n  var colors = [];\n\n  for (var i = 0; i < (6 * 7); i++) {\n    var pi3 = Math.floor(Math.PI / 3);\n    var n = (i * (1.0 / 6));\n    var r = Math.floor(3 * Math.sin(n) + 3);\n    var g = Math.floor(3 * Math.sin(n + 2 * pi3) + 3);\n    var b = Math.floor(3 * Math.sin(n + 4 * pi3) + 3);\n    colors.push(36 * r + 6 * g + b + 16);\n  }\n\n  return colors;\n};\n\n/**\n * Apply rainbow to the given `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nNyanCat.prototype.rainbowify = function(str){\n  var color = this.rainbowColors[this.colorIndex % this.rainbowColors.length];\n  this.colorIndex += 1;\n  return '\\u001b[38;5;' + color + 'm' + str + '\\u001b[0m';\n};\n\n/**\n * Stdout helper.\n */\n\nfunction write(string) {\n  process.stdout.write(string);\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nNyanCat.prototype = new F;\nNyanCat.prototype.constructor = NyanCat;\n\n\n}); // module: reporters/nyan.js\n\nrequire.register(\"reporters/progress.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `Progress`.\n */\n\nexports = module.exports = Progress;\n\n/**\n * General progress bar color.\n */\n\nBase.colors.progress = 90;\n\n/**\n * Initialize a new `Progress` bar test reporter.\n *\n * @param {Runner} runner\n * @param {Object} options\n * @api public\n */\n\nfunction Progress(runner, options) {\n  Base.call(this, runner);\n\n  var self = this\n    , options = options || {}\n    , stats = this.stats\n    , width = Base.window.width * .50 | 0\n    , total = runner.total\n    , complete = 0\n    , max = Math.max;\n\n  // default chars\n  options.open = options.open || '[';\n  options.complete = options.complete || '▬';\n  options.incomplete = options.incomplete || Base.symbols.dot;\n  options.close = options.close || ']';\n  options.verbose = false;\n\n  // tests started\n  runner.on('start', function(){\n    console.log();\n    cursor.hide();\n  });\n\n  // tests complete\n  runner.on('test end', function(){\n    complete++;\n    var incomplete = total - complete\n      , percent = complete / total\n      , n = width * percent | 0\n      , i = width - n;\n\n    cursor.CR();\n    process.stdout.write('\\u001b[J');\n    process.stdout.write(color('progress', '  ' + options.open));\n    process.stdout.write(Array(n).join(options.complete));\n    process.stdout.write(Array(i).join(options.incomplete));\n    process.stdout.write(color('progress', options.close));\n    if (options.verbose) {\n      process.stdout.write(color('progress', ' ' + complete + ' of ' + total));\n    }\n  });\n\n  // tests are complete, output some stats\n  // and the failures if any\n  runner.on('end', function(){\n    cursor.show();\n    console.log();\n    self.epilogue();\n  });\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nProgress.prototype = new F;\nProgress.prototype.constructor = Progress;\n\n\n}); // module: reporters/progress.js\n\nrequire.register(\"reporters/spec.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `Spec`.\n */\n\nexports = module.exports = Spec;\n\n/**\n * Initialize a new `Spec` test reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Spec(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , indents = 0\n    , n = 0;\n\n  function indent() {\n    return Array(indents).join('  ')\n  }\n\n  runner.on('start', function(){\n    console.log();\n  });\n\n  runner.on('suite', function(suite){\n    ++indents;\n    console.log(color('suite', '%s%s'), indent(), suite.title);\n  });\n\n  runner.on('suite end', function(suite){\n    --indents;\n    if (1 == indents) console.log();\n  });\n\n  runner.on('test', function(test){\n    process.stdout.write(indent() + color('pass', '  ◦ ' + test.title + ': '));\n  });\n\n  runner.on('pending', function(test){\n    var fmt = indent() + color('pending', '  - %s');\n    console.log(fmt, test.title);\n  });\n\n  runner.on('pass', function(test){\n    if ('fast' == test.speed) {\n      var fmt = indent()\n        + color('checkmark', '  ' + Base.symbols.ok)\n        + color('pass', ' %s ');\n      cursor.CR();\n      console.log(fmt, test.title);\n    } else {\n      var fmt = indent()\n        + color('checkmark', '  ' + Base.symbols.ok)\n        + color('pass', ' %s ')\n        + color(test.speed, '(%dms)');\n      cursor.CR();\n      console.log(fmt, test.title, test.duration);\n    }\n  });\n\n  runner.on('fail', function(test, err){\n    cursor.CR();\n    console.log(indent() + color('fail', '  %d) %s'), ++n, test.title);\n  });\n\n  runner.on('end', self.epilogue.bind(self));\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nSpec.prototype = new F;\nSpec.prototype.constructor = Spec;\n\n\n}); // module: reporters/spec.js\n\nrequire.register(\"reporters/tap.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , cursor = Base.cursor\n  , color = Base.color;\n\n/**\n * Expose `TAP`.\n */\n\nexports = module.exports = TAP;\n\n/**\n * Initialize a new `TAP` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction TAP(runner) {\n  Base.call(this, runner);\n\n  var self = this\n    , stats = this.stats\n    , n = 1\n    , passes = 0\n    , failures = 0;\n\n  runner.on('start', function(){\n    var total = runner.grepTotal(runner.suite);\n    console.log('%d..%d', 1, total);\n  });\n\n  runner.on('test end', function(){\n    ++n;\n  });\n\n  runner.on('pending', function(test){\n    console.log('ok %d %s # SKIP -', n, title(test));\n  });\n\n  runner.on('pass', function(test){\n    passes++;\n    console.log('ok %d %s', n, title(test));\n  });\n\n  runner.on('fail', function(test, err){\n    failures++;\n    console.log('not ok %d %s', n, title(test));\n    if (err.stack) console.log(err.stack.replace(/^/gm, '  '));\n  });\n\n  runner.on('end', function(){\n    console.log('# tests ' + (passes + failures));\n    console.log('# pass ' + passes);\n    console.log('# fail ' + failures);\n  });\n}\n\n/**\n * Return a TAP-safe title of `test`\n *\n * @param {Object} test\n * @return {String}\n * @api private\n */\n\nfunction title(test) {\n  return test.fullTitle().replace(/#/g, '');\n}\n\n}); // module: reporters/tap.js\n\nrequire.register(\"reporters/teamcity.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base');\n\n/**\n * Expose `Teamcity`.\n */\n\nexports = module.exports = Teamcity;\n\n/**\n * Initialize a new `Teamcity` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction Teamcity(runner) {\n  Base.call(this, runner);\n  var stats = this.stats;\n\n  runner.on('start', function() {\n    console.log(\"##teamcity[testSuiteStarted name='mocha.suite']\");\n  });\n\n  runner.on('test', function(test) {\n    console.log(\"##teamcity[testStarted name='\" + escape(test.fullTitle()) + \"']\");\n  });\n\n  runner.on('fail', function(test, err) {\n    console.log(\"##teamcity[testFailed name='\" + escape(test.fullTitle()) + \"' message='\" + escape(err.message) + \"']\");\n  });\n\n  runner.on('pending', function(test) {\n    console.log(\"##teamcity[testIgnored name='\" + escape(test.fullTitle()) + \"' message='pending']\");\n  });\n\n  runner.on('test end', function(test) {\n    console.log(\"##teamcity[testFinished name='\" + escape(test.fullTitle()) + \"' duration='\" + test.duration + \"']\");\n  });\n\n  runner.on('end', function() {\n    console.log(\"##teamcity[testSuiteFinished name='mocha.suite' duration='\" + stats.duration + \"']\");\n  });\n}\n\n/**\n * Escape the given `str`.\n */\n\nfunction escape(str) {\n  return str\n    .replace(/\\|/g, \"||\")\n    .replace(/\\n/g, \"|n\")\n    .replace(/\\r/g, \"|r\")\n    .replace(/\\[/g, \"|[\")\n    .replace(/\\]/g, \"|]\")\n    .replace(/\\u0085/g, \"|x\")\n    .replace(/\\u2028/g, \"|l\")\n    .replace(/\\u2029/g, \"|p\")\n    .replace(/'/g, \"|'\");\n}\n\n}); // module: reporters/teamcity.js\n\nrequire.register(\"reporters/xunit.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Base = require('./base')\n  , utils = require('../utils')\n  , escape = utils.escape;\n\n/**\n * Save timer references to avoid Sinon interfering (see GH-237).\n */\n\nvar Date = global.Date\n  , setTimeout = global.setTimeout\n  , setInterval = global.setInterval\n  , clearTimeout = global.clearTimeout\n  , clearInterval = global.clearInterval;\n\n/**\n * Expose `XUnit`.\n */\n\nexports = module.exports = XUnit;\n\n/**\n * Initialize a new `XUnit` reporter.\n *\n * @param {Runner} runner\n * @api public\n */\n\nfunction XUnit(runner) {\n  Base.call(this, runner);\n  var stats = this.stats\n    , tests = []\n    , self = this;\n\n  runner.on('pass', function(test){\n    tests.push(test);\n  });\n\n  runner.on('fail', function(test){\n    tests.push(test);\n  });\n\n  runner.on('end', function(){\n    console.log(tag('testsuite', {\n        name: 'Mocha Tests'\n      , tests: stats.tests\n      , failures: stats.failures\n      , errors: stats.failures\n      , skip: stats.tests - stats.failures - stats.passes\n      , timestamp: (new Date).toUTCString()\n      , time: stats.duration / 1000\n    }, false));\n\n    tests.forEach(test);\n    console.log('</testsuite>');\n  });\n}\n\n/**\n * Inherit from `Base.prototype`.\n */\n\nfunction F(){};\nF.prototype = Base.prototype;\nXUnit.prototype = new F;\nXUnit.prototype.constructor = XUnit;\n\n\n/**\n * Output tag for the given `test.`\n */\n\nfunction test(test) {\n  var attrs = {\n      classname: test.parent.fullTitle()\n    , name: test.title\n    , time: test.duration / 1000\n  };\n\n  if ('failed' == test.state) {\n    var err = test.err;\n    attrs.message = escape(err.message);\n    console.log(tag('testcase', attrs, false, tag('failure', attrs, false, cdata(err.stack))));\n  } else if (test.pending) {\n    console.log(tag('testcase', attrs, false, tag('skipped', {}, true)));\n  } else {\n    console.log(tag('testcase', attrs, true) );\n  }\n}\n\n/**\n * HTML tag helper.\n */\n\nfunction tag(name, attrs, close, content) {\n  var end = close ? '/>' : '>'\n    , pairs = []\n    , tag;\n\n  for (var key in attrs) {\n    pairs.push(key + '=\"' + escape(attrs[key]) + '\"');\n  }\n\n  tag = '<' + name + (pairs.length ? ' ' + pairs.join(' ') : '') + end;\n  if (content) tag += content + '</' + name + end;\n  return tag;\n}\n\n/**\n * Return cdata escaped CDATA `str`.\n */\n\nfunction cdata(str) {\n  return '<![CDATA[' + escape(str) + ']]>';\n}\n\n}); // module: reporters/xunit.js\n\nrequire.register(\"runnable.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar EventEmitter = require('browser/events').EventEmitter\n  , debug = require('browser/debug')('mocha:runnable')\n  , milliseconds = require('./ms');\n\n/**\n * Save timer references to avoid Sinon interfering (see GH-237).\n */\n\nvar Date = global.Date\n  , setTimeout = global.setTimeout\n  , setInterval = global.setInterval\n  , clearTimeout = global.clearTimeout\n  , clearInterval = global.clearInterval;\n\n/**\n * Object#toString().\n */\n\nvar toString = Object.prototype.toString;\n\n/**\n * Expose `Runnable`.\n */\n\nmodule.exports = Runnable;\n\n/**\n * Initialize a new `Runnable` with the given `title` and callback `fn`.\n *\n * @param {String} title\n * @param {Function} fn\n * @api private\n */\n\nfunction Runnable(title, fn) {\n  this.title = title;\n  this.fn = fn;\n  this.async = fn && fn.length;\n  this.sync = ! this.async;\n  this._timeout = 2000;\n  this._slow = 75;\n  this.timedOut = false;\n}\n\n/**\n * Inherit from `EventEmitter.prototype`.\n */\n\nfunction F(){};\nF.prototype = EventEmitter.prototype;\nRunnable.prototype = new F;\nRunnable.prototype.constructor = Runnable;\n\n\n/**\n * Set & get timeout `ms`.\n *\n * @param {Number|String} ms\n * @return {Runnable|Number} ms or self\n * @api private\n */\n\nRunnable.prototype.timeout = function(ms){\n  if (0 == arguments.length) return this._timeout;\n  if ('string' == typeof ms) ms = milliseconds(ms);\n  debug('timeout %d', ms);\n  this._timeout = ms;\n  if (this.timer) this.resetTimeout();\n  return this;\n};\n\n/**\n * Set & get slow `ms`.\n *\n * @param {Number|String} ms\n * @return {Runnable|Number} ms or self\n * @api private\n */\n\nRunnable.prototype.slow = function(ms){\n  if (0 === arguments.length) return this._slow;\n  if ('string' == typeof ms) ms = milliseconds(ms);\n  debug('timeout %d', ms);\n  this._slow = ms;\n  return this;\n};\n\n/**\n * Return the full title generated by recursively\n * concatenating the parent's full title.\n *\n * @return {String}\n * @api public\n */\n\nRunnable.prototype.fullTitle = function(){\n  return this.parent.fullTitle() + ' ' + this.title;\n};\n\n/**\n * Clear the timeout.\n *\n * @api private\n */\n\nRunnable.prototype.clearTimeout = function(){\n  clearTimeout(this.timer);\n};\n\n/**\n * Inspect the runnable void of private properties.\n *\n * @return {String}\n * @api private\n */\n\nRunnable.prototype.inspect = function(){\n  return JSON.stringify(this, function(key, val){\n    if ('_' == key[0]) return;\n    if ('parent' == key) return '#<Suite>';\n    if ('ctx' == key) return '#<Context>';\n    return val;\n  }, 2);\n};\n\n/**\n * Reset the timeout.\n *\n * @api private\n */\n\nRunnable.prototype.resetTimeout = function(){\n  var self = this\n    , ms = this.timeout();\n\n  this.clearTimeout();\n  if (ms) {\n    this.timer = setTimeout(function(){\n      self.callback(new Error('timeout of ' + ms + 'ms exceeded'));\n      self.timedOut = true;\n    }, ms);\n  }\n};\n\n/**\n * Run the test and invoke `fn(err)`.\n *\n * @param {Function} fn\n * @api private\n */\n\nRunnable.prototype.run = function(fn){\n  var self = this\n    , ms = this.timeout()\n    , start = new Date\n    , ctx = this.ctx\n    , finished\n    , emitted;\n\n  if (ctx) ctx.runnable(this);\n\n  // timeout\n  if (this.async) {\n    if (ms) {\n      this.timer = setTimeout(function(){\n        done(new Error('timeout of ' + ms + 'ms exceeded'));\n        self.timedOut = true;\n      }, ms);\n    }\n  }\n\n  // called multiple times\n  function multiple(err) {\n    if (emitted) return;\n    emitted = true;\n    self.emit('error', err || new Error('done() called multiple times'));\n  }\n\n  // finished\n  function done(err) {\n    if (self.timedOut) return;\n    if (finished) return multiple(err);\n    self.clearTimeout();\n    self.duration = new Date - start;\n    finished = true;\n    fn(err);\n  }\n\n  // for .resetTimeout()\n  this.callback = done;\n\n  // async\n  if (this.async) {\n    try {\n      this.fn.call(ctx, function(err){\n        if (err instanceof Error || toString.call(err) === \"[object Error]\") return done(err);\n        if (null != err) return done(new Error('done() invoked with non-Error: ' + err));\n        done();\n      });\n    } catch (err) {\n      done(err);\n    }\n    return;\n  }\n\n  if (this.asyncOnly) {\n    return done(new Error('--async-only option in use without declaring `done()`'));\n  }\n\n  // sync\n  try {\n    if (!this.pending) this.fn.call(ctx);\n    this.duration = new Date - start;\n    fn();\n  } catch (err) {\n    fn(err);\n  }\n};\n\n}); // module: runnable.js\n\nrequire.register(\"runner.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar EventEmitter = require('browser/events').EventEmitter\n  , debug = require('browser/debug')('mocha:runner')\n  , Test = require('./test')\n  , utils = require('./utils')\n  , filter = utils.filter\n  , keys = utils.keys;\n\n/**\n * Non-enumerable globals.\n */\n\nvar globals = [\n  'setTimeout',\n  'clearTimeout',\n  'setInterval',\n  'clearInterval',\n  'XMLHttpRequest',\n  'Date'\n];\n\n/**\n * Expose `Runner`.\n */\n\nmodule.exports = Runner;\n\n/**\n * Initialize a `Runner` for the given `suite`.\n *\n * Events:\n *\n *   - `start`  execution started\n *   - `end`  execution complete\n *   - `suite`  (suite) test suite execution started\n *   - `suite end`  (suite) all tests (and sub-suites) have finished\n *   - `test`  (test) test execution started\n *   - `test end`  (test) test completed\n *   - `hook`  (hook) hook execution started\n *   - `hook end`  (hook) hook complete\n *   - `pass`  (test) test passed\n *   - `fail`  (test, err) test failed\n *\n * @api public\n */\n\nfunction Runner(suite) {\n  var self = this;\n  this._globals = [];\n  this.suite = suite;\n  this.total = suite.total();\n  this.failures = 0;\n  this.on('test end', function(test){ self.checkGlobals(test); });\n  this.on('hook end', function(hook){ self.checkGlobals(hook); });\n  this.grep(/.*/);\n  this.globals(this.globalProps().concat(['errno']));\n}\n\n/**\n * Wrapper for setImmediate, process.nextTick, or browser polyfill.\n *\n * @param {Function} fn\n * @api private\n */\n\nRunner.immediately = global.setImmediate || process.nextTick;\n\n/**\n * Inherit from `EventEmitter.prototype`.\n */\n\nfunction F(){};\nF.prototype = EventEmitter.prototype;\nRunner.prototype = new F;\nRunner.prototype.constructor = Runner;\n\n\n/**\n * Run tests with full titles matching `re`. Updates runner.total\n * with number of tests matched.\n *\n * @param {RegExp} re\n * @param {Boolean} invert\n * @return {Runner} for chaining\n * @api public\n */\n\nRunner.prototype.grep = function(re, invert){\n  debug('grep %s', re);\n  this._grep = re;\n  this._invert = invert;\n  this.total = this.grepTotal(this.suite);\n  return this;\n};\n\n/**\n * Returns the number of tests matching the grep search for the\n * given suite.\n *\n * @param {Suite} suite\n * @return {Number}\n * @api public\n */\n\nRunner.prototype.grepTotal = function(suite) {\n  var self = this;\n  var total = 0;\n\n  suite.eachTest(function(test){\n    var match = self._grep.test(test.fullTitle());\n    if (self._invert) match = !match;\n    if (match) total++;\n  });\n\n  return total;\n};\n\n/**\n * Return a list of global properties.\n *\n * @return {Array}\n * @api private\n */\n\nRunner.prototype.globalProps = function() {\n  var props = utils.keys(global);\n\n  // non-enumerables\n  for (var i = 0; i < globals.length; ++i) {\n    if (~utils.indexOf(props, globals[i])) continue;\n    props.push(globals[i]);\n  }\n\n  return props;\n};\n\n/**\n * Allow the given `arr` of globals.\n *\n * @param {Array} arr\n * @return {Runner} for chaining\n * @api public\n */\n\nRunner.prototype.globals = function(arr){\n  if (0 == arguments.length) return this._globals;\n  debug('globals %j', arr);\n  utils.forEach(arr, function(arr){\n    this._globals.push(arr);\n  }, this);\n  return this;\n};\n\n/**\n * Check for global variable leaks.\n *\n * @api private\n */\n\nRunner.prototype.checkGlobals = function(test){\n  if (this.ignoreLeaks) return;\n  var ok = this._globals;\n  var globals = this.globalProps();\n  var isNode = process.kill;\n  var leaks;\n\n  // check length - 2 ('errno' and 'location' globals)\n  if (isNode && 1 == ok.length - globals.length) return\n  else if (2 == ok.length - globals.length) return;\n\n  leaks = filterLeaks(ok, globals);\n  this._globals = this._globals.concat(leaks);\n\n  if (leaks.length > 1) {\n    this.fail(test, new Error('global leaks detected: ' + leaks.join(', ') + ''));\n  } else if (leaks.length) {\n    this.fail(test, new Error('global leak detected: ' + leaks[0]));\n  }\n};\n\n/**\n * Fail the given `test`.\n *\n * @param {Test} test\n * @param {Error} err\n * @api private\n */\n\nRunner.prototype.fail = function(test, err){\n  ++this.failures;\n  test.state = 'failed';\n\n  if ('string' == typeof err) {\n    err = new Error('the string \"' + err + '\" was thrown, throw an Error :)');\n  }\n\n  this.emit('fail', test, err);\n};\n\n/**\n * Fail the given `hook` with `err`.\n *\n * Hook failures (currently) hard-end due\n * to that fact that a failing hook will\n * surely cause subsequent tests to fail,\n * causing jumbled reporting.\n *\n * @param {Hook} hook\n * @param {Error} err\n * @api private\n */\n\nRunner.prototype.failHook = function(hook, err){\n  this.fail(hook, err);\n  this.emit('end');\n};\n\n/**\n * Run hook `name` callbacks and then invoke `fn()`.\n *\n * @param {String} name\n * @param {Function} function\n * @api private\n */\n\nRunner.prototype.hook = function(name, fn){\n  var suite = this.suite\n    , hooks = suite['_' + name]\n    , self = this\n    , timer;\n\n  function next(i) {\n    var hook = hooks[i];\n    if (!hook) return fn();\n    self.currentRunnable = hook;\n\n    self.emit('hook', hook);\n\n    hook.on('error', function(err){\n      self.failHook(hook, err);\n    });\n\n    hook.run(function(err){\n      hook.removeAllListeners('error');\n      var testError = hook.error();\n      if (testError) self.fail(self.test, testError);\n      if (err) return self.failHook(hook, err);\n      self.emit('hook end', hook);\n      next(++i);\n    });\n  }\n\n  Runner.immediately(function(){\n    next(0);\n  });\n};\n\n/**\n * Run hook `name` for the given array of `suites`\n * in order, and callback `fn(err)`.\n *\n * @param {String} name\n * @param {Array} suites\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.hooks = function(name, suites, fn){\n  var self = this\n    , orig = this.suite;\n\n  function next(suite) {\n    self.suite = suite;\n\n    if (!suite) {\n      self.suite = orig;\n      return fn();\n    }\n\n    self.hook(name, function(err){\n      if (err) {\n        self.suite = orig;\n        return fn(err);\n      }\n\n      next(suites.pop());\n    });\n  }\n\n  next(suites.pop());\n};\n\n/**\n * Run hooks from the top level down.\n *\n * @param {String} name\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.hookUp = function(name, fn){\n  var suites = [this.suite].concat(this.parents()).reverse();\n  this.hooks(name, suites, fn);\n};\n\n/**\n * Run hooks from the bottom up.\n *\n * @param {String} name\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.hookDown = function(name, fn){\n  var suites = [this.suite].concat(this.parents());\n  this.hooks(name, suites, fn);\n};\n\n/**\n * Return an array of parent Suites from\n * closest to furthest.\n *\n * @return {Array}\n * @api private\n */\n\nRunner.prototype.parents = function(){\n  var suite = this.suite\n    , suites = [];\n  while (suite = suite.parent) suites.push(suite);\n  return suites;\n};\n\n/**\n * Run the current test and callback `fn(err)`.\n *\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.runTest = function(fn){\n  var test = this.test\n    , self = this;\n\n  if (this.asyncOnly) test.asyncOnly = true;\n\n  try {\n    test.on('error', function(err){\n      self.fail(test, err);\n    });\n    test.run(fn);\n  } catch (err) {\n    fn(err);\n  }\n};\n\n/**\n * Run tests in the given `suite` and invoke\n * the callback `fn()` when complete.\n *\n * @param {Suite} suite\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.runTests = function(suite, fn){\n  var self = this\n    , tests = suite.tests.slice()\n    , test;\n\n  function next(err) {\n    // if we bail after first err\n    if (self.failures && suite._bail) return fn();\n\n    // next test\n    test = tests.shift();\n\n    // all done\n    if (!test) return fn();\n\n    // grep\n    var match = self._grep.test(test.fullTitle());\n    if (self._invert) match = !match;\n    if (!match) return next();\n\n    // pending\n    if (test.pending) {\n      self.emit('pending', test);\n      self.emit('test end', test);\n      return next();\n    }\n\n    // execute test and hook(s)\n    self.emit('test', self.test = test);\n    self.hookDown('beforeEach', function(){\n      self.currentRunnable = self.test;\n      self.runTest(function(err){\n        test = self.test;\n\n        if (err) {\n          self.fail(test, err);\n          self.emit('test end', test);\n          return self.hookUp('afterEach', next);\n        }\n\n        test.state = 'passed';\n        self.emit('pass', test);\n        self.emit('test end', test);\n        self.hookUp('afterEach', next);\n      });\n    });\n  }\n\n  this.next = next;\n  next();\n};\n\n/**\n * Run the given `suite` and invoke the\n * callback `fn()` when complete.\n *\n * @param {Suite} suite\n * @param {Function} fn\n * @api private\n */\n\nRunner.prototype.runSuite = function(suite, fn){\n  var total = this.grepTotal(suite)\n    , self = this\n    , i = 0;\n\n  debug('run suite %s', suite.fullTitle());\n\n  if (!total) return fn();\n\n  this.emit('suite', this.suite = suite);\n\n  function next() {\n    var curr = suite.suites[i++];\n    if (!curr) return done();\n    self.runSuite(curr, next);\n  }\n\n  function done() {\n    self.suite = suite;\n    self.hook('afterAll', function(){\n      self.emit('suite end', suite);\n      fn();\n    });\n  }\n\n  this.hook('beforeAll', function(){\n    self.runTests(suite, next);\n  });\n};\n\n/**\n * Handle uncaught exceptions.\n *\n * @param {Error} err\n * @api private\n */\n\nRunner.prototype.uncaught = function(err){\n  debug('uncaught exception %s', err.message);\n  var runnable = this.currentRunnable;\n  if (!runnable || 'failed' == runnable.state) return;\n  runnable.clearTimeout();\n  err.uncaught = true;\n  this.fail(runnable, err);\n\n  // recover from test\n  if ('test' == runnable.type) {\n    this.emit('test end', runnable);\n    this.hookUp('afterEach', this.next);\n    return;\n  }\n\n  // bail on hooks\n  this.emit('end');\n};\n\n/**\n * Run the root suite and invoke `fn(failures)`\n * on completion.\n *\n * @param {Function} fn\n * @return {Runner} for chaining\n * @api public\n */\n\nRunner.prototype.run = function(fn){\n  var self = this\n    , fn = fn || function(){};\n\n  function uncaught(err){\n    self.uncaught(err);\n  }\n\n  debug('start');\n\n  // callback\n  this.on('end', function(){\n    debug('end');\n    process.removeListener('uncaughtException', uncaught);\n    fn(self.failures);\n  });\n\n  // run suites\n  this.emit('start');\n  this.runSuite(this.suite, function(){\n    debug('finished running');\n    self.emit('end');\n  });\n\n  // uncaught exception\n  process.on('uncaughtException', uncaught);\n\n  return this;\n};\n\n/**\n * Filter leaks with the given globals flagged as `ok`.\n *\n * @param {Array} ok\n * @param {Array} globals\n * @return {Array}\n * @api private\n */\n\nfunction filterLeaks(ok, globals) {\n  return filter(globals, function(key){\n    // Firefox and Chrome exposes iframes as index inside the window object\n    if (/^d+/.test(key)) return false;\n    var matched = filter(ok, function(ok){\n      if (~ok.indexOf('*')) return 0 == key.indexOf(ok.split('*')[0]);\n      // Opera and IE expose global variables for HTML element IDs (issue #243)\n      if (/^mocha-/.test(key)) return true;\n      return key == ok;\n    });\n    return matched.length == 0 && (!global.navigator || 'onerror' !== key);\n  });\n}\n\n}); // module: runner.js\n\nrequire.register(\"suite.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar EventEmitter = require('browser/events').EventEmitter\n  , debug = require('browser/debug')('mocha:suite')\n  , milliseconds = require('./ms')\n  , utils = require('./utils')\n  , Hook = require('./hook');\n\n/**\n * Expose `Suite`.\n */\n\nexports = module.exports = Suite;\n\n/**\n * Create a new `Suite` with the given `title`\n * and parent `Suite`. When a suite with the\n * same title is already present, that suite\n * is returned to provide nicer reporter\n * and more flexible meta-testing.\n *\n * @param {Suite} parent\n * @param {String} title\n * @return {Suite}\n * @api public\n */\n\nexports.create = function(parent, title){\n  var suite = new Suite(title, parent.ctx);\n  suite.parent = parent;\n  if (parent.pending) suite.pending = true;\n  title = suite.fullTitle();\n  parent.addSuite(suite);\n  return suite;\n};\n\n/**\n * Initialize a new `Suite` with the given\n * `title` and `ctx`.\n *\n * @param {String} title\n * @param {Context} ctx\n * @api private\n */\n\nfunction Suite(title, ctx) {\n  this.title = title;\n  this.ctx = ctx;\n  this.suites = [];\n  this.tests = [];\n  this.pending = false;\n  this._beforeEach = [];\n  this._beforeAll = [];\n  this._afterEach = [];\n  this._afterAll = [];\n  this.root = !title;\n  this._timeout = 2000;\n  this._slow = 75;\n  this._bail = false;\n}\n\n/**\n * Inherit from `EventEmitter.prototype`.\n */\n\nfunction F(){};\nF.prototype = EventEmitter.prototype;\nSuite.prototype = new F;\nSuite.prototype.constructor = Suite;\n\n\n/**\n * Return a clone of this `Suite`.\n *\n * @return {Suite}\n * @api private\n */\n\nSuite.prototype.clone = function(){\n  var suite = new Suite(this.title);\n  debug('clone');\n  suite.ctx = this.ctx;\n  suite.timeout(this.timeout());\n  suite.slow(this.slow());\n  suite.bail(this.bail());\n  return suite;\n};\n\n/**\n * Set timeout `ms` or short-hand such as \"2s\".\n *\n * @param {Number|String} ms\n * @return {Suite|Number} for chaining\n * @api private\n */\n\nSuite.prototype.timeout = function(ms){\n  if (0 == arguments.length) return this._timeout;\n  if ('string' == typeof ms) ms = milliseconds(ms);\n  debug('timeout %d', ms);\n  this._timeout = parseInt(ms, 10);\n  return this;\n};\n\n/**\n * Set slow `ms` or short-hand such as \"2s\".\n *\n * @param {Number|String} ms\n * @return {Suite|Number} for chaining\n * @api private\n */\n\nSuite.prototype.slow = function(ms){\n  if (0 === arguments.length) return this._slow;\n  if ('string' == typeof ms) ms = milliseconds(ms);\n  debug('slow %d', ms);\n  this._slow = ms;\n  return this;\n};\n\n/**\n * Sets whether to bail after first error.\n *\n * @parma {Boolean} bail\n * @return {Suite|Number} for chaining\n * @api private\n */\n\nSuite.prototype.bail = function(bail){\n  if (0 == arguments.length) return this._bail;\n  debug('bail %s', bail);\n  this._bail = bail;\n  return this;\n};\n\n/**\n * Run `fn(test[, done])` before running tests.\n *\n * @param {Function} fn\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.beforeAll = function(fn){\n  if (this.pending) return this;\n  var hook = new Hook('\"before all\" hook', fn);\n  hook.parent = this;\n  hook.timeout(this.timeout());\n  hook.slow(this.slow());\n  hook.ctx = this.ctx;\n  this._beforeAll.push(hook);\n  this.emit('beforeAll', hook);\n  return this;\n};\n\n/**\n * Run `fn(test[, done])` after running tests.\n *\n * @param {Function} fn\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.afterAll = function(fn){\n  if (this.pending) return this;\n  var hook = new Hook('\"after all\" hook', fn);\n  hook.parent = this;\n  hook.timeout(this.timeout());\n  hook.slow(this.slow());\n  hook.ctx = this.ctx;\n  this._afterAll.push(hook);\n  this.emit('afterAll', hook);\n  return this;\n};\n\n/**\n * Run `fn(test[, done])` before each test case.\n *\n * @param {Function} fn\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.beforeEach = function(fn){\n  if (this.pending) return this;\n  var hook = new Hook('\"before each\" hook', fn);\n  hook.parent = this;\n  hook.timeout(this.timeout());\n  hook.slow(this.slow());\n  hook.ctx = this.ctx;\n  this._beforeEach.push(hook);\n  this.emit('beforeEach', hook);\n  return this;\n};\n\n/**\n * Run `fn(test[, done])` after each test case.\n *\n * @param {Function} fn\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.afterEach = function(fn){\n  if (this.pending) return this;\n  var hook = new Hook('\"after each\" hook', fn);\n  hook.parent = this;\n  hook.timeout(this.timeout());\n  hook.slow(this.slow());\n  hook.ctx = this.ctx;\n  this._afterEach.push(hook);\n  this.emit('afterEach', hook);\n  return this;\n};\n\n/**\n * Add a test `suite`.\n *\n * @param {Suite} suite\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.addSuite = function(suite){\n  suite.parent = this;\n  suite.timeout(this.timeout());\n  suite.slow(this.slow());\n  suite.bail(this.bail());\n  this.suites.push(suite);\n  this.emit('suite', suite);\n  return this;\n};\n\n/**\n * Add a `test` to this suite.\n *\n * @param {Test} test\n * @return {Suite} for chaining\n * @api private\n */\n\nSuite.prototype.addTest = function(test){\n  test.parent = this;\n  test.timeout(this.timeout());\n  test.slow(this.slow());\n  test.ctx = this.ctx;\n  this.tests.push(test);\n  this.emit('test', test);\n  return this;\n};\n\n/**\n * Return the full title generated by recursively\n * concatenating the parent's full title.\n *\n * @return {String}\n * @api public\n */\n\nSuite.prototype.fullTitle = function(){\n  if (this.parent) {\n    var full = this.parent.fullTitle();\n    if (full) return full + ' ' + this.title;\n  }\n  return this.title;\n};\n\n/**\n * Return the total number of tests.\n *\n * @return {Number}\n * @api public\n */\n\nSuite.prototype.total = function(){\n  return utils.reduce(this.suites, function(sum, suite){\n    return sum + suite.total();\n  }, 0) + this.tests.length;\n};\n\n/**\n * Iterates through each suite recursively to find\n * all tests. Applies a function in the format\n * `fn(test)`.\n *\n * @param {Function} fn\n * @return {Suite}\n * @api private\n */\n\nSuite.prototype.eachTest = function(fn){\n  utils.forEach(this.tests, fn);\n  utils.forEach(this.suites, function(suite){\n    suite.eachTest(fn);\n  });\n  return this;\n};\n\n}); // module: suite.js\n\nrequire.register(\"test.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar Runnable = require('./runnable');\n\n/**\n * Expose `Test`.\n */\n\nmodule.exports = Test;\n\n/**\n * Initialize a new `Test` with the given `title` and callback `fn`.\n *\n * @param {String} title\n * @param {Function} fn\n * @api private\n */\n\nfunction Test(title, fn) {\n  Runnable.call(this, title, fn);\n  this.pending = !fn;\n  this.type = 'test';\n}\n\n/**\n * Inherit from `Runnable.prototype`.\n */\n\nfunction F(){};\nF.prototype = Runnable.prototype;\nTest.prototype = new F;\nTest.prototype.constructor = Test;\n\n\n}); // module: test.js\n\nrequire.register(\"utils.js\", function(module, exports, require){\n\n/**\n * Module dependencies.\n */\n\nvar fs = require('browser/fs')\n  , path = require('browser/path')\n  , join = path.join\n  , debug = require('browser/debug')('mocha:watch');\n\n/**\n * Ignored directories.\n */\n\nvar ignore = ['node_modules', '.git'];\n\n/**\n * Escape special characters in the given string of html.\n *\n * @param  {String} html\n * @return {String}\n * @api private\n */\n\nexports.escape = function(html){\n  return String(html)\n    .replace(/&/g, '&amp;')\n    .replace(/\"/g, '&quot;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n\n/**\n * Array#forEach (<=IE8)\n *\n * @param {Array} array\n * @param {Function} fn\n * @param {Object} scope\n * @api private\n */\n\nexports.forEach = function(arr, fn, scope){\n  for (var i = 0, l = arr.length; i < l; i++)\n    fn.call(scope, arr[i], i);\n};\n\n/**\n * Array#indexOf (<=IE8)\n *\n * @parma {Array} arr\n * @param {Object} obj to find index of\n * @param {Number} start\n * @api private\n */\n\nexports.indexOf = function(arr, obj, start){\n  for (var i = start || 0, l = arr.length; i < l; i++) {\n    if (arr[i] === obj)\n      return i;\n  }\n  return -1;\n};\n\n/**\n * Array#reduce (<=IE8)\n *\n * @param {Array} array\n * @param {Function} fn\n * @param {Object} initial value\n * @api private\n */\n\nexports.reduce = function(arr, fn, val){\n  var rval = val;\n\n  for (var i = 0, l = arr.length; i < l; i++) {\n    rval = fn(rval, arr[i], i, arr);\n  }\n\n  return rval;\n};\n\n/**\n * Array#filter (<=IE8)\n *\n * @param {Array} array\n * @param {Function} fn\n * @api private\n */\n\nexports.filter = function(arr, fn){\n  var ret = [];\n\n  for (var i = 0, l = arr.length; i < l; i++) {\n    var val = arr[i];\n    if (fn(val, i, arr)) ret.push(val);\n  }\n\n  return ret;\n};\n\n/**\n * Object.keys (<=IE8)\n *\n * @param {Object} obj\n * @return {Array} keys\n * @api private\n */\n\nexports.keys = Object.keys || function(obj) {\n  var keys = []\n    , has = Object.prototype.hasOwnProperty // for `window` on <=IE8\n\n  for (var key in obj) {\n    if (has.call(obj, key)) {\n      keys.push(key);\n    }\n  }\n\n  return keys;\n};\n\n/**\n * Watch the given `files` for changes\n * and invoke `fn(file)` on modification.\n *\n * @param {Array} files\n * @param {Function} fn\n * @api private\n */\n\nexports.watch = function(files, fn){\n  var options = { interval: 100 };\n  files.forEach(function(file){\n    debug('file %s', file);\n    fs.watchFile(file, options, function(curr, prev){\n      if (prev.mtime < curr.mtime) fn(file);\n    });\n  });\n};\n\n/**\n * Ignored files.\n */\n\nfunction ignored(path){\n  return !~ignore.indexOf(path);\n}\n\n/**\n * Lookup files in the given `dir`.\n *\n * @return {Array}\n * @api private\n */\n\nexports.files = function(dir, ret){\n  ret = ret || [];\n\n  fs.readdirSync(dir)\n  .filter(ignored)\n  .forEach(function(path){\n    path = join(dir, path);\n    if (fs.statSync(path).isDirectory()) {\n      exports.files(path, ret);\n    } else if (path.match(/\\.(js|coffee)$/)) {\n      ret.push(path);\n    }\n  });\n\n  return ret;\n};\n\n/**\n * Compute a slug from the given `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nexports.slug = function(str){\n  return str\n    .toLowerCase()\n    .replace(/ +/g, '-')\n    .replace(/[^-\\w]/g, '');\n};\n\n/**\n * Strip the function definition from `str`,\n * and re-indent for pre whitespace.\n */\n\nexports.clean = function(str) {\n  str = str\n    .replace(/^function *\\(.*\\) *{/, '')\n    .replace(/\\s+\\}$/, '');\n\n  var spaces = str.match(/^\\n?( *)/)[1].length\n    , re = new RegExp('^ {' + spaces + '}', 'gm');\n\n  str = str.replace(re, '');\n\n  return exports.trim(str);\n};\n\n/**\n * Escape regular expression characters in `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nexports.escapeRegexp = function(str){\n  return str.replace(/[-\\\\^$*+?.()|[\\]{}]/g, \"\\\\$&\");\n};\n\n/**\n * Trim the given `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nexports.trim = function(str){\n  return str.replace(/^\\s+|\\s+$/g, '');\n};\n\n/**\n * Parse the given `qs`.\n *\n * @param {String} qs\n * @return {Object}\n * @api private\n */\n\nexports.parseQuery = function(qs){\n  return exports.reduce(qs.replace('?', '').split('&'), function(obj, pair){\n    var i = pair.indexOf('=')\n      , key = pair.slice(0, i)\n      , val = pair.slice(++i);\n\n    obj[key] = decodeURIComponent(val);\n    return obj;\n  }, {});\n};\n\n/**\n * Highlight the given string of `js`.\n *\n * @param {String} js\n * @return {String}\n * @api private\n */\n\nfunction highlight(js) {\n  return js\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\\/\\/(.*)/gm, '<span class=\"comment\">//$1</span>')\n    .replace(/('.*?')/gm, '<span class=\"string\">$1</span>')\n    .replace(/(\\d+\\.\\d+)/gm, '<span class=\"number\">$1</span>')\n    .replace(/(\\d+)/gm, '<span class=\"number\">$1</span>')\n    .replace(/\\bnew *(\\w+)/gm, '<span class=\"keyword\">new</span> <span class=\"init\">$1</span>')\n    .replace(/\\b(function|new|throw|return|var|if|else)\\b/gm, '<span class=\"keyword\">$1</span>')\n}\n\n/**\n * Highlight the contents of tag `name`.\n *\n * @param {String} name\n * @api private\n */\n\nexports.highlightTags = function(name) {\n  var code = document.getElementsByTagName(name);\n  for (var i = 0, len = code.length; i < len; ++i) {\n    code[i].innerHTML = highlight(code[i].innerHTML);\n  }\n};\n\n}); // module: utils.js\n\n/**\n * Save timer references to avoid Sinon interfering (see GH-237).\n */\n\nvar Date = window.Date;\nvar setTimeout = window.setTimeout;\nvar setInterval = window.setInterval;\nvar clearTimeout = window.clearTimeout;\nvar clearInterval = window.clearInterval;\n\n/**\n * Node shims.\n *\n * These are meant only to allow\n * mocha.js to run untouched, not\n * to allow running node code in\n * the browser.\n */\n\nvar process = {};\nprocess.exit = function(status){};\nprocess.stdout = {};\nglobal = window;\n\n/**\n * Remove uncaughtException listener.\n */\n\nprocess.removeListener = function(e){\n  if ('uncaughtException' == e) {\n    window.onerror = null;\n  }\n};\n\n/**\n * Implements uncaughtException listener.\n */\n\nprocess.on = function(e, fn){\n  if ('uncaughtException' == e) {\n    window.onerror = function(err, url, line){\n      fn(new Error(err + ' (' + url + ':' + line + ')'));\n    };\n  }\n};\n\n/**\n * Expose mocha.\n */\n\nvar Mocha = window.Mocha = require('mocha'),\n    mocha = window.mocha = new Mocha({ reporter: 'html' });\n\nvar immediateQueue = []\n  , immediateTimeout;\n\nfunction timeslice() {\n  var immediateStart = new Date().getTime();\n  while (immediateQueue.length && (new Date().getTime() - immediateStart) < 100) {\n    immediateQueue.shift()();\n  }\n  if (immediateQueue.length) {\n    immediateTimeout = setTimeout(timeslice, 0);\n  } else {\n    immediateTimeout = null;\n  }\n}\n\n/**\n * High-performance override of Runner.immediately.\n */\n\nMocha.Runner.immediately = function(callback) {\n  immediateQueue.push(callback);\n  if (!immediateTimeout) {\n    immediateTimeout = setTimeout(timeslice, 0);\n  }\n};\n\n/**\n * Override ui to ensure that the ui functions are initialized.\n * Normally this would happen in Mocha.prototype.loadFiles.\n */\n\nmocha.ui = function(ui){\n  Mocha.prototype.ui.call(this, ui);\n  this.suite.emit('pre-require', window, null, this);\n  return this;\n};\n\n/**\n * Setup mocha with the given setting options.\n */\n\nmocha.setup = function(opts){\n  if ('string' == typeof opts) opts = { ui: opts };\n  for (var opt in opts) this[opt](opts[opt]);\n  return this;\n};\n\n/**\n * Run mocha, returning the Runner.\n */\n\nmocha.run = function(fn){\n  var options = mocha.options;\n  mocha.globals('location');\n\n  var query = Mocha.utils.parseQuery(window.location.search || '');\n  if (query.grep) mocha.grep(query.grep);\n  if (query.invert) mocha.invert();\n\n  return Mocha.prototype.run.call(mocha, function(){\n    Mocha.utils.highlightTags('code');\n    if (fn) fn();\n  });\n};\n})();//@ sourceURL=visionmedia-mocha/mocha.js"
-));
-require.register("component-indexof/index.js", Function("exports, require, module",
-"\nvar indexOf = [].indexOf;\n\nmodule.exports = function(arr, obj){\n  if (indexOf) return arr.indexOf(obj);\n  for (var i = 0; i < arr.length; ++i) {\n    if (arr[i] === obj) return i;\n  }\n  return -1;\n};//@ sourceURL=component-indexof/index.js"
-));
-require.register("component-emitter/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar index = require('indexof');\n\n/**\n * Expose `Emitter`.\n */\n\nmodule.exports = Emitter;\n\n/**\n * Initialize a new `Emitter`.\n *\n * @api public\n */\n\nfunction Emitter(obj) {\n  if (obj) return mixin(obj);\n};\n\n/**\n * Mixin the emitter properties.\n *\n * @param {Object} obj\n * @return {Object}\n * @api private\n */\n\nfunction mixin(obj) {\n  for (var key in Emitter.prototype) {\n    obj[key] = Emitter.prototype[key];\n  }\n  return obj;\n}\n\n/**\n * Listen on the given `event` with `fn`.\n *\n * @param {String} event\n * @param {Function} fn\n * @return {Emitter}\n * @api public\n */\n\nEmitter.prototype.on = function(event, fn){\n  this._callbacks = this._callbacks || {};\n  (this._callbacks[event] = this._callbacks[event] || [])\n    .push(fn);\n  return this;\n};\n\n/**\n * Adds an `event` listener that will be invoked a single\n * time then automatically removed.\n *\n * @param {String} event\n * @param {Function} fn\n * @return {Emitter}\n * @api public\n */\n\nEmitter.prototype.once = function(event, fn){\n  var self = this;\n  this._callbacks = this._callbacks || {};\n\n  function on() {\n    self.off(event, on);\n    fn.apply(this, arguments);\n  }\n\n  fn._off = on;\n  this.on(event, on);\n  return this;\n};\n\n/**\n * Remove the given callback for `event` or all\n * registered callbacks.\n *\n * @param {String} event\n * @param {Function} fn\n * @return {Emitter}\n * @api public\n */\n\nEmitter.prototype.off =\nEmitter.prototype.removeListener =\nEmitter.prototype.removeAllListeners = function(event, fn){\n  this._callbacks = this._callbacks || {};\n\n  // all\n  if (0 == arguments.length) {\n    this._callbacks = {};\n    return this;\n  }\n\n  // specific event\n  var callbacks = this._callbacks[event];\n  if (!callbacks) return this;\n\n  // remove all handlers\n  if (1 == arguments.length) {\n    delete this._callbacks[event];\n    return this;\n  }\n\n  // remove specific handler\n  var i = index(callbacks, fn._off || fn);\n  if (~i) callbacks.splice(i, 1);\n  return this;\n};\n\n/**\n * Emit `event` with the given args.\n *\n * @param {String} event\n * @param {Mixed} ...\n * @return {Emitter}\n */\n\nEmitter.prototype.emit = function(event){\n  this._callbacks = this._callbacks || {};\n  var args = [].slice.call(arguments, 1)\n    , callbacks = this._callbacks[event];\n\n  if (callbacks) {\n    callbacks = callbacks.slice(0);\n    for (var i = 0, len = callbacks.length; i < len; ++i) {\n      callbacks[i].apply(this, args);\n    }\n  }\n\n  return this;\n};\n\n/**\n * Return array of callbacks for `event`.\n *\n * @param {String} event\n * @return {Array}\n * @api public\n */\n\nEmitter.prototype.listeners = function(event){\n  this._callbacks = this._callbacks || {};\n  return this._callbacks[event] || [];\n};\n\n/**\n * Check if this emitter has `event` handlers.\n *\n * @param {String} event\n * @return {Boolean}\n * @api public\n */\n\nEmitter.prototype.hasListeners = function(event){\n  return !! this.listeners(event).length;\n};\n//@ sourceURL=component-emitter/index.js"
-));
-require.register("RedVentures-reduce/index.js", Function("exports, require, module",
-"\n/**\n * Reduce `arr` with `fn`.\n *\n * @param {Array} arr\n * @param {Function} fn\n * @param {Mixed} initial\n *\n * TODO: combatible error handling?\n */\n\nmodule.exports = function(arr, fn, initial){  \n  var idx = 0;\n  var len = arr.length;\n  var curr = arguments.length == 3\n    ? initial\n    : arr[idx++];\n\n  while (idx < len) {\n    curr = fn.call(null, curr, arr[idx], ++idx, arr);\n  }\n  \n  return curr;\n};//@ sourceURL=RedVentures-reduce/index.js"
-));
-require.register("visionmedia-superagent/lib/client.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar Emitter = require('emitter');\nvar reduce = require('reduce');\n\n/**\n * Root reference for iframes.\n */\n\nvar root = 'undefined' == typeof window\n  ? this\n  : window;\n\n/**\n * Noop.\n */\n\nfunction noop(){};\n\n/**\n * Check if `obj` is a host object,\n * we don't want to serialize these :)\n *\n * TODO: future proof, move to compoent land\n *\n * @param {Object} obj\n * @return {Boolean}\n * @api private\n */\n\nfunction isHost(obj) {\n  var str = {}.toString.call(obj);\n\n  switch (str) {\n    case '[object File]':\n    case '[object Blob]':\n    case '[object FormData]':\n      return true;\n    default:\n      return false;\n  }\n}\n\n/**\n * Determine XHR.\n */\n\nfunction getXHR() {\n  if (root.XMLHttpRequest\n    && ('file:' != root.location.protocol || !root.ActiveXObject)) {\n    return new XMLHttpRequest;\n  } else {\n    try { return new ActiveXObject('Microsoft.XMLHTTP'); } catch(e) {}\n    try { return new ActiveXObject('Msxml2.XMLHTTP.6.0'); } catch(e) {}\n    try { return new ActiveXObject('Msxml2.XMLHTTP.3.0'); } catch(e) {}\n    try { return new ActiveXObject('Msxml2.XMLHTTP'); } catch(e) {}\n  }\n  return false;\n}\n\n/**\n * Removes leading and trailing whitespace, added to support IE.\n *\n * @param {String} s\n * @return {String}\n * @api private\n */\n\nvar trim = ''.trim\n  ? function(s) { return s.trim(); }\n  : function(s) { return s.replace(/(^\\s*|\\s*$)/g, ''); };\n\n/**\n * Check if `obj` is an object.\n *\n * @param {Object} obj\n * @return {Boolean}\n * @api private\n */\n\nfunction isObject(obj) {\n  return obj === Object(obj);\n}\n\n/**\n * Serialize the given `obj`.\n *\n * @param {Object} obj\n * @return {String}\n * @api private\n */\n\nfunction serialize(obj) {\n  if (!isObject(obj)) return obj;\n  var pairs = [];\n  for (var key in obj) {\n    pairs.push(encodeURIComponent(key)\n      + '=' + encodeURIComponent(obj[key]));\n  }\n  return pairs.join('&');\n}\n\n/**\n * Expose serialization method.\n */\n\n request.serializeObject = serialize;\n\n /**\n  * Parse the given x-www-form-urlencoded `str`.\n  *\n  * @param {String} str\n  * @return {Object}\n  * @api private\n  */\n\nfunction parseString(str) {\n  var obj = {};\n  var pairs = str.split('&');\n  var parts;\n  var pair;\n\n  for (var i = 0, len = pairs.length; i < len; ++i) {\n    pair = pairs[i];\n    parts = pair.split('=');\n    obj[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);\n  }\n\n  return obj;\n}\n\n/**\n * Expose parser.\n */\n\nrequest.parseString = parseString;\n\n/**\n * Default MIME type map.\n *\n *     superagent.types.xml = 'application/xml';\n *\n */\n\nrequest.types = {\n  html: 'text/html',\n  json: 'application/json',\n  urlencoded: 'application/x-www-form-urlencoded',\n  'form': 'application/x-www-form-urlencoded',\n  'form-data': 'application/x-www-form-urlencoded'\n};\n\n/**\n * Default serialization map.\n *\n *     superagent.serialize['application/xml'] = function(obj){\n *       return 'generated xml here';\n *     };\n *\n */\n\n request.serialize = {\n   'application/x-www-form-urlencoded': serialize,\n   'application/json': JSON.stringify\n };\n\n /**\n  * Default parsers.\n  *\n  *     superagent.parse['application/xml'] = function(str){\n  *       return { object parsed from str };\n  *     };\n  *\n  */\n\nrequest.parse = {\n  'application/x-www-form-urlencoded': parseString,\n  'application/json': JSON.parse\n};\n\n/**\n * Parse the given header `str` into\n * an object containing the mapped fields.\n *\n * @param {String} str\n * @return {Object}\n * @api private\n */\n\nfunction parseHeader(str) {\n  var lines = str.split(/\\r?\\n/);\n  var fields = {};\n  var index;\n  var line;\n  var field;\n  var val;\n\n  lines.pop(); // trailing CRLF\n\n  for (var i = 0, len = lines.length; i < len; ++i) {\n    line = lines[i];\n    index = line.indexOf(':');\n    field = line.slice(0, index).toLowerCase();\n    val = trim(line.slice(index + 1));\n    fields[field] = val;\n  }\n\n  return fields;\n}\n\n/**\n * Return the mime type for the given `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nfunction type(str){\n  return str.split(/ *; */).shift();\n};\n\n/**\n * Return header field parameters.\n *\n * @param {String} str\n * @return {Object}\n * @api private\n */\n\nfunction params(str){\n  return reduce(str.split(/ *; */), function(obj, str){\n    var parts = str.split(/ *= */)\n      , key = parts.shift()\n      , val = parts.shift();\n\n    if (key && val) obj[key] = val;\n    return obj;\n  }, {});\n};\n\n/**\n * Initialize a new `Response` with the given `xhr`.\n *\n *  - set flags (.ok, .error, etc)\n *  - parse header\n *\n * Examples:\n *\n *  Aliasing `superagent` as `request` is nice:\n *\n *      request = superagent;\n *\n *  We can use the promise-like API, or pass callbacks:\n *\n *      request.get('/').end(function(res){});\n *      request.get('/', function(res){});\n *\n *  Sending data can be chained:\n *\n *      request\n *        .post('/user')\n *        .send({ name: 'tj' })\n *        .end(function(res){});\n *\n *  Or passed to `.send()`:\n *\n *      request\n *        .post('/user')\n *        .send({ name: 'tj' }, function(res){});\n *\n *  Or passed to `.post()`:\n *\n *      request\n *        .post('/user', { name: 'tj' })\n *        .end(function(res){});\n *\n * Or further reduced to a single call for simple cases:\n *\n *      request\n *        .post('/user', { name: 'tj' }, function(res){});\n *\n * @param {XMLHTTPRequest} xhr\n * @param {Object} options\n * @api private\n */\n\nfunction Response(xhr, options) {\n  options = options || {};\n  this.xhr = xhr;\n  this.text = xhr.responseText;\n  this.setStatusProperties(xhr.status);\n  this.header = this.headers = parseHeader(xhr.getAllResponseHeaders());\n  // getAllResponseHeaders sometimes falsely returns \"\" for CORS requests, but\n  // getResponseHeader still works. so we get content-type even if getting\n  // other headers fails.\n  this.header['content-type'] = xhr.getResponseHeader('content-type');\n  this.setHeaderProperties(this.header);\n  this.body = this.parseBody(this.text);\n}\n\n/**\n * Get case-insensitive `field` value.\n *\n * @param {String} field\n * @return {String}\n * @api public\n */\n\nResponse.prototype.get = function(field){\n  return this.header[field.toLowerCase()];\n};\n\n/**\n * Set header related properties:\n *\n *   - `.type` the content type without params\n *\n * A response of \"Content-Type: text/plain; charset=utf-8\"\n * will provide you with a `.type` of \"text/plain\".\n *\n * @param {Object} header\n * @api private\n */\n\nResponse.prototype.setHeaderProperties = function(header){\n  // content-type\n  var ct = this.header['content-type'] || '';\n  this.type = type(ct);\n\n  // params\n  var obj = params(ct);\n  for (var key in obj) this[key] = obj[key];\n};\n\n/**\n * Parse the given body `str`.\n *\n * Used for auto-parsing of bodies. Parsers\n * are defined on the `superagent.parse` object.\n *\n * @param {String} str\n * @return {Mixed}\n * @api private\n */\n\nResponse.prototype.parseBody = function(str){\n  var parse = request.parse[this.type];\n  return parse\n    ? parse(str)\n    : null;\n};\n\n/**\n * Set flags such as `.ok` based on `status`.\n *\n * For example a 2xx response will give you a `.ok` of __true__\n * whereas 5xx will be __false__ and `.error` will be __true__. The\n * `.clientError` and `.serverError` are also available to be more\n * specific, and `.statusType` is the class of error ranging from 1..5\n * sometimes useful for mapping respond colors etc.\n *\n * \"sugar\" properties are also defined for common cases. Currently providing:\n *\n *   - .noContent\n *   - .badRequest\n *   - .unauthorized\n *   - .notAcceptable\n *   - .notFound\n *\n * @param {Number} status\n * @api private\n */\n\nResponse.prototype.setStatusProperties = function(status){\n  var type = status / 100 | 0;\n\n  // status / class\n  this.status = status;\n  this.statusType = type;\n\n  // basics\n  this.info = 1 == type;\n  this.ok = 2 == type;\n  this.clientError = 4 == type;\n  this.serverError = 5 == type;\n  this.error = (4 == type || 5 == type)\n    ? this.toError()\n    : false;\n\n  // sugar\n  this.accepted = 202 == status;\n  this.noContent = 204 == status || 1223 == status;\n  this.badRequest = 400 == status;\n  this.unauthorized = 401 == status;\n  this.notAcceptable = 406 == status;\n  this.notFound = 404 == status;\n  this.forbidden = 403 == status;\n};\n\n/**\n * Return an `Error` representative of this response.\n *\n * @return {Error}\n * @api public\n */\n\nResponse.prototype.toError = function(){\n  var msg = 'got ' + this.status + ' response';\n  var err = new Error(msg);\n  err.status = this.status;\n  return err;\n};\n\n/**\n * Expose `Response`.\n */\n\nrequest.Response = Response;\n\n/**\n * Initialize a new `Request` with the given `method` and `url`.\n *\n * @param {String} method\n * @param {String} url\n * @api public\n */\n\nfunction Request(method, url) {\n  var self = this;\n  Emitter.call(this);\n  this._query = this._query || [];\n  this.method = method;\n  this.url = url;\n  this.header = {};\n  this._header = {};\n  this.set('X-Requested-With', 'XMLHttpRequest');\n  this.on('end', function(){\n    var res = new Response(self.xhr);\n    if ('HEAD' == method) res.text = null;\n    self.callback(null, res);\n  });\n}\n\n/**\n * Inherit from `Emitter.prototype`.\n */\n\nRequest.prototype = new Emitter;\nRequest.prototype.constructor = Request;\n\n/**\n * Set timeout to `ms`.\n *\n * @param {Number} ms\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.timeout = function(ms){\n  this._timeout = ms;\n  return this;\n};\n\n/**\n * Clear previous timeout.\n *\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.clearTimeout = function(){\n  this._timeout = 0;\n  clearTimeout(this._timer);\n  return this;\n};\n\n/**\n * Abort the request, and clear potential timeout.\n *\n * @return {Request}\n * @api public\n */\n\nRequest.prototype.abort = function(){\n  if (this.aborted) return;\n  this.aborted = true;\n  this.xhr.abort();\n  this.clearTimeout();\n  this.emit('abort');\n  return this;\n};\n\n/**\n * Set header `field` to `val`, or multiple fields with one object.\n *\n * Examples:\n *\n *      req.get('/')\n *        .set('Accept', 'application/json')\n *        .set('X-API-Key', 'foobar')\n *        .end(callback);\n *\n *      req.get('/')\n *        .set({ Accept: 'application/json', 'X-API-Key': 'foobar' })\n *        .end(callback);\n *\n * @param {String|Object} field\n * @param {String} val\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.set = function(field, val){\n  if (isObject(field)) {\n    for (var key in field) {\n      this.set(key, field[key]);\n    }\n    return this;\n  }\n  this._header[field.toLowerCase()] = val;\n  this.header[field] = val;\n  return this;\n};\n\n/**\n * Get case-insensitive header `field` value.\n *\n * @param {String} field\n * @return {String}\n * @api private\n */\n\nRequest.prototype.getHeader = function(field){\n  return this._header[field.toLowerCase()];\n};\n\n/**\n * Set Content-Type to `type`, mapping values from `request.types`.\n *\n * Examples:\n *\n *      superagent.types.xml = 'application/xml';\n *\n *      request.post('/')\n *        .type('xml')\n *        .send(xmlstring)\n *        .end(callback);\n *\n *      request.post('/')\n *        .type('application/xml')\n *        .send(xmlstring)\n *        .end(callback);\n *\n * @param {String} type\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.type = function(type){\n  this.set('Content-Type', request.types[type] || type);\n  return this;\n};\n\n/**\n * Set Authorization field value with `user` and `pass`.\n *\n * @param {String} user\n * @param {String} pass\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.auth = function(user, pass){\n  var str = btoa(user + ':' + pass);\n  this.set('Authorization', 'Basic ' + str);\n  return this;\n};\n\n/**\n* Add query-string `val`.\n*\n* Examples:\n*\n*   request.get('/shoes')\n*     .query('size=10')\n*     .query({ color: 'blue' })\n*\n* @param {Object|String} val\n* @return {Request} for chaining\n* @api public\n*/\n\nRequest.prototype.query = function(val){\n  if ('string' != typeof val) val = serialize(val);\n  this._query.push(val);\n  return this;\n};\n\n/**\n * Send `data`, defaulting the `.type()` to \"json\" when\n * an object is given.\n *\n * Examples:\n *\n *       // querystring\n *       request.get('/search')\n *         .end(callback)\n *\n *       // multiple data \"writes\"\n *       request.get('/search')\n *         .send({ search: 'query' })\n *         .send({ range: '1..5' })\n *         .send({ order: 'desc' })\n *         .end(callback)\n *\n *       // manual json\n *       request.post('/user')\n *         .type('json')\n *         .send('{\"name\":\"tj\"})\n *         .end(callback)\n *\n *       // auto json\n *       request.post('/user')\n *         .send({ name: 'tj' })\n *         .end(callback)\n *\n *       // manual x-www-form-urlencoded\n *       request.post('/user')\n *         .type('form')\n *         .send('name=tj')\n *         .end(callback)\n *\n *       // auto x-www-form-urlencoded\n *       request.post('/user')\n *         .type('form')\n *         .send({ name: 'tj' })\n *         .end(callback)\n *\n *       // defaults to x-www-form-urlencoded\n  *      request.post('/user')\n  *        .send('name=tobi')\n  *        .send('species=ferret')\n  *        .end(callback)\n *\n * @param {String|Object} data\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.send = function(data){\n  var obj = isObject(data);\n  var type = this.getHeader('Content-Type');\n\n  // merge\n  if (obj && isObject(this._data)) {\n    for (var key in data) {\n      this._data[key] = data[key];\n    }\n  } else if ('string' == typeof data) {\n    if (!type) this.type('form');\n    type = this.getHeader('Content-Type');\n    if ('application/x-www-form-urlencoded' == type) {\n      this._data = this._data\n        ? this._data + '&' + data\n        : data;\n    } else {\n      this._data = (this._data || '') + data;\n    }\n  } else {\n    this._data = data;\n  }\n\n  if (!obj) return this;\n  if (!type) this.type('json');\n  return this;\n};\n\n/**\n * Invoke the callback with `err` and `res`\n * and handle arity check.\n *\n * @param {Error} err\n * @param {Response} res\n * @api private\n */\n\nRequest.prototype.callback = function(err, res){\n  var fn = this._callback;\n  if (2 == fn.length) return fn(err, res);\n  if (err) return this.emit('error', err);\n  fn(res);\n};\n\n/**\n * Invoke callback with x-domain error.\n *\n * @api private\n */\n\nRequest.prototype.crossDomainError = function(){\n  var err = new Error('Origin is not allowed by Access-Control-Allow-Origin');\n  err.crossDomain = true;\n  this.callback(err);\n};\n\n/**\n * Invoke callback with timeout error.\n *\n * @api private\n */\n\nRequest.prototype.timeoutError = function(){\n  var timeout = this._timeout;\n  var err = new Error('timeout of ' + timeout + 'ms exceeded');\n  err.timeout = timeout;\n  this.callback(err);\n};\n\n/**\n * Enable transmission of cookies with x-domain requests.\n *\n * Note that for this to work the origin must not be\n * using \"Access-Control-Allow-Origin\" with a wildcard,\n * and also must set \"Access-Control-Allow-Credentials\"\n * to \"true\".\n *\n * @api public\n */\n\nRequest.prototype.withCredentials = function(){\n  this._withCredentials = true;\n  return this;\n};\n\n/**\n * Initiate request, invoking callback `fn(res)`\n * with an instanceof `Response`.\n *\n * @param {Function} fn\n * @return {Request} for chaining\n * @api public\n */\n\nRequest.prototype.end = function(fn){\n  var self = this;\n  var xhr = this.xhr = getXHR();\n  var query = this._query.join('&');\n  var timeout = this._timeout;\n  var data = this._data;\n\n  // store callback\n  this._callback = fn || noop;\n\n  // CORS\n  if (this._withCredentials) xhr.withCredentials = true;\n\n  // state change\n  xhr.onreadystatechange = function(){\n    if (4 != xhr.readyState) return;\n    if (0 == xhr.status) {\n      if (self.aborted) return self.timeoutError();\n      return self.crossDomainError();\n    }\n    self.emit('end');\n  };\n\n  // progress\n  if (xhr.upload) {\n    xhr.upload.onprogress = function(e){\n      e.percent = e.loaded / e.total * 100;\n      self.emit('progress', e);\n    };\n  }\n\n  // timeout\n  if (timeout && !this._timer) {\n    this._timer = setTimeout(function(){\n      self.abort();\n    }, timeout);\n  }\n\n  // querystring\n  if (query) {\n    query = request.serializeObject(query);\n    this.url += ~this.url.indexOf('?')\n      ? '&' + query\n      : '?' + query;\n  }\n\n  // initiate request\n  xhr.open(this.method, this.url, true);\n\n  // body\n  if ('GET' != this.method && 'HEAD' != this.method && 'string' != typeof data && !isHost(data)) {\n    // serialize stuff\n    var serialize = request.serialize[this.getHeader('Content-Type')];\n    if (serialize) data = serialize(data);\n  }\n\n  // set header fields\n  for (var field in this.header) {\n    if (null == this.header[field]) continue;\n    xhr.setRequestHeader(field, this.header[field]);\n  }\n\n  // send stuff\n  xhr.send(data);\n  return this;\n};\n\n/**\n * Expose `Request`.\n */\n\nrequest.Request = Request;\n\n/**\n * Issue a request:\n *\n * Examples:\n *\n *    request('GET', '/users').end(callback)\n *    request('/users').end(callback)\n *    request('/users', callback)\n *\n * @param {String} method\n * @param {String|Function} url or callback\n * @return {Request}\n * @api public\n */\n\nfunction request(method, url) {\n  // callback\n  if ('function' == typeof url) {\n    return new Request('GET', method).end(url);\n  }\n\n  // url first\n  if (1 == arguments.length) {\n    return new Request('GET', method);\n  }\n\n  return new Request(method, url);\n}\n\n/**\n * GET `url` with optional callback `fn(res)`.\n *\n * @param {String} url\n * @param {Mixed|Function} data or fn\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.get = function(url, data, fn){\n  var req = request('GET', url);\n  if ('function' == typeof data) fn = data, data = null;\n  if (data) req.query(data);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * GET `url` with optional callback `fn(res)`.\n *\n * @param {String} url\n * @param {Mixed|Function} data or fn\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.head = function(url, data, fn){\n  var req = request('HEAD', url);\n  if ('function' == typeof data) fn = data, data = null;\n  if (data) req.send(data);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * DELETE `url` with optional callback `fn(res)`.\n *\n * @param {String} url\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.del = function(url, fn){\n  var req = request('DELETE', url);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * PATCH `url` with optional `data` and callback `fn(res)`.\n *\n * @param {String} url\n * @param {Mixed} data\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.patch = function(url, data, fn){\n  var req = request('PATCH', url);\n  if ('function' == typeof data) fn = data, data = null;\n  if (data) req.send(data);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * POST `url` with optional `data` and callback `fn(res)`.\n *\n * @param {String} url\n * @param {Mixed} data\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.post = function(url, data, fn){\n  var req = request('POST', url);\n  if ('function' == typeof data) fn = data, data = null;\n  if (data) req.send(data);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * PUT `url` with optional `data` and callback `fn(res)`.\n *\n * @param {String} url\n * @param {Mixed|Function} data or fn\n * @param {Function} fn\n * @return {Request}\n * @api public\n */\n\nrequest.put = function(url, data, fn){\n  var req = request('PUT', url);\n  if ('function' == typeof data) fn = data, data = null;\n  if (data) req.send(data);\n  if (fn) req.end(fn);\n  return req;\n};\n\n/**\n * Expose `request`.\n */\n\nmodule.exports = request;\n//@ sourceURL=visionmedia-superagent/lib/client.js"
-));
-require.register("visionmedia-debug/index.js", Function("exports, require, module",
-"if ('undefined' == typeof window) {\n  module.exports = require('./lib/debug');\n} else {\n  module.exports = require('./debug');\n}\n//@ sourceURL=visionmedia-debug/index.js"
-));
-require.register("visionmedia-debug/debug.js", Function("exports, require, module",
-"\n/**\n * Expose `debug()` as the module.\n */\n\nmodule.exports = debug;\n\n/**\n * Create a debugger with the given `name`.\n *\n * @param {String} name\n * @return {Type}\n * @api public\n */\n\nfunction debug(name) {\n  if (!debug.enabled(name)) return function(){};\n\n  return function(fmt){\n    fmt = coerce(fmt);\n\n    var curr = new Date;\n    var ms = curr - (debug[name] || curr);\n    debug[name] = curr;\n\n    fmt = name\n      + ' '\n      + fmt\n      + ' +' + debug.humanize(ms);\n\n    // This hackery is required for IE8\n    // where `console.log` doesn't have 'apply'\n    window.console\n      && console.log\n      && Function.prototype.apply.call(console.log, console, arguments);\n  }\n}\n\n/**\n * The currently active debug mode names.\n */\n\ndebug.names = [];\ndebug.skips = [];\n\n/**\n * Enables a debug mode by name. This can include modes\n * separated by a colon and wildcards.\n *\n * @param {String} name\n * @api public\n */\n\ndebug.enable = function(name) {\n  try {\n    localStorage.debug = name;\n  } catch(e){}\n\n  var split = (name || '').split(/[\\s,]+/)\n    , len = split.length;\n\n  for (var i = 0; i < len; i++) {\n    name = split[i].replace('*', '.*?');\n    if (name[0] === '-') {\n      debug.skips.push(new RegExp('^' + name.substr(1) + '$'));\n    }\n    else {\n      debug.names.push(new RegExp('^' + name + '$'));\n    }\n  }\n};\n\n/**\n * Disable debug output.\n *\n * @api public\n */\n\ndebug.disable = function(){\n  debug.enable('');\n};\n\n/**\n * Humanize the given `ms`.\n *\n * @param {Number} m\n * @return {String}\n * @api private\n */\n\ndebug.humanize = function(ms) {\n  var sec = 1000\n    , min = 60 * 1000\n    , hour = 60 * min;\n\n  if (ms >= hour) return (ms / hour).toFixed(1) + 'h';\n  if (ms >= min) return (ms / min).toFixed(1) + 'm';\n  if (ms >= sec) return (ms / sec | 0) + 's';\n  return ms + 'ms';\n};\n\n/**\n * Returns true if the given mode name is enabled, false otherwise.\n *\n * @param {String} name\n * @return {Boolean}\n * @api public\n */\n\ndebug.enabled = function(name) {\n  for (var i = 0, len = debug.skips.length; i < len; i++) {\n    if (debug.skips[i].test(name)) {\n      return false;\n    }\n  }\n  for (var i = 0, len = debug.names.length; i < len; i++) {\n    if (debug.names[i].test(name)) {\n      return true;\n    }\n  }\n  return false;\n};\n\n/**\n * Coerce `val`.\n */\n\nfunction coerce(val) {\n  if (val instanceof Error) return val.stack || val.message;\n  return val;\n}\n\n// persist\n\nif (window.localStorage) debug.enable(localStorage.debug);\n//@ sourceURL=visionmedia-debug/debug.js"
-));
-require.register("component-type/index.js", Function("exports, require, module",
-"\n/**\n * toString ref.\n */\n\nvar toString = Object.prototype.toString;\n\n/**\n * Return the type of `val`.\n *\n * @param {Mixed} val\n * @return {String}\n * @api public\n */\n\nmodule.exports = function(val){\n  switch (toString.call(val)) {\n    case '[object Function]': return 'function';\n    case '[object Date]': return 'date';\n    case '[object RegExp]': return 'regexp';\n    case '[object Arguments]': return 'arguments';\n    case '[object Array]': return 'array';\n    case '[object String]': return 'string';\n  }\n\n  if (val === null) return 'null';\n  if (val === undefined) return 'undefined';\n  if (val && val.nodeType === 1) return 'element';\n  if (val === Object(val)) return 'object';\n\n  return typeof val;\n};\n//@ sourceURL=component-type/index.js"
-));
-require.register("component-each/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar type = require('type');\n\n/**\n * HOP reference.\n */\n\nvar has = Object.prototype.hasOwnProperty;\n\n/**\n * Iterate the given `obj` and invoke `fn(val, i)`.\n *\n * @param {String|Array|Object} obj\n * @param {Function} fn\n * @api public\n */\n\nmodule.exports = function(obj, fn){\n  switch (type(obj)) {\n    case 'array':\n      return array(obj, fn);\n    case 'object':\n      if ('number' == typeof obj.length) return array(obj, fn);\n      return object(obj, fn);\n    case 'string':\n      return string(obj, fn);\n  }\n};\n\n/**\n * Iterate string chars.\n *\n * @param {String} obj\n * @param {Function} fn\n * @api private\n */\n\nfunction string(obj, fn) {\n  for (var i = 0; i < obj.length; ++i) {\n    fn(obj.charAt(i), i);\n  }\n}\n\n/**\n * Iterate object keys.\n *\n * @param {Object} obj\n * @param {Function} fn\n * @api private\n */\n\nfunction object(obj, fn) {\n  for (var key in obj) {\n    if (has.call(obj, key)) {\n      fn(key, obj[key]);\n    }\n  }\n}\n\n/**\n * Iterate array-ish.\n *\n * @param {Array|Object} obj\n * @param {Function} fn\n * @api private\n */\n\nfunction array(obj, fn) {\n  for (var i = 0; i < obj.length; ++i) {\n    fn(obj[i], i);\n  }\n}//@ sourceURL=component-each/index.js"
-));
-require.register("component-url/index.js", Function("exports, require, module",
-"\n/**\n * Parse the given `url`.\n *\n * @param {String} str\n * @return {Object}\n * @api public\n */\n\nexports.parse = function(url){\n  var a = document.createElement('a');\n  a.href = url;\n  return {\n    href: a.href,\n    host: a.host || location.host,\n    port: ('0' === a.port || '' === a.port) ? location.port : a.port,\n    hash: a.hash,\n    hostname: a.hostname || location.hostname,\n    pathname: a.pathname.charAt(0) != '/' ? '/' + a.pathname : a.pathname,\n    protocol: !a.protocol || ':' == a.protocol ? location.protocol : a.protocol,\n    search: a.search,\n    query: a.search.slice(1)\n  };\n};\n\n/**\n * Check if `url` is absolute.\n *\n * @param {String} url\n * @return {Boolean}\n * @api public\n */\n\nexports.isAbsolute = function(url){\n  return 0 == url.indexOf('//') || !!~url.indexOf('://');\n};\n\n/**\n * Check if `url` is relative.\n *\n * @param {String} url\n * @return {Boolean}\n * @api public\n */\n\nexports.isRelative = function(url){\n  return !exports.isAbsolute(url);\n};\n\n/**\n * Check if `url` is cross domain.\n *\n * @param {String} url\n * @return {Boolean}\n * @api public\n */\n\nexports.isCrossDomain = function(url){\n  url = exports.parse(url);\n  return url.hostname !== location.hostname\n    || url.port !== location.port\n    || url.protocol !== location.protocol;\n};//@ sourceURL=component-url/index.js"
-));
-require.register("component-live-css/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar request = require('superagent')\n  , debug = require('debug')('live-css')\n  , each = require('each')\n  , url = require('url');\n\n/**\n * Poll timer.\n */\n\nvar timer;\n\n/**\n * Poll interval.\n */\n\nvar interval = 1000;\n\n/**\n * Etag map.\n */\n\nvar etags = {};\n\n/**\n * Last-Modified map.\n */\n\nvar mtimes = {};\n\n/**\n * Start live.\n *\n * @api public\n */\n\nexports.start = function(){\n  timer = setTimeout(function(){\n    checkAll();\n    exports.start();\n  }, interval);\n};\n\n/**\n * Stop live.\n *\n * @api public\n */\n\nexports.stop = function(){\n  clearTimeout(timer);\n};\n\n/**\n * Check styles.\n *\n * @api private\n */\n\nfunction checkAll() {\n  var styles = getStyles();\n  each(styles, check);\n}\n\n/**\n * Check `style`.\n *\n * @param {Element} style\n * @api private\n */\n\nfunction check(style) {\n  var href = style.getAttribute('href');\n  var prevEtag = etags[href];\n  var prevMtime = mtimes[href];\n\n  request\n  .head(href)\n  .query({ bust: new Date })\n  .end(function(res){\n    var etag = res.header.etag;\n    if (etag) etags[href] = etag;\n\n    var mtime = res.header['last-modified'];\n    if (mtime) mtimes[href] = mtime;\n\n    if (etag && etag != prevEtag) {\n      debug('etag mismatch');\n      debug('old \"%s\"', prevEtag);\n      debug('new \"%s\"', etag);\n      debug('changed %s', href);\n      return refresh(style);\n    }\n\n    if (mtime && mtime != prevMtime) {\n      debug('mtime mismatch');\n      debug('old \"%s\"', prevMtime);\n      debug('new \"%s\"', mtime);\n      debug('changed %s', href);\n      return refresh(style);\n    }\n  });\n}\n\n/**\n * Refresh `style`.\n *\n * @param {Element} style\n * @api private\n */\n\nfunction refresh(style) {\n  var parent = style.parentNode;\n  var sibling = style.nextSibling;\n  var clone = style.cloneNode(true);\n\n  // insert\n  if (sibling) {\n    parent.insertBefore(clone, sibling);\n  } else {\n    parent.appendChild(clone);\n  }\n\n  // remove prev\n  clone.onload = function(){\n    parent.removeChild(style);\n  };\n}\n\n/**\n * Return stylesheet links.\n *\n * @return {Array}\n * @api private\n */\n\nfunction getStyles() {\n  var links = document.getElementsByTagName('link');\n  var styles = [];\n\n  each(links, function(link){\n    if ('stylesheet' != link.getAttribute('rel')) return;\n    if (url.isAbsolute(link.getAttribute('href'))) return;\n    styles.push(link);\n  });\n\n  return styles;\n}//@ sourceURL=component-live-css/index.js"
-));
-require.register("component-format-parser/index.js", Function("exports, require, module",
-"\n/**\n * Parse the given format `str`.\n *\n * @param {String} str\n * @return {Array}\n * @api public\n */\n\nmodule.exports = function(str){\n\treturn str.split(/ *\\| */).map(function(call){\n\t\tvar parts = call.split(':');\n\t\tvar name = parts.shift();\n\t\tvar args = parseArgs(parts.join(':'));\n\n\t\treturn {\n\t\t\tname: name,\n\t\t\targs: args\n\t\t};\n\t});\n};\n\n/**\n * Parse args `str`.\n *\n * @param {String} str\n * @return {Array}\n * @api private\n */\n\nfunction parseArgs(str) {\n\tvar args = [];\n\tvar re = /\"([^\"]*)\"|'([^']*)'|([^ \\t,]+)/g;\n\tvar m;\n\t\n\twhile (m = re.exec(str)) {\n\t\targs.push(m[2] || m[1] || m[0]);\n\t}\n\t\n\treturn args;\n}\n//@ sourceURL=component-format-parser/index.js"
-));
-require.register("component-props/index.js", Function("exports, require, module",
-"\n/**\n * Return immediate identifiers parsed from `str`.\n *\n * @param {String} str\n * @return {Array}\n * @api public\n */\n\nmodule.exports = function(str, prefix){\n  var p = unique(props(str));\n  if (prefix) return prefixed(str, p, prefix);\n  return p;\n};\n\n/**\n * Return immediate identifiers in `str`.\n *\n * @param {String} str\n * @return {Array}\n * @api private\n */\n\nfunction props(str) {\n  return str\n    .replace(/\\.\\w+|\\w+ *\\(|\"[^\"]*\"|'[^']*'|\\/([^/]+)\\//g, '')\n    .match(/[a-zA-Z_]\\w*/g)\n    || [];\n}\n\n/**\n * Return `str` with `props` prefixed with `prefix`.\n *\n * @param {String} str\n * @param {Array} props\n * @param {String} prefix\n * @return {String}\n * @api private\n */\n\nfunction prefixed(str, props, prefix) {\n  var re = /\\.\\w+|\\w+ *\\(|\"[^\"]*\"|'[^']*'|\\/([^/]+)\\/|[a-zA-Z_]\\w*/g;\n  return str.replace(re, function(_){\n    if ('(' == _[_.length - 1]) return prefix + _;\n    if (!~props.indexOf(_)) return _;\n    return prefix + _;\n  });\n}\n\n/**\n * Return unique array.\n *\n * @param {Array} arr\n * @return {Array}\n * @api private\n */\n\nfunction unique(arr) {\n  var ret = [];\n\n  for (var i = 0; i < arr.length; i++) {\n    if (~ret.indexOf(arr[i])) continue;\n    ret.push(arr[i]);\n  }\n\n  return ret;\n}\n//@ sourceURL=component-props/index.js"
-));
-require.register("component-event/index.js", Function("exports, require, module",
-"\n/**\n * Bind `el` event `type` to `fn`.\n *\n * @param {Element} el\n * @param {String} type\n * @param {Function} fn\n * @param {Boolean} capture\n * @return {Function}\n * @api public\n */\n\nexports.bind = function(el, type, fn, capture){\n  if (el.addEventListener) {\n    el.addEventListener(type, fn, capture);\n  } else {\n    el.attachEvent('on' + type, fn);\n  }\n  return fn;\n};\n\n/**\n * Unbind `el` event `type`'s callback `fn`.\n *\n * @param {Element} el\n * @param {String} type\n * @param {Function} fn\n * @param {Boolean} capture\n * @return {Function}\n * @api public\n */\n\nexports.unbind = function(el, type, fn, capture){\n  if (el.removeEventListener) {\n    el.removeEventListener(type, fn, capture);\n  } else {\n    el.detachEvent('on' + type, fn);\n  }\n  return fn;\n};\n//@ sourceURL=component-event/index.js"
-));
-require.register("component-classes/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar index = require('indexof');\n\n/**\n * Whitespace regexp.\n */\n\nvar re = /\\s+/;\n\n/**\n * toString reference.\n */\n\nvar toString = Object.prototype.toString;\n\n/**\n * Wrap `el` in a `ClassList`.\n *\n * @param {Element} el\n * @return {ClassList}\n * @api public\n */\n\nmodule.exports = function(el){\n  return new ClassList(el);\n};\n\n/**\n * Initialize a new ClassList for `el`.\n *\n * @param {Element} el\n * @api private\n */\n\nfunction ClassList(el) {\n  this.el = el;\n  this.list = el.classList;\n}\n\n/**\n * Add class `name` if not already present.\n *\n * @param {String} name\n * @return {ClassList}\n * @api public\n */\n\nClassList.prototype.add = function(name){\n  // classList\n  if (this.list) {\n    this.list.add(name);\n    return this;\n  }\n\n  // fallback\n  var arr = this.array();\n  var i = index(arr, name);\n  if (!~i) arr.push(name);\n  this.el.className = arr.join(' ');\n  return this;\n};\n\n/**\n * Remove class `name` when present, or\n * pass a regular expression to remove\n * any which match.\n *\n * @param {String|RegExp} name\n * @return {ClassList}\n * @api public\n */\n\nClassList.prototype.remove = function(name){\n  if ('[object RegExp]' == toString.call(name)) {\n    return this.removeMatching(name);\n  }\n\n  // classList\n  if (this.list) {\n    this.list.remove(name);\n    return this;\n  }\n\n  // fallback\n  var arr = this.array();\n  var i = index(arr, name);\n  if (~i) arr.splice(i, 1);\n  this.el.className = arr.join(' ');\n  return this;\n};\n\n/**\n * Remove all classes matching `re`.\n *\n * @param {RegExp} re\n * @return {ClassList}\n * @api private\n */\n\nClassList.prototype.removeMatching = function(re){\n  var arr = this.array();\n  for (var i = 0; i < arr.length; i++) {\n    if (re.test(arr[i])) {\n      this.remove(arr[i]);\n    }\n  }\n  return this;\n};\n\n/**\n * Toggle class `name`.\n *\n * @param {String} name\n * @return {ClassList}\n * @api public\n */\n\nClassList.prototype.toggle = function(name){\n  // classList\n  if (this.list) {\n    this.list.toggle(name);\n    return this;\n  }\n\n  // fallback\n  if (this.has(name)) {\n    this.remove(name);\n  } else {\n    this.add(name);\n  }\n  return this;\n};\n\n/**\n * Return an array of classes.\n *\n * @return {Array}\n * @api public\n */\n\nClassList.prototype.array = function(){\n  var arr = this.el.className.split(re);\n  if ('' === arr[0]) arr.pop();\n  return arr;\n};\n\n/**\n * Check if class `name` is present.\n *\n * @param {String} name\n * @return {ClassList}\n * @api public\n */\n\nClassList.prototype.has =\nClassList.prototype.contains = function(name){\n  return this.list\n    ? this.list.contains(name)\n    : !! ~index(this.array(), name);\n};\n//@ sourceURL=component-classes/index.js"
-));
-require.register("component-query/index.js", Function("exports, require, module",
-"\nfunction one(selector, el) {\n  return el.querySelector(selector);\n}\n\nexports = module.exports = function(selector, el){\n  el = el || document;\n  return one(selector, el);\n};\n\nexports.all = function(selector, el){\n  el = el || document;\n  return el.querySelectorAll(selector);\n};\n\nexports.engine = function(obj){\n  if (!obj.one) throw new Error('.one callback required');\n  if (!obj.all) throw new Error('.all callback required');\n  one = obj.one;\n  exports.all = obj.all;\n};\n//@ sourceURL=component-query/index.js"
-));
-require.register("component-reactive/lib/index.js", Function("exports, require, module",
-"/**\n * Module dependencies.\n */\n\nvar AttrBinding = require('./attr-binding');\nvar TextBinding = require('./text-binding');\nvar debug = require('debug')('reactive');\nvar bindings = require('./bindings');\nvar Binding = require('./binding');\nvar utils = require('./utils');\nvar query = require('query');\n\n/**\n * Expose `Reactive`.\n */\n\nexports = module.exports = Reactive;\n\n/**\n * Bindings.\n */\n\nexports.bindings = {};\n\n/**\n * Default subscription method.\n */\n\nfunction subscribe(obj, prop, fn) {\n  if (!obj.on) return;\n  obj.on('change ' + prop, fn);\n};\n\n/**\n * Default unsubscription method.\n */\n\nfunction unsubscribe(obj, prop, fn) {\n  if (!obj.off) return;\n  obj.off('change ' + prop, fn);\n};\n\n/**\n * Define subscription function.\n *\n * @param {Function} fn\n * @api public\n */\n\nexports.subscribe = function(fn){\n  subscribe = fn;\n  Binding.subscribe = fn;\n};\n\n/**\n * Define unsubscribe function.\n *\n * @param {Function} fn\n * @api public\n */\n\nexports.unsubscribe = function(fn){\n  unsubscribe = fn;\n  Binding.unsubscribe = fn;\n};\n\n/**\n * Define binding `name` with callback `fn(el, val)`.\n *\n * @param {String} name or object\n * @param {String|Object} name\n * @param {Function} fn\n * @api public\n */\n\nexports.bind = function(name, fn){\n  if ('object' == typeof name) {\n    for (var key in name) {\n      exports.bind(key, name[key]);\n    }\n    return;\n  }\n\n  exports.bindings[name] = fn;\n};\n\n/**\n * Initialize a reactive template for `el` and `obj`.\n *\n * @param {Element} el\n * @param {Element} obj\n * @param {Object} options\n * @api public\n */\n\nfunction Reactive(el, obj, options) {\n  if (!(this instanceof Reactive)) return new Reactive(el, obj, options);\n  this.el = el;\n  this.obj = obj;\n  this.els = [];\n  this.fns = options || {};\n  this.bindAll();\n  this.bindInterpolation(this.el, []);\n}\n\n/**\n * Subscribe to changes on `prop`.\n *\n * @param {String} prop\n * @param {Function} fn\n * @api private\n */\n\nReactive.prototype.sub = function(prop, fn){\n  subscribe(this.obj, prop, fn);\n};\n\n/**\n * Unsubscribe to changes from `prop`.\n *\n * @param {String} prop\n * @param {Function} fn\n * @api public\n */\n\nReactive.prototype.unsub = function(prop, fn){\n  unsubscribe(this.obj, prop, fn);\n};\n\n/**\n * Traverse and bind all interpolation within attributes and text.\n *\n * @param {Element} el\n * @api private\n */\n\nReactive.prototype.bindInterpolation = function(el, els){\n\n  // element\n  if (el.nodeType == 1) {\n    for (var i = 0; i < el.attributes.length; i++) {\n      var attr = el.attributes[i];\n      if (utils.hasInterpolation(attr.value)) {\n        new AttrBinding(this, el, attr);\n      }\n    }\n  }\n\n  // text node\n  if (el.nodeType == 3) {\n    if (utils.hasInterpolation(el.data)) {\n      debug('bind text \"%s\"', el.data);\n      new TextBinding(this, el);\n    }\n  }\n\n  // walk nodes\n  for (var i = 0; i < el.childNodes.length; i++) {\n    var node = el.childNodes[i];\n    this.bindInterpolation(node, els);\n  }\n};\n\n/**\n * Apply all bindings.\n *\n * @api private\n */\n\nReactive.prototype.bindAll = function() {\n  for (var name in exports.bindings) {\n    this.bind(name, exports.bindings[name]);\n  }\n};\n\n/**\n * Bind `name` to `fn`.\n *\n * @param {String|Object} name or object\n * @param {Function} fn\n * @api public\n */\n\nReactive.prototype.bind = function(name, fn) {\n  if ('object' == typeof name) {\n    for (var key in name) {\n      this.bind(key, name[key]);\n    }\n    return;\n  }\n\n  var obj = this.obj;\n  var els = query.all('[' + name + ']', this.el);\n  if (!els.length) return;\n\n  debug('bind [%s] (%d elements)', name, els.length);\n  for (var i = 0; i < els.length; i++) {\n    var binding = new Binding(name, this, els[i], fn);\n    binding.bind();\n  }\n};\n\n// bundled bindings\n\nbindings(exports.bind);\n//@ sourceURL=component-reactive/lib/index.js"
-));
-require.register("component-reactive/lib/utils.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar debug = require('debug')('reactive:utils');\nvar props = require('props');\n\n/**\n * Function cache.\n */\n\nvar cache = {};\n\n/**\n * Return interpolation property names in `str`,\n * for example \"{foo} and {bar}\" would return\n * ['foo', 'bar'].\n *\n * @param {String} str\n * @return {Array}\n * @api private\n */\n\nexports.interpolationProps = function(str) {\n  var m;\n  var arr = [];\n  var re = /\\{([^}]+)\\}/g;\n\n  while (m = re.exec(str)) {\n    var expr = m[1];\n    if (isSimple(expr)) {\n      arr.push(expr);\n    } else {\n      arr = arr.concat(props(expr));\n    }\n  }\n\n  return unique(arr);\n};\n\n/**\n * Interpolate `str` with the given `fn`.\n *\n * TODO: cache compiled function\n *\n * @param {String} str\n * @param {Function} fn\n * @return {String}\n * @api private\n */\n\nexports.interpolate = function(str, fn){\n  return str.replace(/\\{([^}]+)\\}/g, function(_, expr){\n    var callback;\n\n    if (!isSimple(expr)) {\n      callback = cache[expr] || (cache[expr] = compile(expr));\n    }\n\n    return fn(expr.trim(), callback);\n  });\n};\n\n/**\n * Check if `str` has interpolation.\n *\n * @param {String} str\n * @return {Boolean}\n * @api private\n */\n\nexports.hasInterpolation = function(str) {\n  return ~str.indexOf('{');\n};\n\n/**\n * Remove computed properties notation from `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nexports.clean = function(str) {\n  return str.split('<')[0].trim();\n};\n\n/**\n * Compile `expr` to a `Function`.\n *\n * @param {String} expr\n * @return {Function}\n * @api private\n */\n\nfunction compile(expr) {\n  expr = 'return ' + props(expr, 'model.');\n  debug('compile `%s`', expr);\n  return new Function('model', expr);\n}\n\n/**\n * Return unique array.\n *\n * @param {Array} arr\n * @return {Array}\n * @api private\n */\n\nfunction unique(arr) {\n  var ret = [];\n\n  for (var i = 0; i < arr.length; i++) {\n    if (~ret.indexOf(arr[i])) continue;\n    ret.push(arr[i]);\n  }\n\n  return ret;\n}\n\n/**\n * Check if `expr` is \"simple\" and\n * may be optimized to reduce compiled functions.\n *\n * @param {String} expr\n * @return {Boolean}\n * @api private\n */\n\nfunction isSimple(expr) {\n  return expr.match(/^ *\\w+ *$/);\n}\n//@ sourceURL=component-reactive/lib/utils.js"
-));
-require.register("component-reactive/lib/text-binding.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar debug = require('debug')('reactive:text-binding');\nvar utils = require('./utils');\n\n/**\n * Expose `TextBinding`.\n */\n\nmodule.exports = TextBinding;\n\n/**\n * Initialize a new text binding.\n *\n * @param {Reactive} view\n * @param {Element} node\n * @param {Attribute} attr\n * @api private\n */\n\nfunction TextBinding(view, node) {\n  var self = this;\n  this.view = view;\n  this.text = node.data;\n  this.node = node;\n  this.props = utils.interpolationProps(this.text);\n  this.subscribe();\n  this.render();\n}\n\n/**\n * Subscribe to changes.\n */\n\nTextBinding.prototype.subscribe = function(){\n  var self = this;\n  var view = this.view;\n  this.props.forEach(function(prop){\n    view.sub(prop, function(){\n      self.render();\n    });\n  });\n};\n\n/**\n * Render text.\n */\n\nTextBinding.prototype.render = function(){\n  var node = this.node;\n  var text = this.text;\n  var obj = this.view.obj;\n  debug('render \"%s\"', text);\n  node.data = utils.interpolate(text, function(prop, fn){\n    return fn\n      ? fn(obj)\n      : obj[prop];\n  });\n};\n//@ sourceURL=component-reactive/lib/text-binding.js"
-));
-require.register("component-reactive/lib/attr-binding.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar debug = require('debug')('reactive:attr-binding');\nvar utils = require('./utils');\n\n/**\n * Expose `AttrBinding`.\n */\n\nmodule.exports = AttrBinding;\n\n/**\n * Initialize a new attribute binding.\n *\n * @param {Reactive} view\n * @param {Element} node\n * @param {Attribute} attr\n * @api private\n */\n\nfunction AttrBinding(view, node, attr) {\n  var self = this;\n  this.view = view;\n  this.node = node;\n  this.attr = attr;\n  this.text = attr.value;\n  this.props = utils.interpolationProps(this.text);\n  this.subscribe();\n  this.render();\n}\n\n/**\n * Subscribe to changes.\n */\n\nAttrBinding.prototype.subscribe = function(){\n  var self = this;\n  var view = this.view;\n  this.props.forEach(function(prop){\n    view.sub(prop, function(){\n      self.render();\n    });\n  });\n};\n\n/**\n * Render the value.\n */\n\nAttrBinding.prototype.render = function(){\n  var attr = this.attr;\n  var text = this.text;\n  var obj = this.view.obj;\n  debug('render %s \"%s\"', attr.name, text);\n  attr.value = utils.interpolate(text, function(prop, fn){\n    return fn\n      ? fn(obj)\n      : obj[prop];\n  });\n};\n//@ sourceURL=component-reactive/lib/attr-binding.js"
-));
-require.register("component-reactive/lib/binding.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar parse = require('format-parser');\n\n/**\n * Expose `Binding`.\n */\n\nmodule.exports = Binding;\n\n/**\n * Initialize a binding.\n *\n * @api private\n */\n\nfunction Binding(name, view, el, fn) {\n  this.name = name;\n  this.view = view;\n  this.obj = view.obj;\n  this.fns = view.fns;\n  this.el = el;\n  this.fn = fn;\n}\n\n/**\n * Apply the binding.\n *\n * @api private\n */\n\nBinding.prototype.bind = function() {\n  var val = this.el.getAttribute(this.name);\n  this.fn(this.el, val, this.obj);\n};\n\n/**\n * Perform interpolation on `name`.\n *\n * @param {String} name\n * @return {String}\n * @api public\n */\n\nBinding.prototype.interpolate = function(name) {\n  var self = this;\n  name = clean(name);\n\n  if (~name.indexOf('{')) {\n    return name.replace(/{([^}]+)}/g, function(_, name){\n      return self.value(name);\n    });\n  }\n\n  return this.formatted(name);\n};\n\n/**\n * Return value for property `name`.\n *\n *  - check if the \"view\" has a `name` method\n *  - check if the \"model\" has a `name` method\n *  - check if the \"model\" has a `name` property\n *\n * @param {String} name\n * @return {Mixed}\n * @api public\n */\n\nBinding.prototype.value = function(name) {\n  var self = this;\n  var obj = this.obj;\n  var view = this.view.fns;\n  name = clean(name);\n\n  // view method\n  if ('function' == typeof view[name]) {\n    return view[name]();\n  }\n\n  // view value\n  if (view.hasOwnProperty(name)) {\n    return view[name];\n  }\n\n  // getter-style method\n  if ('function' == typeof obj[name]) {\n    return obj[name]();\n  }\n\n  // value\n  return obj[name];\n};\n\n/**\n * Return formatted property.\n *\n * @param {String} fmt\n * @return {Mixed}\n * @api public\n */\n\nBinding.prototype.formatted = function(fmt) {\n  var calls = parse(clean(fmt));\n  var name = calls[0].name;\n  var val = this.value(name);\n\n  for (var i = 1; i < calls.length; ++i) {\n    var call = calls[i];\n    call.args.unshift(val);\n    var fn = this.fns[call.name];\n    val = fn.apply(this.fns, call.args);\n  }\n\n  return val;\n};\n\n/**\n * Define subscription `fn`.\n *\n * @param {Function} fn\n * @api public\n */\n\nBinding.prototype.subscribe = function(fn){\n  this._subscribe = fn;\n};\n\n/**\n * Define unsubscribe `fn`.\n *\n * @param {Function} fn\n * @api public\n */\n\nBinding.prototype.unsubscribe = function(fn){\n  this._unsubscribe = fn;\n};\n\n/**\n * Invoke `fn` on changes.\n *\n * @param {Function} fn\n * @api public\n */\n\nBinding.prototype.change = function(fn) {\n  fn.call(this);\n\n  var self = this;\n  var obj = this.obj;\n  var sub = this._subscribe || Binding.subscribe;\n  var val = this.el.getAttribute(this.name);\n\n  // computed props\n  var parts = val.split('<');\n  val = parts[0];\n  var computed = parts[1];\n  if (computed) computed = computed.trim().split(/\\s+/);\n\n  // interpolation\n  if (hasInterpolation(val)) {\n    var props = interpolationProps(val);\n    props.forEach(function(prop){\n      sub(obj, prop, fn.bind(self));\n    });\n    return;\n  }\n\n  // formatting\n  var calls = parse(val);\n  var prop = calls[0].name;\n\n  // computed props\n  if (computed) {\n    computed.forEach(function(prop){\n      sub(obj, prop, fn.bind(self));\n    });\n    return;\n  }\n\n  // bind to prop\n  sub(obj, prop, fn.bind(this));\n};\n\n/**\n * Default subscription method.\n */\n\nBinding.subscribe = function(obj, prop, fn) {\n  if (!obj.on) return;\n  obj.on('change ' + prop, fn);\n};\n\n/**\n * Default unsubscription method.\n */\n\nBinding.unsubscribe = function(obj, prop, fn) {\n  if (!obj.off) return;\n  obj.off('change ' + prop, fn);\n};\n\n/**\n * Return interpolation property names in `str`,\n * for example \"{foo} and {bar}\" would return\n * ['foo', 'bar'].\n *\n * @param {String} str\n * @return {Array}\n * @api private\n */\n\nfunction interpolationProps(str) {\n  var m;\n  var arr = [];\n  var re = /\\{([^}]+)\\}/g;\n  while (m = re.exec(str)) {\n    arr.push(m[1]);\n  }\n  return arr;\n}\n\n/**\n * Check if `str` has interpolation.\n *\n * @param {String} str\n * @return {Boolean}\n * @api private\n */\n\nfunction hasInterpolation(str) {\n  return ~str.indexOf('{');\n}\n\n/**\n * Remove computed properties notation from `str`.\n *\n * @param {String} str\n * @return {String}\n * @api private\n */\n\nfunction clean(str) {\n  return str.split('<')[0].trim();\n}\n//@ sourceURL=component-reactive/lib/binding.js"
-));
-require.register("component-reactive/lib/bindings.js", Function("exports, require, module",
-"/**\n * Module dependencies.\n */\n\nvar classes = require('classes');\nvar event = require('event');\n\n/**\n * Attributes supported.\n */\n\nvar attrs = [\n  'id',\n  'src',\n  'rel',\n  'cols',\n  'rows',\n  'name',\n  'href',\n  'title',\n  'class',\n  'style',\n  'width',\n  'value',\n  'height',\n  'tabindex',\n  'placeholder'\n];\n\n/**\n * Events supported.\n */\n\nvar events = [\n  'change',\n  'click',\n  'dblclick',\n  'mousedown',\n  'mouseup',\n  'blur',\n  'focus',\n  'input',\n  'keydown',\n  'keypress',\n  'keyup'\n];\n\n/**\n * Apply bindings.\n */\n\nmodule.exports = function(bind){\n\n  /**\n   * Generate attribute bindings.\n   */\n\n  attrs.forEach(function(attr){\n    bind('data-' + attr, function(el, name, obj){\n      this.change(function(){\n        el.setAttribute(attr, this.interpolate(name));\n      });\n    });\n  });\n\n/**\n * Append child element.\n */\n\n  bind('data-append', function(el, name){\n    var other = this.value(name);\n    el.appendChild(other);\n  });\n\n/**\n * Replace element.\n */\n\n  bind('data-replace', function(el, name){\n    var other = this.value(name);\n    el.parentNode.replaceChild(other, el);\n  });\n\n  /**\n   * Show binding.\n   */\n\n  bind('data-show', function(el, name){\n    this.change(function(){\n      if (this.value(name)) {\n        classes(el).add('show').remove('hide');\n      } else {\n        classes(el).remove('show').add('hide');\n      }\n    });\n  });\n\n  /**\n   * Hide binding.\n   */\n\n  bind('data-hide', function(el, name){\n    this.change(function(){\n      if (this.value(name)) {\n        classes(el).remove('show').add('hide');\n      } else {\n        classes(el).add('show').remove('hide');\n      }\n    });\n  });\n\n  /**\n   * Checked binding.\n   */\n\n  bind('data-checked', function(el, name){\n    this.change(function(){\n      if (this.value(name)) {\n        el.setAttribute('checked', 'checked');\n      } else {\n        el.removeAttribute('checked');\n      }\n    });\n  });\n\n  /**\n   * Text binding.\n   */\n\n  bind('data-text', function(el, name){\n    this.change(function(){\n      el.textContent = this.interpolate(name);\n    });\n  });\n\n  /**\n   * HTML binding.\n   */\n\n  bind('data-html', function(el, name){\n    this.change(function(){\n      el.innerHTML = this.formatted(name);\n    });\n  });\n\n  /**\n   * Generate event bindings.\n   */\n\n  events.forEach(function(name){\n    bind('on-' + name, function(el, method){\n      var fns = this.view.fns\n      event.bind(el, name, function(e){\n        var fn = fns[method];\n        if (!fn) throw new Error('method .' + method + '() missing');\n        fns[method](e);\n      });\n    });\n  });\n};\n//@ sourceURL=component-reactive/lib/bindings.js"
-));
-require.register("component-underscore/index.js", Function("exports, require, module",
-"//     Underscore.js 1.3.3\n//     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.\n//     Underscore is freely distributable under the MIT license.\n//     Portions of Underscore are inspired or borrowed from Prototype,\n//     Oliver Steele's Functional, and John Resig's Micro-Templating.\n//     For all details and documentation:\n//     http://documentcloud.github.com/underscore\n\n(function() {\n\n  // Baseline setup\n  // --------------\n\n  // Establish the root object, `window` in the browser, or `global` on the server.\n  var root = this;\n\n  // Save the previous value of the `_` variable.\n  var previousUnderscore = root._;\n\n  // Establish the object that gets returned to break out of a loop iteration.\n  var breaker = {};\n\n  // Save bytes in the minified (but not gzipped) version:\n  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;\n\n  // Create quick reference variables for speed access to core prototypes.\n  var push             = ArrayProto.push,\n      slice            = ArrayProto.slice,\n      unshift          = ArrayProto.unshift,\n      toString         = ObjProto.toString,\n      hasOwnProperty   = ObjProto.hasOwnProperty;\n\n  // All **ECMAScript 5** native function implementations that we hope to use\n  // are declared here.\n  var\n    nativeForEach      = ArrayProto.forEach,\n    nativeMap          = ArrayProto.map,\n    nativeReduce       = ArrayProto.reduce,\n    nativeReduceRight  = ArrayProto.reduceRight,\n    nativeFilter       = ArrayProto.filter,\n    nativeEvery        = ArrayProto.every,\n    nativeSome         = ArrayProto.some,\n    nativeIndexOf      = ArrayProto.indexOf,\n    nativeLastIndexOf  = ArrayProto.lastIndexOf,\n    nativeIsArray      = Array.isArray,\n    nativeKeys         = Object.keys,\n    nativeBind         = FuncProto.bind;\n\n  // Create a safe reference to the Underscore object for use below.\n  var _ = function(obj) { return new wrapper(obj); };\n\n  // Export the Underscore object for **Node.js**, with\n  // backwards-compatibility for the old `require()` API. If we're in\n  // the browser, add `_` as a global object via a string identifier,\n  // for Closure Compiler \"advanced\" mode.\n  if (typeof exports !== 'undefined') {\n    if (typeof module !== 'undefined' && module.exports) {\n      exports = module.exports = _;\n    }\n    exports._ = _;\n  } else {\n    root['_'] = _;\n  }\n\n  // Current version.\n  _.VERSION = '1.3.3';\n\n  // Collection Functions\n  // --------------------\n\n  // The cornerstone, an `each` implementation, aka `forEach`.\n  // Handles objects with the built-in `forEach`, arrays, and raw objects.\n  // Delegates to **ECMAScript 5**'s native `forEach` if available.\n  var each = _.each = _.forEach = function(obj, iterator, context) {\n    if (obj == null) return;\n    if (nativeForEach && obj.forEach === nativeForEach) {\n      obj.forEach(iterator, context);\n    } else if (obj.length === +obj.length) {\n      for (var i = 0, l = obj.length; i < l; i++) {\n        if (iterator.call(context, obj[i], i, obj) === breaker) return;\n      }\n    } else {\n      for (var key in obj) {\n        if (_.has(obj, key)) {\n          if (iterator.call(context, obj[key], key, obj) === breaker) return;\n        }\n      }\n    }\n  };\n\n  // Return the results of applying the iterator to each element.\n  // Delegates to **ECMAScript 5**'s native `map` if available.\n  _.map = _.collect = function(obj, iterator, context) {\n    var results = [];\n    if (obj == null) return results;\n    if (nativeMap && obj.map === nativeMap) return obj.map(iterator, context);\n    each(obj, function(value, index, list) {\n      results[results.length] = iterator.call(context, value, index, list);\n    });\n    return results;\n  };\n\n  // **Reduce** builds up a single result from a list of values, aka `inject`,\n  // or `foldl`. Delegates to **ECMAScript 5**'s native `reduce` if available.\n  _.reduce = _.foldl = _.inject = function(obj, iterator, memo, context) {\n    var initial = arguments.length > 2;\n    if (obj == null) obj = [];\n    if (nativeReduce && obj.reduce === nativeReduce) {\n      if (context) iterator = _.bind(iterator, context);\n      return initial ? obj.reduce(iterator, memo) : obj.reduce(iterator);\n    }\n    each(obj, function(value, index, list) {\n      if (!initial) {\n        memo = value;\n        initial = true;\n      } else {\n        memo = iterator.call(context, memo, value, index, list);\n      }\n    });\n    if (!initial) throw new TypeError('Reduce of empty array with no initial value');\n    return memo;\n  };\n\n  // The right-associative version of reduce, also known as `foldr`.\n  // Delegates to **ECMAScript 5**'s native `reduceRight` if available.\n  _.reduceRight = _.foldr = function(obj, iterator, memo, context) {\n    var initial = arguments.length > 2;\n    if (obj == null) obj = [];\n    if (nativeReduceRight && obj.reduceRight === nativeReduceRight) {\n      if (context) iterator = _.bind(iterator, context);\n      return initial ? obj.reduceRight(iterator, memo) : obj.reduceRight(iterator);\n    }\n    var reversed = _.toArray(obj).reverse();\n    if (context && !initial) iterator = _.bind(iterator, context);\n    return initial ? _.reduce(reversed, iterator, memo, context) : _.reduce(reversed, iterator);\n  };\n\n  // Return the first value which passes a truth test. Aliased as `detect`.\n  _.find = _.detect = function(obj, iterator, context) {\n    var result;\n    any(obj, function(value, index, list) {\n      if (iterator.call(context, value, index, list)) {\n        result = value;\n        return true;\n      }\n    });\n    return result;\n  };\n\n  // Return all the elements that pass a truth test.\n  // Delegates to **ECMAScript 5**'s native `filter` if available.\n  // Aliased as `select`.\n  _.filter = _.select = function(obj, iterator, context) {\n    var results = [];\n    if (obj == null) return results;\n    if (nativeFilter && obj.filter === nativeFilter) return obj.filter(iterator, context);\n    each(obj, function(value, index, list) {\n      if (iterator.call(context, value, index, list)) results[results.length] = value;\n    });\n    return results;\n  };\n\n  // Return all the elements for which a truth test fails.\n  _.reject = function(obj, iterator, context) {\n    var results = [];\n    if (obj == null) return results;\n    each(obj, function(value, index, list) {\n      if (!iterator.call(context, value, index, list)) results[results.length] = value;\n    });\n    return results;\n  };\n\n  // Determine whether all of the elements match a truth test.\n  // Delegates to **ECMAScript 5**'s native `every` if available.\n  // Aliased as `all`.\n  _.every = _.all = function(obj, iterator, context) {\n    var result = true;\n    if (obj == null) return result;\n    if (nativeEvery && obj.every === nativeEvery) return obj.every(iterator, context);\n    each(obj, function(value, index, list) {\n      if (!(result = result && iterator.call(context, value, index, list))) return breaker;\n    });\n    return !!result;\n  };\n\n  // Determine if at least one element in the object matches a truth test.\n  // Delegates to **ECMAScript 5**'s native `some` if available.\n  // Aliased as `any`.\n  var any = _.some = _.any = function(obj, iterator, context) {\n    iterator || (iterator = _.identity);\n    var result = false;\n    if (obj == null) return result;\n    if (nativeSome && obj.some === nativeSome) return obj.some(iterator, context);\n    each(obj, function(value, index, list) {\n      if (result || (result = iterator.call(context, value, index, list))) return breaker;\n    });\n    return !!result;\n  };\n\n  // Determine if a given value is included in the array or object using `===`.\n  // Aliased as `contains`.\n  _.include = _.contains = function(obj, target) {\n    var found = false;\n    if (obj == null) return found;\n    if (nativeIndexOf && obj.indexOf === nativeIndexOf) return obj.indexOf(target) != -1;\n    found = any(obj, function(value) {\n      return value === target;\n    });\n    return found;\n  };\n\n  // Invoke a method (with arguments) on every item in a collection.\n  _.invoke = function(obj, method) {\n    var args = slice.call(arguments, 2);\n    return _.map(obj, function(value) {\n      return (_.isFunction(method) ? method : value[method]).apply(value, args);\n    });\n  };\n\n  // Convenience version of a common use case of `map`: fetching a property.\n  _.pluck = function(obj, key) {\n    return _.map(obj, function(value){ return value[key]; });\n  };\n\n  // Return the maximum element or (element-based computation).\n  // Can't optimize arrays of integers longer than 65,535 elements.\n  // See: https://bugs.webkit.org/show_bug.cgi?id=80797\n  _.max = function(obj, iterator, context) {\n    if (!iterator && _.isArray(obj) && obj[0] === +obj[0] && obj.length < 65535) {\n      return Math.max.apply(Math, obj);\n    }\n    if (!iterator && _.isEmpty(obj)) return -Infinity;\n    var result = {computed : -Infinity};\n    each(obj, function(value, index, list) {\n      var computed = iterator ? iterator.call(context, value, index, list) : value;\n      computed >= result.computed && (result = {value : value, computed : computed});\n    });\n    return result.value;\n  };\n\n  // Return the minimum element (or element-based computation).\n  _.min = function(obj, iterator, context) {\n    if (!iterator && _.isArray(obj) && obj[0] === +obj[0] && obj.length < 65535) {\n      return Math.min.apply(Math, obj);\n    }\n    if (!iterator && _.isEmpty(obj)) return Infinity;\n    var result = {computed : Infinity};\n    each(obj, function(value, index, list) {\n      var computed = iterator ? iterator.call(context, value, index, list) : value;\n      computed < result.computed && (result = {value : value, computed : computed});\n    });\n    return result.value;\n  };\n\n  // Shuffle an array.\n  _.shuffle = function(obj) {\n    var rand;\n    var index = 0;\n    var shuffled = [];\n    each(obj, function(value) {\n      rand = Math.floor(Math.random() * ++index);\n      shuffled[index - 1] = shuffled[rand];\n      shuffled[rand] = value;\n    });\n    return shuffled;\n  };\n\n  // Sort the object's values by a criterion produced by an iterator.\n  _.sortBy = function(obj, val, context) {\n    var iterator = lookupIterator(obj, val);\n    return _.pluck(_.map(obj, function(value, index, list) {\n      return {\n        value : value,\n        criteria : iterator.call(context, value, index, list)\n      };\n    }).sort(function(left, right) {\n      var a = left.criteria, b = right.criteria;\n      if (a === void 0) return 1;\n      if (b === void 0) return -1;\n      return a < b ? -1 : a > b ? 1 : 0;\n    }), 'value');\n  };\n\n  // An internal function to generate lookup iterators.\n  var lookupIterator = function(obj, val) {\n    return _.isFunction(val) ? val : function(obj) { return obj[val]; };\n  };\n\n  // An internal function used for aggregate \"group by\" operations.\n  var group = function(obj, val, behavior) {\n    var result = {};\n    var iterator = lookupIterator(obj, val);\n    each(obj, function(value, index) {\n      var key = iterator(value, index);\n      behavior(result, key, value);\n    });\n    return result;\n  };\n\n  // Groups the object's values by a criterion. Pass either a string attribute\n  // to group by, or a function that returns the criterion.\n  _.groupBy = function(obj, val) {\n    return group(obj, val, function(result, key, value) {\n      (result[key] || (result[key] = [])).push(value);\n    });\n  };\n\n  // Counts instances of an object that group by a certain criterion. Pass\n  // either a string attribute to count by, or a function that returns the\n  // criterion.\n  _.countBy = function(obj, val) {\n    return group(obj, val, function(result, key, value) {\n      result[key] || (result[key] = 0);\n      result[key]++;\n    });\n  };\n\n  // Use a comparator function to figure out the smallest index at which\n  // an object should be inserted so as to maintain order. Uses binary search.\n  _.sortedIndex = function(array, obj, iterator) {\n    iterator || (iterator = _.identity);\n    var value = iterator(obj);\n    var low = 0, high = array.length;\n    while (low < high) {\n      var mid = (low + high) >> 1;\n      iterator(array[mid]) < value ? low = mid + 1 : high = mid;\n    }\n    return low;\n  };\n\n  // Safely convert anything iterable into a real, live array.\n  _.toArray = function(obj) {\n    if (!obj)                                     return [];\n    if (_.isArray(obj))                           return slice.call(obj);\n    if (_.isArguments(obj))                       return slice.call(obj);\n    if (obj.toArray && _.isFunction(obj.toArray)) return obj.toArray();\n    return _.values(obj);\n  };\n\n  // Return the number of elements in an object.\n  _.size = function(obj) {\n    return _.isArray(obj) ? obj.length : _.keys(obj).length;\n  };\n\n  // Array Functions\n  // ---------------\n\n  // Get the first element of an array. Passing **n** will return the first N\n  // values in the array. Aliased as `head` and `take`. The **guard** check\n  // allows it to work with `_.map`.\n  _.first = _.head = _.take = function(array, n, guard) {\n    return (n != null) && !guard ? slice.call(array, 0, n) : array[0];\n  };\n\n  // Returns everything but the last entry of the array. Especially useful on\n  // the arguments object. Passing **n** will return all the values in\n  // the array, excluding the last N. The **guard** check allows it to work with\n  // `_.map`.\n  _.initial = function(array, n, guard) {\n    return slice.call(array, 0, array.length - ((n == null) || guard ? 1 : n));\n  };\n\n  // Get the last element of an array. Passing **n** will return the last N\n  // values in the array. The **guard** check allows it to work with `_.map`.\n  _.last = function(array, n, guard) {\n    if ((n != null) && !guard) {\n      return slice.call(array, Math.max(array.length - n, 0));\n    } else {\n      return array[array.length - 1];\n    }\n  };\n\n  // Returns everything but the first entry of the array. Aliased as `tail`.\n  // Especially useful on the arguments object. Passing an **index** will return\n  // the rest of the values in the array from that index onward. The **guard**\n  // check allows it to work with `_.map`.\n  _.rest = _.tail = function(array, index, guard) {\n    return slice.call(array, (index == null) || guard ? 1 : index);\n  };\n\n  // Trim out all falsy values from an array.\n  _.compact = function(array) {\n    return _.filter(array, function(value){ return !!value; });\n  };\n\n  // Internal implementation of a recursive `flatten` function.\n  var flatten = function(input, shallow, output) {\n    each(input, function(value) {\n      if (_.isArray(value)) {\n        shallow ? push.apply(output, value) : flatten(value, shallow, output);\n      } else {\n        output.push(value);\n      }\n    });\n    return output;\n  };\n\n  // Return a completely flattened version of an array.\n  _.flatten = function(array, shallow) {\n    return flatten(array, shallow, []);\n  };\n\n  // Return a version of the array that does not contain the specified value(s).\n  _.without = function(array) {\n    return _.difference(array, slice.call(arguments, 1));\n  };\n\n  // Produce a duplicate-free version of the array. If the array has already\n  // been sorted, you have the option of using a faster algorithm.\n  // Aliased as `unique`.\n  _.uniq = _.unique = function(array, isSorted, iterator) {\n    var initial = iterator ? _.map(array, iterator) : array;\n    var results = [];\n    _.reduce(initial, function(memo, value, index) {\n      if (isSorted ? (_.last(memo) !== value || !memo.length) : !_.include(memo, value)) {\n        memo.push(value);\n        results.push(array[index]);\n      }\n      return memo;\n    }, []);\n    return results;\n  };\n\n  // Produce an array that contains the union: each distinct element from all of\n  // the passed-in arrays.\n  _.union = function() {\n    return _.uniq(flatten(arguments, true, []));\n  };\n\n  // Produce an array that contains every item shared between all the\n  // passed-in arrays.\n  _.intersection = function(array) {\n    var rest = slice.call(arguments, 1);\n    return _.filter(_.uniq(array), function(item) {\n      return _.every(rest, function(other) {\n        return _.indexOf(other, item) >= 0;\n      });\n    });\n  };\n\n  // Take the difference between one array and a number of other arrays.\n  // Only the elements present in just the first array will remain.\n  _.difference = function(array) {\n    var rest = flatten(slice.call(arguments, 1), true, []);\n    return _.filter(array, function(value){ return !_.include(rest, value); });\n  };\n\n  // Zip together multiple lists into a single array -- elements that share\n  // an index go together.\n  _.zip = function() {\n    var args = slice.call(arguments);\n    var length = _.max(_.pluck(args, 'length'));\n    var results = new Array(length);\n    for (var i = 0; i < length; i++) {\n      results[i] = _.pluck(args, \"\" + i);\n    }\n    return results;\n  };\n\n  // Zip together two arrays -- an array of keys and an array of values -- into\n  // a single object.\n  _.zipObject = function(keys, values) {\n    var result = {};\n    for (var i = 0, l = keys.length; i < l; i++) {\n      result[keys[i]] = values[i];\n    }\n    return result;\n  };\n\n  // If the browser doesn't supply us with indexOf (I'm looking at you, **MSIE**),\n  // we need this function. Return the position of the first occurrence of an\n  // item in an array, or -1 if the item is not included in the array.\n  // Delegates to **ECMAScript 5**'s native `indexOf` if available.\n  // If the array is large and already in sort order, pass `true`\n  // for **isSorted** to use binary search.\n  _.indexOf = function(array, item, isSorted) {\n    if (array == null) return -1;\n    var i, l;\n    if (isSorted) {\n      i = _.sortedIndex(array, item);\n      return array[i] === item ? i : -1;\n    }\n    if (nativeIndexOf && array.indexOf === nativeIndexOf) return array.indexOf(item);\n    for (i = 0, l = array.length; i < l; i++) if (array[i] === item) return i;\n    return -1;\n  };\n\n  // Delegates to **ECMAScript 5**'s native `lastIndexOf` if available.\n  _.lastIndexOf = function(array, item) {\n    if (array == null) return -1;\n    if (nativeLastIndexOf && array.lastIndexOf === nativeLastIndexOf) return array.lastIndexOf(item);\n    var i = array.length;\n    while (i--) if (array[i] === item) return i;\n    return -1;\n  };\n\n  // Generate an integer Array containing an arithmetic progression. A port of\n  // the native Python `range()` function. See\n  // [the Python documentation](http://docs.python.org/library/functions.html#range).\n  _.range = function(start, stop, step) {\n    if (arguments.length <= 1) {\n      stop = start || 0;\n      start = 0;\n    }\n    step = arguments[2] || 1;\n\n    var len = Math.max(Math.ceil((stop - start) / step), 0);\n    var idx = 0;\n    var range = new Array(len);\n\n    while(idx < len) {\n      range[idx++] = start;\n      start += step;\n    }\n\n    return range;\n  };\n\n  // Function (ahem) Functions\n  // ------------------\n\n  // Reusable constructor function for prototype setting.\n  var ctor = function(){};\n\n  // Create a function bound to a given object (assigning `this`, and arguments,\n  // optionally). Binding with arguments is also known as `curry`.\n  // Delegates to **ECMAScript 5**'s native `Function.bind` if available.\n  // We check for `func.bind` first, to fail fast when `func` is undefined.\n  _.bind = function bind(func, context) {\n    var bound, args;\n    if (func.bind === nativeBind && nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));\n    if (!_.isFunction(func)) throw new TypeError;\n    args = slice.call(arguments, 2);\n    return bound = function() {\n      if (!(this instanceof bound)) return func.apply(context, args.concat(slice.call(arguments)));\n      ctor.prototype = func.prototype;\n      var self = new ctor;\n      var result = func.apply(self, args.concat(slice.call(arguments)));\n      if (Object(result) === result) return result;\n      return self;\n    };\n  };\n\n  // Bind all of an object's methods to that object. Useful for ensuring that\n  // all callbacks defined on an object belong to it.\n  _.bindAll = function(obj) {\n    var funcs = slice.call(arguments, 1);\n    if (funcs.length == 0) funcs = _.functions(obj);\n    each(funcs, function(f) { obj[f] = _.bind(obj[f], obj); });\n    return obj;\n  };\n\n  // Memoize an expensive function by storing its results.\n  _.memoize = function(func, hasher) {\n    var memo = {};\n    hasher || (hasher = _.identity);\n    return function() {\n      var key = hasher.apply(this, arguments);\n      return _.has(memo, key) ? memo[key] : (memo[key] = func.apply(this, arguments));\n    };\n  };\n\n  // Delays a function for the given number of milliseconds, and then calls\n  // it with the arguments supplied.\n  _.delay = function(func, wait) {\n    var args = slice.call(arguments, 2);\n    return setTimeout(function(){ return func.apply(null, args); }, wait);\n  };\n\n  // Defers a function, scheduling it to run after the current call stack has\n  // cleared.\n  _.defer = function(func) {\n    return _.delay.apply(_, [func, 1].concat(slice.call(arguments, 1)));\n  };\n\n  // Returns a function, that, when invoked, will only be triggered at most once\n  // during a given window of time.\n  _.throttle = function(func, wait) {\n    var context, args, timeout, throttling, more, result;\n    var whenDone = _.debounce(function(){ more = throttling = false; }, wait);\n    return function() {\n      context = this; args = arguments;\n      var later = function() {\n        timeout = null;\n        if (more) func.apply(context, args);\n        whenDone();\n      };\n      if (!timeout) timeout = setTimeout(later, wait);\n      if (throttling) {\n        more = true;\n      } else {\n        throttling = true;\n        result = func.apply(context, args);\n      }\n      whenDone();\n      return result;\n    };\n  };\n\n  // Returns a function, that, as long as it continues to be invoked, will not\n  // be triggered. The function will be called after it stops being called for\n  // N milliseconds. If `immediate` is passed, trigger the function on the\n  // leading edge, instead of the trailing.\n  _.debounce = function(func, wait, immediate) {\n    var timeout;\n    return function() {\n      var context = this, args = arguments;\n      var later = function() {\n        timeout = null;\n        if (!immediate) func.apply(context, args);\n      };\n      var callNow = immediate && !timeout;\n      clearTimeout(timeout);\n      timeout = setTimeout(later, wait);\n      if (callNow) func.apply(context, args);\n    };\n  };\n\n  // Returns a function that will be executed at most one time, no matter how\n  // often you call it. Useful for lazy initialization.\n  _.once = function(func) {\n    var ran = false, memo;\n    return function() {\n      if (ran) return memo;\n      ran = true;\n      return memo = func.apply(this, arguments);\n    };\n  };\n\n  // Returns the first function passed as an argument to the second,\n  // allowing you to adjust arguments, run code before and after, and\n  // conditionally execute the original function.\n  _.wrap = function(func, wrapper) {\n    return function() {\n      var args = [func].concat(slice.call(arguments, 0));\n      return wrapper.apply(this, args);\n    };\n  };\n\n  // Returns a function that is the composition of a list of functions, each\n  // consuming the return value of the function that follows.\n  _.compose = function() {\n    var funcs = arguments;\n    return function() {\n      var args = arguments;\n      for (var i = funcs.length - 1; i >= 0; i--) {\n        args = [funcs[i].apply(this, args)];\n      }\n      return args[0];\n    };\n  };\n\n  // Returns a function that will only be executed after being called N times.\n  _.after = function(times, func) {\n    if (times <= 0) return func();\n    return function() {\n      if (--times < 1) {\n        return func.apply(this, arguments);\n      }\n    };\n  };\n\n  // Object Functions\n  // ----------------\n\n  // Retrieve the names of an object's properties.\n  // Delegates to **ECMAScript 5**'s native `Object.keys`\n  _.keys = nativeKeys || function(obj) {\n    if (obj !== Object(obj)) throw new TypeError('Invalid object');\n    var keys = [];\n    for (var key in obj) if (_.has(obj, key)) keys[keys.length] = key;\n    return keys;\n  };\n\n  // Retrieve the values of an object's properties.\n  _.values = function(obj) {\n    return _.map(obj, _.identity);\n  };\n\n  // Return a sorted list of the function names available on the object.\n  // Aliased as `methods`\n  _.functions = _.methods = function(obj) {\n    var names = [];\n    for (var key in obj) {\n      if (_.isFunction(obj[key])) names.push(key);\n    }\n    return names.sort();\n  };\n\n  // Extend a given object with all the properties in passed-in object(s).\n  _.extend = function(obj) {\n    each(slice.call(arguments, 1), function(source) {\n      for (var prop in source) {\n        obj[prop] = source[prop];\n      }\n    });\n    return obj;\n  };\n\n  // Return a copy of the object only containing the whitelisted properties.\n  _.pick = function(obj) {\n    var result = {};\n    each(flatten(slice.call(arguments, 1), true, []), function(key) {\n      if (key in obj) result[key] = obj[key];\n    });\n    return result;\n  };\n\n  // Fill in a given object with default properties.\n  _.defaults = function(obj) {\n    each(slice.call(arguments, 1), function(source) {\n      for (var prop in source) {\n        if (obj[prop] == null) obj[prop] = source[prop];\n      }\n    });\n    return obj;\n  };\n\n  // Create a (shallow-cloned) duplicate of an object.\n  _.clone = function(obj) {\n    if (!_.isObject(obj)) return obj;\n    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);\n  };\n\n  // Invokes interceptor with the obj, and then returns obj.\n  // The primary purpose of this method is to \"tap into\" a method chain, in\n  // order to perform operations on intermediate results within the chain.\n  _.tap = function(obj, interceptor) {\n    interceptor(obj);\n    return obj;\n  };\n\n  // Internal recursive comparison function for `isEqual`.\n  var eq = function(a, b, stack) {\n    // Identical objects are equal. `0 === -0`, but they aren't identical.\n    // See the Harmony `egal` proposal: http://wiki.ecmascript.org/doku.php?id=harmony:egal.\n    if (a === b) return a !== 0 || 1 / a == 1 / b;\n    // A strict comparison is necessary because `null == undefined`.\n    if (a == null || b == null) return a === b;\n    // Unwrap any wrapped objects.\n    if (a._chain) a = a._wrapped;\n    if (b._chain) b = b._wrapped;\n    // Invoke a custom `isEqual` method if one is provided.\n    if (a.isEqual && _.isFunction(a.isEqual)) return a.isEqual(b);\n    if (b.isEqual && _.isFunction(b.isEqual)) return b.isEqual(a);\n    // Compare `[[Class]]` names.\n    var className = toString.call(a);\n    if (className != toString.call(b)) return false;\n    switch (className) {\n      // Strings, numbers, dates, and booleans are compared by value.\n      case '[object String]':\n        // Primitives and their corresponding object wrappers are equivalent; thus, `\"5\"` is\n        // equivalent to `new String(\"5\")`.\n        return a == String(b);\n      case '[object Number]':\n        // `NaN`s are equivalent, but non-reflexive. An `egal` comparison is performed for\n        // other numeric values.\n        return a != +a ? b != +b : (a == 0 ? 1 / a == 1 / b : a == +b);\n      case '[object Date]':\n      case '[object Boolean]':\n        // Coerce dates and booleans to numeric primitive values. Dates are compared by their\n        // millisecond representations. Note that invalid dates with millisecond representations\n        // of `NaN` are not equivalent.\n        return +a == +b;\n      // RegExps are compared by their source patterns and flags.\n      case '[object RegExp]':\n        return a.source == b.source &&\n               a.global == b.global &&\n               a.multiline == b.multiline &&\n               a.ignoreCase == b.ignoreCase;\n    }\n    if (typeof a != 'object' || typeof b != 'object') return false;\n    // Assume equality for cyclic structures. The algorithm for detecting cyclic\n    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.\n    var length = stack.length;\n    while (length--) {\n      // Linear search. Performance is inversely proportional to the number of\n      // unique nested structures.\n      if (stack[length] == a) return true;\n    }\n    // Add the first object to the stack of traversed objects.\n    stack.push(a);\n    var size = 0, result = true;\n    // Recursively compare objects and arrays.\n    if (className == '[object Array]') {\n      // Compare array lengths to determine if a deep comparison is necessary.\n      size = a.length;\n      result = size == b.length;\n      if (result) {\n        // Deep compare the contents, ignoring non-numeric properties.\n        while (size--) {\n          // Ensure commutative equality for sparse arrays.\n          if (!(result = size in a == size in b && eq(a[size], b[size], stack))) break;\n        }\n      }\n    } else {\n      // Objects with different constructors are not equivalent.\n      if ('constructor' in a != 'constructor' in b || a.constructor != b.constructor) return false;\n      // Deep compare objects.\n      for (var key in a) {\n        if (_.has(a, key)) {\n          // Count the expected number of properties.\n          size++;\n          // Deep compare each member.\n          if (!(result = _.has(b, key) && eq(a[key], b[key], stack))) break;\n        }\n      }\n      // Ensure that both objects contain the same number of properties.\n      if (result) {\n        for (key in b) {\n          if (_.has(b, key) && !(size--)) break;\n        }\n        result = !size;\n      }\n    }\n    // Remove the first object from the stack of traversed objects.\n    stack.pop();\n    return result;\n  };\n\n  // Perform a deep comparison to check if two objects are equal.\n  _.isEqual = function(a, b) {\n    return eq(a, b, []);\n  };\n\n  // Is a given array, string, or object empty?\n  // An \"empty\" object has no enumerable own-properties.\n  _.isEmpty = function(obj) {\n    if (obj == null) return true;\n    if (_.isArray(obj) || _.isString(obj)) return obj.length === 0;\n    for (var key in obj) if (_.has(obj, key)) return false;\n    return true;\n  };\n\n  // Is a given value a DOM element?\n  _.isElement = function(obj) {\n    return !!(obj && obj.nodeType == 1);\n  };\n\n  // Is a given value an array?\n  // Delegates to ECMA5's native Array.isArray\n  _.isArray = nativeIsArray || function(obj) {\n    return toString.call(obj) == '[object Array]';\n  };\n\n  // Is a given variable an object?\n  _.isObject = function(obj) {\n    return obj === Object(obj);\n  };\n\n  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp.\n  each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp'], function(name) {\n    _['is' + name] = function(obj) {\n      return toString.call(obj) == '[object ' + name + ']';\n    };\n  });\n\n  // Define a fallback version of the method in browsers (ahem, IE), where\n  // there isn't any inspectable \"Arguments\" type.\n  if (!_.isArguments(arguments)) {\n    _.isArguments = function(obj) {\n      return !!(obj && _.has(obj, 'callee'));\n    };\n  }\n\n  // Is a given object a finite number?\n  _.isFinite = function(obj) {\n    return _.isNumber(obj) && isFinite(obj);\n  };\n\n  // Is the given value `NaN`?\n  _.isNaN = function(obj) {\n    // `NaN` is the only value for which `===` is not reflexive.\n    return obj !== obj;\n  };\n\n  // Is a given value a boolean?\n  _.isBoolean = function(obj) {\n    return obj === true || obj === false || toString.call(obj) == '[object Boolean]';\n  };\n\n  // Is a given value equal to null?\n  _.isNull = function(obj) {\n    return obj === null;\n  };\n\n  // Is a given variable undefined?\n  _.isUndefined = function(obj) {\n    return obj === void 0;\n  };\n\n  // Shortcut function for checking if an object has a given property directly\n  // on itself (in other words, not on a prototype).\n  _.has = function(obj, key) {\n    return hasOwnProperty.call(obj, key);\n  };\n\n  // Utility Functions\n  // -----------------\n\n  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its\n  // previous owner. Returns a reference to the Underscore object.\n  _.noConflict = function() {\n    root._ = previousUnderscore;\n    return this;\n  };\n\n  // Keep the identity function around for default iterators.\n  _.identity = function(value) {\n    return value;\n  };\n\n  // Run a function **n** times.\n  _.times = function(n, iterator, context) {\n    for (var i = 0; i < n; i++) iterator.call(context, i);\n  };\n\n  // List of HTML entities for escaping.\n  var htmlEscapes = {\n    '&': '&amp;',\n    '<': '&lt;',\n    '>': '&gt;',\n    '\"': '&quot;',\n    \"'\": '&#x27;',\n    '/': '&#x2F;'\n  };\n\n  // Regex containing the keys listed immediately above.\n  var htmlEscaper = /[&<>\"'\\/]/g;\n\n  // Escape a string for HTML interpolation.\n  _.escape = function(string) {\n    return ('' + string).replace(htmlEscaper, function(match) {\n      return htmlEscapes[match];\n    });\n  };\n\n  // If the value of the named property is a function then invoke it;\n  // otherwise, return it.\n  _.result = function(object, property) {\n    if (object == null) return null;\n    var value = object[property];\n    return _.isFunction(value) ? value.call(object) : value;\n  };\n\n  // Add your own custom functions to the Underscore object, ensuring that\n  // they're correctly added to the OOP wrapper as well.\n  _.mixin = function(obj) {\n    each(_.functions(obj), function(name){\n      addToWrapper(name, _[name] = obj[name]);\n    });\n  };\n\n  // Generate a unique integer id (unique within the entire client session).\n  // Useful for temporary DOM ids.\n  var idCounter = 0;\n  _.uniqueId = function(prefix) {\n    var id = idCounter++;\n    return prefix ? prefix + id : id;\n  };\n\n  // By default, Underscore uses ERB-style template delimiters, change the\n  // following template settings to use alternative delimiters.\n  _.templateSettings = {\n    evaluate    : /<%([\\s\\S]+?)%>/g,\n    interpolate : /<%=([\\s\\S]+?)%>/g,\n    escape      : /<%-([\\s\\S]+?)%>/g\n  };\n\n  // When customizing `templateSettings`, if you don't want to define an\n  // interpolation, evaluation or escaping regex, we need one that is\n  // guaranteed not to match.\n  var noMatch = /.^/;\n\n  // Certain characters need to be escaped so that they can be put into a\n  // string literal.\n  var escapes = {\n    '\\\\':   '\\\\',\n    \"'\":    \"'\",\n    r:      '\\r',\n    n:      '\\n',\n    t:      '\\t',\n    u2028:  '\\u2028',\n    u2029:  '\\u2029'\n  };\n\n  for (var key in escapes) escapes[escapes[key]] = key;\n  var escaper = /\\\\|'|\\r|\\n|\\t|\\u2028|\\u2029/g;\n  var unescaper = /\\\\(\\\\|'|r|n|t|u2028|u2029)/g;\n\n  // Within an interpolation, evaluation, or escaping, remove HTML escaping\n  // that had been previously added.\n  var unescape = function(code) {\n    return code.replace(unescaper, function(match, escape) {\n      return escapes[escape];\n    });\n  };\n\n  // JavaScript micro-templating, similar to John Resig's implementation.\n  // Underscore templating handles arbitrary delimiters, preserves whitespace,\n  // and correctly escapes quotes within interpolated code.\n  _.template = function(text, data, settings) {\n    settings = _.defaults(settings || {}, _.templateSettings);\n\n    // Compile the template source, taking care to escape characters that\n    // cannot be included in a string literal and then unescape them in code\n    // blocks.\n    var source = \"__p+='\" + text\n      .replace(escaper, function(match) {\n        return '\\\\' + escapes[match];\n      })\n      .replace(settings.escape || noMatch, function(match, code) {\n        return \"'+\\n((__t=(\" + unescape(code) + \"))==null?'':_.escape(__t))+\\n'\";\n      })\n      .replace(settings.interpolate || noMatch, function(match, code) {\n        return \"'+\\n((__t=(\" + unescape(code) + \"))==null?'':__t)+\\n'\";\n      })\n      .replace(settings.evaluate || noMatch, function(match, code) {\n        return \"';\\n\" + unescape(code) + \"\\n__p+='\";\n      }) + \"';\\n\";\n\n    // If a variable is not specified, place data values in local scope.\n    if (!settings.variable) source = 'with(obj||{}){\\n' + source + '}\\n';\n\n    source = \"var __t,__p='',__j=Array.prototype.join,\" +\n      \"print=function(){__p+=__j.call(arguments,'')};\\n\" +\n      source + \"return __p;\\n\";\n\n    var render = new Function(settings.variable || 'obj', '_', source);\n    if (data) return render(data, _);\n    var template = function(data) {\n      return render.call(this, data, _);\n    };\n\n    // Provide the compiled function source as a convenience for precompilation.\n    template.source = 'function(' + (settings.variable || 'obj') + '){\\n' + source + '}';\n\n    return template;\n  };\n\n  // Add a \"chain\" function, which will delegate to the wrapper.\n  _.chain = function(obj) {\n    return _(obj).chain();\n  };\n\n  // The OOP Wrapper\n  // ---------------\n\n  // If Underscore is called as a function, it returns a wrapped object that\n  // can be used OO-style. This wrapper holds altered versions of all the\n  // underscore functions. Wrapped objects may be chained.\n  var wrapper = function(obj) { this._wrapped = obj; };\n\n  // Expose `wrapper.prototype` as `_.prototype`\n  _.prototype = wrapper.prototype;\n\n  // Helper function to continue chaining intermediate results.\n  var result = function(obj, chain) {\n    return chain ? _(obj).chain() : obj;\n  };\n\n  // A method to easily add functions to the OOP wrapper.\n  var addToWrapper = function(name, func) {\n    wrapper.prototype[name] = function() {\n      var args = slice.call(arguments);\n      unshift.call(args, this._wrapped);\n      return result(func.apply(_, args), this._chain);\n    };\n  };\n\n  // Add all of the Underscore functions to the wrapper object.\n  _.mixin(_);\n\n  // Add all mutator Array functions to the wrapper.\n  each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {\n    var method = ArrayProto[name];\n    wrapper.prototype[name] = function() {\n      var obj = this._wrapped;\n      method.apply(obj, arguments);\n      if ((name == 'shift' || name == 'splice') && obj.length === 0) delete obj[0];\n      return result(obj, this._chain);\n    };\n  });\n\n  // Add all accessor Array functions to the wrapper.\n  each(['concat', 'join', 'slice'], function(name) {\n    var method = ArrayProto[name];\n    wrapper.prototype[name] = function() {\n      return result(method.apply(this._wrapped, arguments), this._chain);\n    };\n  });\n\n  // Start chaining a wrapped Underscore object.\n  wrapper.prototype.chain = function() {\n    this._chain = true;\n    return this;\n  };\n\n  // Extracts the result from a wrapped and chained object.\n  wrapper.prototype.value = function() {\n    return this._wrapped;\n  };\n\n}).call(this);\n//@ sourceURL=component-underscore/index.js"
-));
-require.register("namjul-backbone/backbone.js", Function("exports, require, module",
-"//     Backbone.js 1.0.0\n\n//     (c) 2010-2011 Jeremy Ashkenas, DocumentCloud Inc.\n//     (c) 2011-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors\n//     Backbone may be freely distributed under the MIT license.\n//     For all details and documentation:\n//     http://backbonejs.org\n\n(function(){\n\n  // Initial Setup\n  // -------------\n\n  // Save a reference to the global object (`window` in the browser, `exports`\n  // on the server).\n  var root = this;\n\n  // Save the previous value of the `Backbone` variable, so that it can be\n  // restored later on, if `noConflict` is used.\n  var previousBackbone = root.Backbone;\n\n  // Create local references to array methods we'll want to use later.\n  var array = [];\n  var push = array.push;\n  var slice = array.slice;\n  var splice = array.splice;\n\n  // The top-level namespace. All public Backbone classes and modules will\n  // be attached to this. Exported for both the browser and the server.\n  var Backbone;\n  if (typeof exports !== 'undefined') {\n    Backbone = exports;\n  } else {\n    Backbone = root.Backbone = {};\n  }\n\n  // Current version of the library. Keep in sync with `package.json`.\n  Backbone.VERSION = '1.0.0';\n\n  // Require Underscore, if we're on the server, and it's not already present.\n  var _ = root._;\n  if (!_ && (typeof require !== 'undefined')) _ = require('underscore');\n\n  // For Backbone's purposes, jQuery, Zepto, Ender, or My Library (kidding) owns\n  // the `$` variable.\n  Backbone.$ = root.jQuery || root.Zepto || root.ender || root.$;\n\n  // Runs Backbone.js in *noConflict* mode, returning the `Backbone` variable\n  // to its previous owner. Returns a reference to this Backbone object.\n  Backbone.noConflict = function() {\n    root.Backbone = previousBackbone;\n    return this;\n  };\n\n  // Turn on `emulateHTTP` to support legacy HTTP servers. Setting this option\n  // will fake `\"PUT\"` and `\"DELETE\"` requests via the `_method` parameter and\n  // set a `X-Http-Method-Override` header.\n  Backbone.emulateHTTP = false;\n\n  // Turn on `emulateJSON` to support legacy servers that can't deal with direct\n  // `application/json` requests ... will encode the body as\n  // `application/x-www-form-urlencoded` instead and will send the model in a\n  // form param named `model`.\n  Backbone.emulateJSON = false;\n\n  // Backbone.Events\n  // ---------------\n\n  // A module that can be mixed in to *any object* in order to provide it with\n  // custom events. You may bind with `on` or remove with `off` callback\n  // functions to an event; `trigger`-ing an event fires all callbacks in\n  // succession.\n  //\n  //     var object = {};\n  //     _.extend(object, Backbone.Events);\n  //     object.on('expand', function(){ alert('expanded'); });\n  //     object.trigger('expand');\n  //\n  var Events = Backbone.Events = {\n\n    // Bind an event to a `callback` function. Passing `\"all\"` will bind\n    // the callback to all events fired.\n    on: function(name, callback, context) {\n      if (!eventsApi(this, 'on', name, [callback, context]) || !callback) return this;\n      this._events || (this._events = {});\n      var events = this._events[name] || (this._events[name] = []);\n      events.push({callback: callback, context: context, ctx: context || this});\n      return this;\n    },\n\n    // Bind an event to only be triggered a single time. After the first time\n    // the callback is invoked, it will be removed.\n    once: function(name, callback, context) {\n      if (!eventsApi(this, 'once', name, [callback, context]) || !callback) return this;\n      var self = this;\n      var once = _.once(function() {\n        self.off(name, once);\n        callback.apply(this, arguments);\n      });\n      once._callback = callback;\n      return this.on(name, once, context);\n    },\n\n    // Remove one or many callbacks. If `context` is null, removes all\n    // callbacks with that function. If `callback` is null, removes all\n    // callbacks for the event. If `name` is null, removes all bound\n    // callbacks for all events.\n    off: function(name, callback, context) {\n      var retain, ev, events, names, i, l, j, k;\n      if (!this._events || !eventsApi(this, 'off', name, [callback, context])) return this;\n      if (!name && !callback && !context) {\n        this._events = {};\n        return this;\n      }\n\n      names = name ? [name] : _.keys(this._events);\n      for (i = 0, l = names.length; i < l; i++) {\n        name = names[i];\n        if (events = this._events[name]) {\n          this._events[name] = retain = [];\n          if (callback || context) {\n            for (j = 0, k = events.length; j < k; j++) {\n              ev = events[j];\n              if ((callback && callback !== ev.callback && callback !== ev.callback._callback) ||\n                  (context && context !== ev.context)) {\n                retain.push(ev);\n              }\n            }\n          }\n          if (!retain.length) delete this._events[name];\n        }\n      }\n\n      return this;\n    },\n\n    // Trigger one or many events, firing all bound callbacks. Callbacks are\n    // passed the same arguments as `trigger` is, apart from the event name\n    // (unless you're listening on `\"all\"`, which will cause your callback to\n    // receive the true name of the event as the first argument).\n    trigger: function(name) {\n      if (!this._events) return this;\n      var args = slice.call(arguments, 1);\n      if (!eventsApi(this, 'trigger', name, args)) return this;\n      var events = this._events[name];\n      var allEvents = this._events.all;\n      if (events) triggerEvents(events, args);\n      if (allEvents) triggerEvents(allEvents, arguments);\n      return this;\n    },\n\n    // Tell this object to stop listening to either specific events ... or\n    // to every object it's currently listening to.\n    stopListening: function(obj, name, callback) {\n      var listeners = this._listeners;\n      if (!listeners) return this;\n      var deleteListener = !name && !callback;\n      if (typeof name === 'object') callback = this;\n      if (obj) (listeners = {})[obj._listenerId] = obj;\n      for (var id in listeners) {\n        listeners[id].off(name, callback, this);\n        if (deleteListener) delete this._listeners[id];\n      }\n      return this;\n    }\n\n  };\n\n  // Regular expression used to split event strings.\n  var eventSplitter = /\\s+/;\n\n  // Implement fancy features of the Events API such as multiple event\n  // names `\"change blur\"` and jQuery-style event maps `{change: action}`\n  // in terms of the existing API.\n  var eventsApi = function(obj, action, name, rest) {\n    if (!name) return true;\n\n    // Handle event maps.\n    if (typeof name === 'object') {\n      for (var key in name) {\n        obj[action].apply(obj, [key, name[key]].concat(rest));\n      }\n      return false;\n    }\n\n    // Handle space separated event names.\n    if (eventSplitter.test(name)) {\n      var names = name.split(eventSplitter);\n      for (var i = 0, l = names.length; i < l; i++) {\n        obj[action].apply(obj, [names[i]].concat(rest));\n      }\n      return false;\n    }\n\n    return true;\n  };\n\n  // A difficult-to-believe, but optimized internal dispatch function for\n  // triggering events. Tries to keep the usual cases speedy (most internal\n  // Backbone events have 3 arguments).\n  var triggerEvents = function(events, args) {\n    var ev, i = -1, l = events.length, a1 = args[0], a2 = args[1], a3 = args[2];\n    switch (args.length) {\n      case 0: while (++i < l) (ev = events[i]).callback.call(ev.ctx); return;\n      case 1: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1); return;\n      case 2: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1, a2); return;\n      case 3: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1, a2, a3); return;\n      default: while (++i < l) (ev = events[i]).callback.apply(ev.ctx, args);\n    }\n  };\n\n  var listenMethods = {listenTo: 'on', listenToOnce: 'once'};\n\n  // Inversion-of-control versions of `on` and `once`. Tell *this* object to\n  // listen to an event in another object ... keeping track of what it's\n  // listening to.\n  _.each(listenMethods, function(implementation, method) {\n    Events[method] = function(obj, name, callback) {\n      var listeners = this._listeners || (this._listeners = {});\n      var id = obj._listenerId || (obj._listenerId = _.uniqueId('l'));\n      listeners[id] = obj;\n      if (typeof name === 'object') callback = this;\n      obj[implementation](name, callback, this);\n      return this;\n    };\n  });\n\n  // Aliases for backwards compatibility.\n  Events.bind   = Events.on;\n  Events.unbind = Events.off;\n\n  // Allow the `Backbone` object to serve as a global event bus, for folks who\n  // want global \"pubsub\" in a convenient place.\n  _.extend(Backbone, Events);\n\n  // Backbone.Model\n  // --------------\n\n  // Backbone **Models** are the basic data object in the framework --\n  // frequently representing a row in a table in a database on your server.\n  // A discrete chunk of data and a bunch of useful, related methods for\n  // performing computations and transformations on that data.\n\n  // Create a new model with the specified attributes. A client id (`cid`)\n  // is automatically generated and assigned for you.\n  var Model = Backbone.Model = function(attributes, options) {\n    var defaults;\n    var attrs = attributes || {};\n    options || (options = {});\n    this.cid = _.uniqueId('c');\n    this.attributes = {};\n    if (options.collection) this.collection = options.collection;\n    if (options.parse) attrs = this.parse(attrs, options) || {};\n    options._attrs || (options._attrs = attrs);\n    if (defaults = _.result(this, 'defaults')) {\n      attrs = _.defaults({}, attrs, defaults);\n    }\n    this.set(attrs, options);\n    this.changed = {};\n    this.initialize.apply(this, arguments);\n  };\n\n  // Attach all inheritable methods to the Model prototype.\n  _.extend(Model.prototype, Events, {\n\n    // A hash of attributes whose current and previous value differ.\n    changed: null,\n\n    // The value returned during the last failed validation.\n    validationError: null,\n\n    // The default name for the JSON `id` attribute is `\"id\"`. MongoDB and\n    // CouchDB users may want to set this to `\"_id\"`.\n    idAttribute: 'id',\n\n    // Initialize is an empty function by default. Override it with your own\n    // initialization logic.\n    initialize: function(){},\n\n    // Return a copy of the model's `attributes` object.\n    toJSON: function(options) {\n      return _.clone(this.attributes);\n    },\n\n    // Proxy `Backbone.sync` by default -- but override this if you need\n    // custom syncing semantics for *this* particular model.\n    sync: function() {\n      return Backbone.sync.apply(this, arguments);\n    },\n\n    // Get the value of an attribute.\n    get: function(attr) {\n      return this.attributes[attr];\n    },\n\n    // Get the HTML-escaped value of an attribute.\n    escape: function(attr) {\n      return _.escape(this.get(attr));\n    },\n\n    // Returns `true` if the attribute contains a value that is not null\n    // or undefined.\n    has: function(attr) {\n      return this.get(attr) != null;\n    },\n\n    // Set a hash of model attributes on the object, firing `\"change\"`. This is\n    // the core primitive operation of a model, updating the data and notifying\n    // anyone who needs to know about the change in state. The heart of the beast.\n    set: function(key, val, options) {\n      var attr, attrs, unset, changes, silent, changing, prev, current;\n      if (key == null) return this;\n\n      // Handle both `\"key\", value` and `{key: value}` -style arguments.\n      if (typeof key === 'object') {\n        attrs = key;\n        options = val;\n      } else {\n        (attrs = {})[key] = val;\n      }\n\n      options || (options = {});\n\n      // Run validation.\n      if (!this._validate(attrs, options)) return false;\n\n      // Extract attributes and options.\n      unset           = options.unset;\n      silent          = options.silent;\n      changes         = [];\n      changing        = this._changing;\n      this._changing  = true;\n\n      if (!changing) {\n        this._previousAttributes = _.clone(this.attributes);\n        this.changed = {};\n      }\n      current = this.attributes, prev = this._previousAttributes;\n\n      // Check for changes of `id`.\n      if (this.idAttribute in attrs) this.id = attrs[this.idAttribute];\n\n      // For each `set` attribute, update or delete the current value.\n      for (attr in attrs) {\n        val = attrs[attr];\n        if (!_.isEqual(current[attr], val)) changes.push(attr);\n        if (!_.isEqual(prev[attr], val)) {\n          this.changed[attr] = val;\n        } else {\n          delete this.changed[attr];\n        }\n        unset ? delete current[attr] : current[attr] = val;\n      }\n\n      // Trigger all relevant attribute changes.\n      if (!silent) {\n        if (changes.length) this._pending = true;\n        for (var i = 0, l = changes.length; i < l; i++) {\n          this.trigger('change:' + changes[i], this, current[changes[i]], options);\n        }\n      }\n\n      // You might be wondering why there's a `while` loop here. Changes can\n      // be recursively nested within `\"change\"` events.\n      if (changing) return this;\n      if (!silent) {\n        while (this._pending) {\n          this._pending = false;\n          this.trigger('change', this, options);\n        }\n      }\n      this._pending = false;\n      this._changing = false;\n      return this;\n    },\n\n    // Remove an attribute from the model, firing `\"change\"`. `unset` is a noop\n    // if the attribute doesn't exist.\n    unset: function(attr, options) {\n      return this.set(attr, void 0, _.extend({}, options, {unset: true}));\n    },\n\n    // Clear all attributes on the model, firing `\"change\"`.\n    clear: function(options) {\n      var attrs = {};\n      for (var key in this.attributes) attrs[key] = void 0;\n      return this.set(attrs, _.extend({}, options, {unset: true}));\n    },\n\n    // Determine if the model has changed since the last `\"change\"` event.\n    // If you specify an attribute name, determine if that attribute has changed.\n    hasChanged: function(attr) {\n      if (attr == null) return !_.isEmpty(this.changed);\n      return _.has(this.changed, attr);\n    },\n\n    // Return an object containing all the attributes that have changed, or\n    // false if there are no changed attributes. Useful for determining what\n    // parts of a view need to be updated and/or what attributes need to be\n    // persisted to the server. Unset attributes will be set to undefined.\n    // You can also pass an attributes object to diff against the model,\n    // determining if there *would be* a change.\n    changedAttributes: function(diff) {\n      if (!diff) return this.hasChanged() ? _.clone(this.changed) : false;\n      var val, changed = false;\n      var old = this._changing ? this._previousAttributes : this.attributes;\n      for (var attr in diff) {\n        if (_.isEqual(old[attr], (val = diff[attr]))) continue;\n        (changed || (changed = {}))[attr] = val;\n      }\n      return changed;\n    },\n\n    // Get the previous value of an attribute, recorded at the time the last\n    // `\"change\"` event was fired.\n    previous: function(attr) {\n      if (attr == null || !this._previousAttributes) return null;\n      return this._previousAttributes[attr];\n    },\n\n    // Get all of the attributes of the model at the time of the previous\n    // `\"change\"` event.\n    previousAttributes: function() {\n      return _.clone(this._previousAttributes);\n    },\n\n    // Fetch the model from the server. If the server's representation of the\n    // model differs from its current attributes, they will be overridden,\n    // triggering a `\"change\"` event.\n    fetch: function(options) {\n      options = options ? _.clone(options) : {};\n      if (options.parse === void 0) options.parse = true;\n      var model = this;\n      var success = options.success;\n      options.success = function(resp) {\n        if (!model.set(model.parse(resp, options), options)) return false;\n        if (success) success(model, resp, options);\n        model.trigger('sync', model, resp, options);\n      };\n      wrapError(this, options);\n      return this.sync('read', this, options);\n    },\n\n    // Set a hash of model attributes, and sync the model to the server.\n    // If the server returns an attributes hash that differs, the model's\n    // state will be `set` again.\n    save: function(key, val, options) {\n      var attrs, method, xhr, attributes = this.attributes;\n\n      // Handle both `\"key\", value` and `{key: value}` -style arguments.\n      if (key == null || typeof key === 'object') {\n        attrs = key;\n        options = val;\n      } else {\n        (attrs = {})[key] = val;\n      }\n\n      options = _.extend({validate: true}, options);\n\n      // If we're not waiting and attributes exist, save acts as\n      // `set(attr).save(null, opts)` with validation. Otherwise, check if\n      // the model will be valid when the attributes, if any, are set.\n      if (attrs && !options.wait) {\n        if (!this.set(attrs, options)) return false;\n      } else {\n        if (!this._validate(attrs, options)) return false;\n      }\n\n      // Set temporary attributes if `{wait: true}`.\n      if (attrs && options.wait) {\n        this.attributes = _.extend({}, attributes, attrs);\n      }\n\n      // After a successful server-side save, the client is (optionally)\n      // updated with the server-side state.\n      if (options.parse === void 0) options.parse = true;\n      var model = this;\n      var success = options.success;\n      options.success = function(resp) {\n        // Ensure attributes are restored during synchronous saves.\n        model.attributes = attributes;\n        var serverAttrs = model.parse(resp, options);\n        if (options.wait) serverAttrs = _.extend(attrs || {}, serverAttrs);\n        if (_.isObject(serverAttrs) && !model.set(serverAttrs, options)) {\n          return false;\n        }\n        if (success) success(model, resp, options);\n        model.trigger('sync', model, resp, options);\n      };\n      wrapError(this, options);\n\n      method = this.isNew() ? 'create' : (options.patch ? 'patch' : 'update');\n      if (method === 'patch') options.attrs = attrs;\n      xhr = this.sync(method, this, options);\n\n      // Restore attributes.\n      if (attrs && options.wait) this.attributes = attributes;\n\n      return xhr;\n    },\n\n    // Destroy this model on the server if it was already persisted.\n    // Optimistically removes the model from its collection, if it has one.\n    // If `wait: true` is passed, waits for the server to respond before removal.\n    destroy: function(options) {\n      options = options ? _.clone(options) : {};\n      var model = this;\n      var success = options.success;\n\n      var destroy = function() {\n        model.trigger('destroy', model, model.collection, options);\n      };\n\n      options.success = function(resp) {\n        if (options.wait || model.isNew()) destroy();\n        if (success) success(model, resp, options);\n        if (!model.isNew()) model.trigger('sync', model, resp, options);\n      };\n\n      if (this.isNew()) {\n        options.success();\n        return false;\n      }\n      wrapError(this, options);\n\n      var xhr = this.sync('delete', this, options);\n      if (!options.wait) destroy();\n      return xhr;\n    },\n\n    // Default URL for the model's representation on the server -- if you're\n    // using Backbone's restful methods, override this to change the endpoint\n    // that will be called.\n    url: function() {\n      var base = _.result(this, 'urlRoot') || _.result(this.collection, 'url') || urlError();\n      if (this.isNew()) return base;\n      return base + (base.charAt(base.length - 1) === '/' ? '' : '/') + encodeURIComponent(this.id);\n    },\n\n    // **parse** converts a response into the hash of attributes to be `set` on\n    // the model. The default implementation is just to pass the response along.\n    parse: function(resp, options) {\n      return resp;\n    },\n\n    // Create a new model with identical attributes to this one.\n    clone: function() {\n      return new this.constructor(this.attributes);\n    },\n\n    // A model is new if it has never been saved to the server, and lacks an id.\n    isNew: function() {\n      return this.id == null;\n    },\n\n    // Check if the model is currently in a valid state.\n    isValid: function(options) {\n      return this._validate({}, _.extend(options || {}, { validate: true }));\n    },\n\n    // Run validation against the next complete set of model attributes,\n    // returning `true` if all is well. Otherwise, fire an `\"invalid\"` event.\n    _validate: function(attrs, options) {\n      if (!options.validate || !this.validate) return true;\n      attrs = _.extend({}, this.attributes, attrs);\n      var error = this.validationError = this.validate(attrs, options) || null;\n      if (!error) return true;\n      this.trigger('invalid', this, error, _.extend(options || {}, {validationError: error}));\n      return false;\n    }\n\n  });\n\n  // Underscore methods that we want to implement on the Model.\n  var modelMethods = ['keys', 'values', 'pairs', 'invert', 'pick', 'omit'];\n\n  // Mix in each Underscore method as a proxy to `Model#attributes`.\n  _.each(modelMethods, function(method) {\n    Model.prototype[method] = function() {\n      var args = slice.call(arguments);\n      args.unshift(this.attributes);\n      return _[method].apply(_, args);\n    };\n  });\n\n  // Backbone.Collection\n  // -------------------\n\n  // If models tend to represent a single row of data, a Backbone Collection is\n  // more analagous to a table full of data ... or a small slice or page of that\n  // table, or a collection of rows that belong together for a particular reason\n  // -- all of the messages in this particular folder, all of the documents\n  // belonging to this particular author, and so on. Collections maintain\n  // indexes of their models, both in order, and for lookup by `id`.\n\n  // Create a new **Collection**, perhaps to contain a specific type of `model`.\n  // If a `comparator` is specified, the Collection will maintain\n  // its models in sort order, as they're added and removed.\n  var Collection = Backbone.Collection = function(models, options) {\n    options || (options = {});\n    if (options.model) this.model = options.model;\n    if (options.comparator !== void 0) this.comparator = options.comparator;\n    this._reset();\n    this.initialize.apply(this, arguments);\n    if (models) this.reset(models, _.extend({silent: true}, options));\n  };\n\n  // Default options for `Collection#set`.\n  var setOptions = {add: true, remove: true, merge: true};\n  var addOptions = {add: true, remove: false};\n\n  // Define the Collection's inheritable methods.\n  _.extend(Collection.prototype, Events, {\n\n    // The default model for a collection is just a **Backbone.Model**.\n    // This should be overridden in most cases.\n    model: Model,\n\n    // Initialize is an empty function by default. Override it with your own\n    // initialization logic.\n    initialize: function(){},\n\n    // The JSON representation of a Collection is an array of the\n    // models' attributes.\n    toJSON: function(options) {\n      return this.map(function(model){ return model.toJSON(options); });\n    },\n\n    // Proxy `Backbone.sync` by default.\n    sync: function() {\n      return Backbone.sync.apply(this, arguments);\n    },\n\n    // Add a model, or list of models to the set.\n    add: function(models, options) {\n      return this.set(models, _.extend({merge: false}, options, addOptions));\n    },\n\n    // Remove a model, or a list of models from the set.\n    remove: function(models, options) {\n      models = _.isArray(models) ? models.slice() : [models];\n      options || (options = {});\n      var i, l, index, model;\n      for (i = 0, l = models.length; i < l; i++) {\n        model = this.get(models[i]);\n        if (!model) continue;\n        delete this._byId[model.id];\n        delete this._byId[model.cid];\n        index = this.indexOf(model);\n        this.models.splice(index, 1);\n        this.length--;\n        if (!options.silent) {\n          options.index = index;\n          model.trigger('remove', model, this, options);\n        }\n        this._removeReference(model);\n      }\n      return this;\n    },\n\n    // Update a collection by `set`-ing a new list of models, adding new ones,\n    // removing models that are no longer present, and merging models that\n    // already exist in the collection, as necessary. Similar to **Model#set**,\n    // the core operation for updating the data contained by the collection.\n    set: function(models, options) {\n      options = _.defaults({}, options, setOptions);\n      if (options.parse) models = this.parse(models, options);\n      if (!_.isArray(models)) models = models ? [models] : [];\n      var i, l, model, attrs, existing, sort;\n      var at = options.at;\n      var sortable = this.comparator && (at == null) && options.sort !== false;\n      var sortAttr = _.isString(this.comparator) ? this.comparator : null;\n      var toAdd = [], toRemove = [], modelMap = {};\n      var add = options.add, merge = options.merge, remove = options.remove;\n      var order = !sortable && add && remove ? [] : false;\n\n      // Turn bare objects into model references, and prevent invalid models\n      // from being added.\n      for (i = 0, l = models.length; i < l; i++) {\n        if (!(model = this._prepareModel(attrs = models[i], options))) continue;\n\n        // If a duplicate is found, prevent it from being added and\n        // optionally merge it into the existing model.\n        if (existing = this.get(model)) {\n          if (remove) modelMap[existing.cid] = true;\n          if (merge) {\n            attrs = attrs === model ? model.attributes : options._attrs;\n            delete options._attrs;\n            existing.set(attrs, options);\n            if (sortable && !sort && existing.hasChanged(sortAttr)) sort = true;\n          }\n\n        // This is a new model, push it to the `toAdd` list.\n        } else if (add) {\n          toAdd.push(model);\n\n          // Listen to added models' events, and index models for lookup by\n          // `id` and by `cid`.\n          model.on('all', this._onModelEvent, this);\n          this._byId[model.cid] = model;\n          if (model.id != null) this._byId[model.id] = model;\n        }\n        if (order) order.push(existing || model);\n      }\n\n      // Remove nonexistent models if appropriate.\n      if (remove) {\n        for (i = 0, l = this.length; i < l; ++i) {\n          if (!modelMap[(model = this.models[i]).cid]) toRemove.push(model);\n        }\n        if (toRemove.length) this.remove(toRemove, options);\n      }\n\n      // See if sorting is needed, update `length` and splice in new models.\n      if (toAdd.length || (order && order.length)) {\n        if (sortable) sort = true;\n        this.length += toAdd.length;\n        if (at != null) {\n          splice.apply(this.models, [at, 0].concat(toAdd));\n        } else {\n          if (order) this.models.length = 0;\n          push.apply(this.models, order || toAdd);\n        }\n      }\n\n      // Silently sort the collection if appropriate.\n      if (sort) this.sort({silent: true});\n\n      if (options.silent) return this;\n\n      // Trigger `add` events.\n      for (i = 0, l = toAdd.length; i < l; i++) {\n        (model = toAdd[i]).trigger('add', model, this, options);\n      }\n\n      // Trigger `sort` if the collection was sorted.\n      if (sort || (order && order.length)) this.trigger('sort', this, options);\n      return this;\n    },\n\n    // When you have more items than you want to add or remove individually,\n    // you can reset the entire set with a new list of models, without firing\n    // any granular `add` or `remove` events. Fires `reset` when finished.\n    // Useful for bulk operations and optimizations.\n    reset: function(models, options) {\n      options || (options = {});\n      for (var i = 0, l = this.models.length; i < l; i++) {\n        this._removeReference(this.models[i]);\n      }\n      options.previousModels = this.models;\n      this._reset();\n      this.add(models, _.extend({silent: true}, options));\n      if (!options.silent) this.trigger('reset', this, options);\n      return this;\n    },\n\n    // Add a model to the end of the collection.\n    push: function(model, options) {\n      model = this._prepareModel(model, options);\n      this.add(model, _.extend({at: this.length}, options));\n      return model;\n    },\n\n    // Remove a model from the end of the collection.\n    pop: function(options) {\n      var model = this.at(this.length - 1);\n      this.remove(model, options);\n      return model;\n    },\n\n    // Add a model to the beginning of the collection.\n    unshift: function(model, options) {\n      model = this._prepareModel(model, options);\n      this.add(model, _.extend({at: 0}, options));\n      return model;\n    },\n\n    // Remove a model from the beginning of the collection.\n    shift: function(options) {\n      var model = this.at(0);\n      this.remove(model, options);\n      return model;\n    },\n\n    // Slice out a sub-array of models from the collection.\n    slice: function() {\n      return slice.apply(this.models, arguments);\n    },\n\n    // Get a model from the set by id.\n    get: function(obj) {\n      if (obj == null) return void 0;\n      return this._byId[obj.id != null ? obj.id : obj.cid || obj];\n    },\n\n    // Get the model at the given index.\n    at: function(index) {\n      return this.models[index];\n    },\n\n    // Return models with matching attributes. Useful for simple cases of\n    // `filter`.\n    where: function(attrs, first) {\n      if (_.isEmpty(attrs)) return first ? void 0 : [];\n      return this[first ? 'find' : 'filter'](function(model) {\n        for (var key in attrs) {\n          if (attrs[key] !== model.get(key)) return false;\n        }\n        return true;\n      });\n    },\n\n    // Return the first model with matching attributes. Useful for simple cases\n    // of `find`.\n    findWhere: function(attrs) {\n      return this.where(attrs, true);\n    },\n\n    // Force the collection to re-sort itself. You don't need to call this under\n    // normal circumstances, as the set will maintain sort order as each item\n    // is added.\n    sort: function(options) {\n      if (!this.comparator) throw new Error('Cannot sort a set without a comparator');\n      options || (options = {});\n\n      // Run sort based on type of `comparator`.\n      if (_.isString(this.comparator) || this.comparator.length === 1) {\n        this.models = this.sortBy(this.comparator, this);\n      } else {\n        this.models.sort(_.bind(this.comparator, this));\n      }\n\n      if (!options.silent) this.trigger('sort', this, options);\n      return this;\n    },\n\n    // Figure out the smallest index at which a model should be inserted so as\n    // to maintain order.\n    sortedIndex: function(model, value, context) {\n      value || (value = this.comparator);\n      var iterator = _.isFunction(value) ? value : function(model) {\n        return model.get(value);\n      };\n      return _.sortedIndex(this.models, model, iterator, context);\n    },\n\n    // Pluck an attribute from each model in the collection.\n    pluck: function(attr) {\n      return _.invoke(this.models, 'get', attr);\n    },\n\n    // Fetch the default set of models for this collection, resetting the\n    // collection when they arrive. If `reset: true` is passed, the response\n    // data will be passed through the `reset` method instead of `set`.\n    fetch: function(options) {\n      options = options ? _.clone(options) : {};\n      if (options.parse === void 0) options.parse = true;\n      var success = options.success;\n      var collection = this;\n      options.success = function(resp) {\n        var method = options.reset ? 'reset' : 'set';\n        collection[method](resp, options);\n        if (success) success(collection, resp, options);\n        collection.trigger('sync', collection, resp, options);\n      };\n      wrapError(this, options);\n      return this.sync('read', this, options);\n    },\n\n    // Create a new instance of a model in this collection. Add the model to the\n    // collection immediately, unless `wait: true` is passed, in which case we\n    // wait for the server to agree.\n    create: function(model, options) {\n      options = options ? _.clone(options) : {};\n      if (!(model = this._prepareModel(model, options))) return false;\n      if (!options.wait) this.add(model, options);\n      var collection = this;\n      var success = options.success;\n      options.success = function(resp) {\n        if (options.wait) collection.add(model, options);\n        if (success) success(model, resp, options);\n      };\n      model.save(null, options);\n      return model;\n    },\n\n    // **parse** converts a response into a list of models to be added to the\n    // collection. The default implementation is just to pass it through.\n    parse: function(resp, options) {\n      return resp;\n    },\n\n    // Create a new collection with an identical list of models as this one.\n    clone: function() {\n      return new this.constructor(this.models);\n    },\n\n    // Private method to reset all internal state. Called when the collection\n    // is first initialized or reset.\n    _reset: function() {\n      this.length = 0;\n      this.models = [];\n      this._byId  = {};\n    },\n\n    // Prepare a hash of attributes (or other model) to be added to this\n    // collection.\n    _prepareModel: function(attrs, options) {\n      if (attrs instanceof Model) {\n        if (!attrs.collection) attrs.collection = this;\n        return attrs;\n      }\n      options || (options = {});\n      options.collection = this;\n      var model = new this.model(attrs, options);\n      if (!model._validate(attrs, options)) {\n        this.trigger('invalid', this, attrs, options);\n        return false;\n      }\n      return model;\n    },\n\n    // Internal method to sever a model's ties to a collection.\n    _removeReference: function(model) {\n      if (this === model.collection) delete model.collection;\n      model.off('all', this._onModelEvent, this);\n    },\n\n    // Internal method called every time a model in the set fires an event.\n    // Sets need to update their indexes when models change ids. All other\n    // events simply proxy through. \"add\" and \"remove\" events that originate\n    // in other collections are ignored.\n    _onModelEvent: function(event, model, collection, options) {\n      if ((event === 'add' || event === 'remove') && collection !== this) return;\n      if (event === 'destroy') this.remove(model, options);\n      if (model && event === 'change:' + model.idAttribute) {\n        delete this._byId[model.previous(model.idAttribute)];\n        if (model.id != null) this._byId[model.id] = model;\n      }\n      this.trigger.apply(this, arguments);\n    }\n\n  });\n\n  // Underscore methods that we want to implement on the Collection.\n  // 90% of the core usefulness of Backbone Collections is actually implemented\n  // right here:\n  var methods = ['forEach', 'each', 'map', 'collect', 'reduce', 'foldl',\n    'inject', 'reduceRight', 'foldr', 'find', 'detect', 'filter', 'select',\n    'reject', 'every', 'all', 'some', 'any', 'include', 'contains', 'invoke',\n    'max', 'min', 'toArray', 'size', 'first', 'head', 'take', 'initial', 'rest',\n    'tail', 'drop', 'last', 'without', 'indexOf', 'shuffle', 'lastIndexOf',\n    'isEmpty', 'chain'];\n\n  // Mix in each Underscore method as a proxy to `Collection#models`.\n  _.each(methods, function(method) {\n    Collection.prototype[method] = function() {\n      var args = slice.call(arguments);\n      args.unshift(this.models);\n      return _[method].apply(_, args);\n    };\n  });\n\n  // Underscore methods that take a property name as an argument.\n  var attributeMethods = ['groupBy', 'countBy', 'sortBy'];\n\n  // Use attributes instead of properties.\n  _.each(attributeMethods, function(method) {\n    Collection.prototype[method] = function(value, context) {\n      var iterator = _.isFunction(value) ? value : function(model) {\n        return model.get(value);\n      };\n      return _[method](this.models, iterator, context);\n    };\n  });\n\n  // Backbone.View\n  // -------------\n\n  // Backbone Views are almost more convention than they are actual code. A View\n  // is simply a JavaScript object that represents a logical chunk of UI in the\n  // DOM. This might be a single item, an entire list, a sidebar or panel, or\n  // even the surrounding frame which wraps your whole app. Defining a chunk of\n  // UI as a **View** allows you to define your DOM events declaratively, without\n  // having to worry about render order ... and makes it easy for the view to\n  // react to specific changes in the state of your models.\n\n  // Options with special meaning *(e.g. model, collection, id, className)* are\n  // attached directly to the view.  See `viewOptions` for an exhaustive\n  // list.\n\n  // Creating a Backbone.View creates its initial element outside of the DOM,\n  // if an existing element is not provided...\n  var View = Backbone.View = function(options) {\n    this.cid = _.uniqueId('view');\n    options || (options = {});\n    _.extend(this, _.pick(options, viewOptions));\n    this._ensureElement();\n    this.initialize.apply(this, arguments);\n    this.delegateEvents();\n  };\n\n  // Cached regex to split keys for `delegate`.\n  var delegateEventSplitter = /^(\\S+)\\s*(.*)$/;\n\n  // List of view options to be merged as properties.\n  var viewOptions = ['model', 'collection', 'el', 'id', 'attributes', 'className', 'tagName', 'events'];\n\n  // Set up all inheritable **Backbone.View** properties and methods.\n  _.extend(View.prototype, Events, {\n\n    // The default `tagName` of a View's element is `\"div\"`.\n    tagName: 'div',\n\n    // jQuery delegate for element lookup, scoped to DOM elements within the\n    // current view. This should be prefered to global lookups where possible.\n    $: function(selector) {\n      return this.$el.find(selector);\n    },\n\n    // Initialize is an empty function by default. Override it with your own\n    // initialization logic.\n    initialize: function(){},\n\n    // **render** is the core function that your view should override, in order\n    // to populate its element (`this.el`), with the appropriate HTML. The\n    // convention is for **render** to always return `this`.\n    render: function() {\n      return this;\n    },\n\n    // Remove this view by taking the element out of the DOM, and removing any\n    // applicable Backbone.Events listeners.\n    remove: function() {\n      this.$el.remove();\n      this.stopListening();\n      return this;\n    },\n\n    // Change the view's element (`this.el` property), including event\n    // re-delegation.\n    setElement: function(element, delegate) {\n      if (this.$el) this.undelegateEvents();\n      this.$el = element instanceof Backbone.$ ? element : Backbone.$(element);\n      this.el = this.$el[0];\n      if (delegate !== false) this.delegateEvents();\n      return this;\n    },\n\n    // Set callbacks, where `this.events` is a hash of\n    //\n    // *{\"event selector\": \"callback\"}*\n    //\n    //     {\n    //       'mousedown .title':  'edit',\n    //       'click .button':     'save'\n    //       'click .open':       function(e) { ... }\n    //     }\n    //\n    // pairs. Callbacks will be bound to the view, with `this` set properly.\n    // Uses event delegation for efficiency.\n    // Omitting the selector binds the event to `this.el`.\n    // This only works for delegate-able events: not `focus`, `blur`, and\n    // not `change`, `submit`, and `reset` in Internet Explorer.\n    delegateEvents: function(events) {\n      if (!(events || (events = _.result(this, 'events')))) return this;\n      this.undelegateEvents();\n      for (var key in events) {\n        var method = events[key];\n        if (!_.isFunction(method)) method = this[events[key]];\n        if (!method) continue;\n\n        var match = key.match(delegateEventSplitter);\n        var eventName = match[1], selector = match[2];\n        method = _.bind(method, this);\n        eventName += '.delegateEvents' + this.cid;\n        if (selector === '') {\n          this.$el.on(eventName, method);\n        } else {\n          this.$el.on(eventName, selector, method);\n        }\n      }\n      return this;\n    },\n\n    // Clears all callbacks previously bound to the view with `delegateEvents`.\n    // You usually don't need to use this, but may wish to if you have multiple\n    // Backbone views attached to the same DOM element.\n    undelegateEvents: function() {\n      this.$el.off('.delegateEvents' + this.cid);\n      return this;\n    },\n\n    // Ensure that the View has a DOM element to render into.\n    // If `this.el` is a string, pass it through `$()`, take the first\n    // matching element, and re-assign it to `el`. Otherwise, create\n    // an element from the `id`, `className` and `tagName` properties.\n    _ensureElement: function() {\n      if (!this.el) {\n        var attrs = _.extend({}, _.result(this, 'attributes'));\n        if (this.id) attrs.id = _.result(this, 'id');\n        if (this.className) attrs['class'] = _.result(this, 'className');\n        var $el = Backbone.$('<' + _.result(this, 'tagName') + '>').attr(attrs);\n        this.setElement($el, false);\n      } else {\n        this.setElement(_.result(this, 'el'), false);\n      }\n    }\n\n  });\n\n  // Backbone.sync\n  // -------------\n\n  // Override this function to change the manner in which Backbone persists\n  // models to the server. You will be passed the type of request, and the\n  // model in question. By default, makes a RESTful Ajax request\n  // to the model's `url()`. Some possible customizations could be:\n  //\n  // * Use `setTimeout` to batch rapid-fire updates into a single request.\n  // * Send up the models as XML instead of JSON.\n  // * Persist models via WebSockets instead of Ajax.\n  //\n  // Turn on `Backbone.emulateHTTP` in order to send `PUT` and `DELETE` requests\n  // as `POST`, with a `_method` parameter containing the true HTTP method,\n  // as well as all requests with the body as `application/x-www-form-urlencoded`\n  // instead of `application/json` with the model in a param named `model`.\n  // Useful when interfacing with server-side languages like **PHP** that make\n  // it difficult to read the body of `PUT` requests.\n  Backbone.sync = function(method, model, options) {\n    var type = methodMap[method];\n\n    // Default options, unless specified.\n    _.defaults(options || (options = {}), {\n      emulateHTTP: Backbone.emulateHTTP,\n      emulateJSON: Backbone.emulateJSON\n    });\n\n    // Default JSON-request options.\n    var params = {type: type, dataType: 'json'};\n\n    // Ensure that we have a URL.\n    if (!options.url) {\n      params.url = _.result(model, 'url') || urlError();\n    }\n\n    // Ensure that we have the appropriate request data.\n    if (options.data == null && model && (method === 'create' || method === 'update' || method === 'patch')) {\n      params.contentType = 'application/json';\n      params.data = JSON.stringify(options.attrs || model.toJSON(options));\n    }\n\n    // For older servers, emulate JSON by encoding the request into an HTML-form.\n    if (options.emulateJSON) {\n      params.contentType = 'application/x-www-form-urlencoded';\n      params.data = params.data ? {model: params.data} : {};\n    }\n\n    // For older servers, emulate HTTP by mimicking the HTTP method with `_method`\n    // And an `X-HTTP-Method-Override` header.\n    if (options.emulateHTTP && (type === 'PUT' || type === 'DELETE' || type === 'PATCH')) {\n      params.type = 'POST';\n      if (options.emulateJSON) params.data._method = type;\n      var beforeSend = options.beforeSend;\n      options.beforeSend = function(xhr) {\n        xhr.setRequestHeader('X-HTTP-Method-Override', type);\n        if (beforeSend) return beforeSend.apply(this, arguments);\n      };\n    }\n\n    // Don't process data on a non-GET request.\n    if (params.type !== 'GET' && !options.emulateJSON) {\n      params.processData = false;\n    }\n\n    // If we're sending a `PATCH` request, and we're in an old Internet Explorer\n    // that still has ActiveX enabled by default, override jQuery to use that\n    // for XHR instead. Remove this line when jQuery supports `PATCH` on IE8.\n    if (params.type === 'PATCH' && window.ActiveXObject &&\n          !(window.external && window.external.msActiveXFilteringEnabled)) {\n      params.xhr = function() {\n        return new ActiveXObject(\"Microsoft.XMLHTTP\");\n      };\n    }\n\n    // Make the request, allowing the user to override any Ajax options.\n    var xhr = options.xhr = Backbone.ajax(_.extend(params, options));\n    model.trigger('request', model, xhr, options);\n    return xhr;\n  };\n\n  // Map from CRUD to HTTP for our default `Backbone.sync` implementation.\n  var methodMap = {\n    'create': 'POST',\n    'update': 'PUT',\n    'patch':  'PATCH',\n    'delete': 'DELETE',\n    'read':   'GET'\n  };\n\n  // Set the default implementation of `Backbone.ajax` to proxy through to `$`.\n  // Override this if you'd like to use a different library.\n  Backbone.ajax = function() {\n    return Backbone.$.ajax.apply(Backbone.$, arguments);\n  };\n\n  // Backbone.Router\n  // ---------------\n\n  // Routers map faux-URLs to actions, and fire events when routes are\n  // matched. Creating a new one sets its `routes` hash, if not set statically.\n  var Router = Backbone.Router = function(options) {\n    options || (options = {});\n    if (options.routes) this.routes = options.routes;\n    this._bindRoutes();\n    this.initialize.apply(this, arguments);\n  };\n\n  // Cached regular expressions for matching named param parts and splatted\n  // parts of route strings.\n  var optionalParam = /\\((.*?)\\)/g;\n  var namedParam    = /(\\(\\?)?:\\w+/g;\n  var splatParam    = /\\*\\w+/g;\n  var escapeRegExp  = /[\\-{}\\[\\]+?.,\\\\\\^$|#\\s]/g;\n\n  // Set up all inheritable **Backbone.Router** properties and methods.\n  _.extend(Router.prototype, Events, {\n\n    // Initialize is an empty function by default. Override it with your own\n    // initialization logic.\n    initialize: function(){},\n\n    // Manually bind a single named route to a callback. For example:\n    //\n    //     this.route('search/:query/p:num', 'search', function(query, num) {\n    //       ...\n    //     });\n    //\n    route: function(route, name, callback) {\n      if (!_.isRegExp(route)) route = this._routeToRegExp(route);\n      if (_.isFunction(name)) {\n        callback = name;\n        name = '';\n      }\n      if (!callback) callback = this[name];\n      var router = this;\n      Backbone.history.route(route, function(fragment) {\n        var args = router._extractParameters(route, fragment);\n        callback && callback.apply(router, args);\n        router.trigger.apply(router, ['route:' + name].concat(args));\n        router.trigger('route', name, args);\n        Backbone.history.trigger('route', router, name, args);\n      });\n      return this;\n    },\n\n    // Simple proxy to `Backbone.history` to save a fragment into the history.\n    navigate: function(fragment, options) {\n      Backbone.history.navigate(fragment, options);\n      return this;\n    },\n\n    // Bind all defined routes to `Backbone.history`. We have to reverse the\n    // order of the routes here to support behavior where the most general\n    // routes can be defined at the bottom of the route map.\n    _bindRoutes: function() {\n      if (!this.routes) return;\n      this.routes = _.result(this, 'routes');\n      var route, routes = _.keys(this.routes);\n      while ((route = routes.pop()) != null) {\n        this.route(route, this.routes[route]);\n      }\n    },\n\n    // Convert a route string into a regular expression, suitable for matching\n    // against the current location hash.\n    _routeToRegExp: function(route) {\n      route = route.replace(escapeRegExp, '\\\\$&')\n                   .replace(optionalParam, '(?:$1)?')\n                   .replace(namedParam, function(match, optional){\n                     return optional ? match : '([^\\/]+)';\n                   })\n                   .replace(splatParam, '(.*?)');\n      return new RegExp('^' + route + '$');\n    },\n\n    // Given a route, and a URL fragment that it matches, return the array of\n    // extracted decoded parameters. Empty or unmatched parameters will be\n    // treated as `null` to normalize cross-browser behavior.\n    _extractParameters: function(route, fragment) {\n      var params = route.exec(fragment).slice(1);\n      return _.map(params, function(param) {\n        return param ? decodeURIComponent(param) : null;\n      });\n    }\n\n  });\n\n  // Backbone.History\n  // ----------------\n\n  // Handles cross-browser history management, based on either\n  // [pushState](http://diveintohtml5.info/history.html) and real URLs, or\n  // [onhashchange](https://developer.mozilla.org/en-US/docs/DOM/window.onhashchange)\n  // and URL fragments. If the browser supports neither (old IE, natch),\n  // falls back to polling.\n  var History = Backbone.History = function() {\n    this.handlers = [];\n    _.bindAll(this, 'checkUrl');\n\n    // Ensure that `History` can be used outside of the browser.\n    if (typeof window !== 'undefined') {\n      this.location = window.location;\n      this.history = window.history;\n    }\n  };\n\n  // Cached regex for stripping a leading hash/slash and trailing space.\n  var routeStripper = /^[#\\/]|\\s+$/g;\n\n  // Cached regex for stripping leading and trailing slashes.\n  var rootStripper = /^\\/+|\\/+$/g;\n\n  // Cached regex for detecting MSIE.\n  var isExplorer = /msie [\\w.]+/;\n\n  // Cached regex for removing a trailing slash.\n  var trailingSlash = /\\/$/;\n\n  // Has the history handling already been started?\n  History.started = false;\n\n  // Set up all inheritable **Backbone.History** properties and methods.\n  _.extend(History.prototype, Events, {\n\n    // The default interval to poll for hash changes, if necessary, is\n    // twenty times a second.\n    interval: 50,\n\n    // Gets the true hash value. Cannot use location.hash directly due to bug\n    // in Firefox where location.hash will always be decoded.\n    getHash: function(window) {\n      var match = (window || this).location.href.match(/#(.*)$/);\n      return match ? match[1] : '';\n    },\n\n    // Get the cross-browser normalized URL fragment, either from the URL,\n    // the hash, or the override.\n    getFragment: function(fragment, forcePushState) {\n      if (fragment == null) {\n        if (this._hasPushState || !this._wantsHashChange || forcePushState) {\n          fragment = this.location.pathname;\n          var root = this.root.replace(trailingSlash, '');\n          if (!fragment.indexOf(root)) fragment = fragment.substr(root.length);\n        } else {\n          fragment = this.getHash();\n        }\n      }\n      return fragment.replace(routeStripper, '');\n    },\n\n    // Start the hash change handling, returning `true` if the current URL matches\n    // an existing route, and `false` otherwise.\n    start: function(options) {\n      if (History.started) throw new Error(\"Backbone.history has already been started\");\n      History.started = true;\n\n      // Figure out the initial configuration. Do we need an iframe?\n      // Is pushState desired ... is it available?\n      this.options          = _.extend({}, {root: '/'}, this.options, options);\n      this.root             = this.options.root;\n      this._wantsHashChange = this.options.hashChange !== false;\n      this._wantsPushState  = !!this.options.pushState;\n      this._hasPushState    = !!(this.options.pushState && this.history && this.history.pushState);\n      var fragment          = this.getFragment();\n      var docMode           = document.documentMode;\n      var oldIE             = (isExplorer.exec(navigator.userAgent.toLowerCase()) && (!docMode || docMode <= 7));\n\n      // Normalize root to always include a leading and trailing slash.\n      this.root = ('/' + this.root + '/').replace(rootStripper, '/');\n\n      if (oldIE && this._wantsHashChange) {\n        this.iframe = Backbone.$('<iframe src=\"javascript:0\" tabindex=\"-1\" />').hide().appendTo('body')[0].contentWindow;\n        this.navigate(fragment);\n      }\n\n      // Depending on whether we're using pushState or hashes, and whether\n      // 'onhashchange' is supported, determine how we check the URL state.\n      if (this._hasPushState) {\n        Backbone.$(window).on('popstate', this.checkUrl);\n      } else if (this._wantsHashChange && ('onhashchange' in window) && !oldIE) {\n        Backbone.$(window).on('hashchange', this.checkUrl);\n      } else if (this._wantsHashChange) {\n        this._checkUrlInterval = setInterval(this.checkUrl, this.interval);\n      }\n\n      // Determine if we need to change the base url, for a pushState link\n      // opened by a non-pushState browser.\n      this.fragment = fragment;\n      var loc = this.location;\n      var atRoot = loc.pathname.replace(/[^\\/]$/, '$&/') === this.root;\n\n      // If we've started off with a route from a `pushState`-enabled browser,\n      // but we're currently in a browser that doesn't support it...\n      if (this._wantsHashChange && this._wantsPushState && !this._hasPushState && !atRoot) {\n        this.fragment = this.getFragment(null, true);\n        this.location.replace(this.root + this.location.search + '#' + this.fragment);\n        // Return immediately as browser will do redirect to new url\n        return true;\n\n      // Or if we've started out with a hash-based route, but we're currently\n      // in a browser where it could be `pushState`-based instead...\n      } else if (this._wantsPushState && this._hasPushState && atRoot && loc.hash) {\n        this.fragment = this.getHash().replace(routeStripper, '');\n        this.history.replaceState({}, document.title, this.root + this.fragment + loc.search);\n      }\n\n      if (!this.options.silent) return this.loadUrl();\n    },\n\n    // Disable Backbone.history, perhaps temporarily. Not useful in a real app,\n    // but possibly useful for unit testing Routers.\n    stop: function() {\n      Backbone.$(window).off('popstate', this.checkUrl).off('hashchange', this.checkUrl);\n      clearInterval(this._checkUrlInterval);\n      History.started = false;\n    },\n\n    // Add a route to be tested when the fragment changes. Routes added later\n    // may override previous routes.\n    route: function(route, callback) {\n      this.handlers.unshift({route: route, callback: callback});\n    },\n\n    // Checks the current URL to see if it has changed, and if it has,\n    // calls `loadUrl`, normalizing across the hidden iframe.\n    checkUrl: function(e) {\n      var current = this.getFragment();\n      if (current === this.fragment && this.iframe) {\n        current = this.getFragment(this.getHash(this.iframe));\n      }\n      if (current === this.fragment) return false;\n      if (this.iframe) this.navigate(current);\n      this.loadUrl() || this.loadUrl(this.getHash());\n    },\n\n    // Attempt to load the current URL fragment. If a route succeeds with a\n    // match, returns `true`. If no defined routes matches the fragment,\n    // returns `false`.\n    loadUrl: function(fragmentOverride) {\n      var fragment = this.fragment = this.getFragment(fragmentOverride);\n      var matched = _.any(this.handlers, function(handler) {\n        if (handler.route.test(fragment)) {\n          handler.callback(fragment);\n          return true;\n        }\n      });\n      return matched;\n    },\n\n    // Save a fragment into the hash history, or replace the URL state if the\n    // 'replace' option is passed. You are responsible for properly URL-encoding\n    // the fragment in advance.\n    //\n    // The options object can contain `trigger: true` if you wish to have the\n    // route callback be fired (not usually desirable), or `replace: true`, if\n    // you wish to modify the current URL without adding an entry to the history.\n    navigate: function(fragment, options) {\n      if (!History.started) return false;\n      if (!options || options === true) options = {trigger: options};\n      fragment = this.getFragment(fragment || '');\n      if (this.fragment === fragment) return;\n      this.fragment = fragment;\n      var url = this.root + fragment;\n\n      // If pushState is available, we use it to set the fragment as a real URL.\n      if (this._hasPushState) {\n        this.history[options.replace ? 'replaceState' : 'pushState']({}, document.title, url);\n\n      // If hash changes haven't been explicitly disabled, update the hash\n      // fragment to store history.\n      } else if (this._wantsHashChange) {\n        this._updateHash(this.location, fragment, options.replace);\n        if (this.iframe && (fragment !== this.getFragment(this.getHash(this.iframe)))) {\n          // Opening and closing the iframe tricks IE7 and earlier to push a\n          // history entry on hash-tag change.  When replace is true, we don't\n          // want this.\n          if(!options.replace) this.iframe.document.open().close();\n          this._updateHash(this.iframe.location, fragment, options.replace);\n        }\n\n      // If you've told us that you explicitly don't want fallback hashchange-\n      // based history, then `navigate` becomes a page refresh.\n      } else {\n        return this.location.assign(url);\n      }\n      if (options.trigger) return this.loadUrl(fragment);\n    },\n\n    // Update the hash location, either replacing the current entry, or adding\n    // a new one to the browser history.\n    _updateHash: function(location, fragment, replace) {\n      if (replace) {\n        var href = location.href.replace(/(javascript:|#).*$/, '');\n        location.replace(href + '#' + fragment);\n      } else {\n        // Some browsers require that `hash` contains a leading #.\n        location.hash = '#' + fragment;\n      }\n    }\n\n  });\n\n  // Create the default Backbone.history.\n  Backbone.history = new History;\n\n  // Helpers\n  // -------\n\n  // Helper function to correctly set up the prototype chain, for subclasses.\n  // Similar to `goog.inherits`, but uses a hash of prototype properties and\n  // class properties to be extended.\n  var extend = function(protoProps, staticProps) {\n    var parent = this;\n    var child;\n\n    // The constructor function for the new subclass is either defined by you\n    // (the \"constructor\" property in your `extend` definition), or defaulted\n    // by us to simply call the parent's constructor.\n    if (protoProps && _.has(protoProps, 'constructor')) {\n      child = protoProps.constructor;\n    } else {\n      child = function(){ return parent.apply(this, arguments); };\n    }\n\n    // Add static properties to the constructor function, if supplied.\n    _.extend(child, parent, staticProps);\n\n    // Set the prototype chain to inherit from `parent`, without calling\n    // `parent`'s constructor function.\n    var Surrogate = function(){ this.constructor = child; };\n    Surrogate.prototype = parent.prototype;\n    child.prototype = new Surrogate;\n\n    // Add prototype properties (instance properties) to the subclass,\n    // if supplied.\n    if (protoProps) _.extend(child.prototype, protoProps);\n\n    // Set a convenience property in case the parent's prototype is needed\n    // later.\n    child.__super__ = parent.prototype;\n\n    return child;\n  };\n\n  // Set up inheritance for the model, collection, router, view and history.\n  Model.extend = Collection.extend = Router.extend = View.extend = History.extend = extend;\n\n  // Throw an error when a URL is needed, and none is supplied.\n  var urlError = function() {\n    throw new Error('A \"url\" property or function must be specified');\n  };\n\n  // Wrap an optional error callback with a fallback error event.\n  var wrapError = function(model, options) {\n    var error = options.error;\n    options.error = function(resp) {\n      if (error) error(model, resp, options);\n      model.trigger('error', model, resp, options);\n    };\n  };\n\n}).call(this);\n//@ sourceURL=namjul-backbone/backbone.js"
-));
-require.register("namjul-backbone/index.js", Function("exports, require, module",
-"module.exports = require('./backbone');\n//@ sourceURL=namjul-backbone/index.js"
-));
-require.register("zepto/index.js", Function("exports, require, module",
-";(function(){\n\n/* Zepto v1.0-3-g342d490 - zepto event touch - zeptojs.com/license */\n\n\nvar Zepto = (function() {\n  var undefined, key, $, classList, emptyArray = [], slice = emptyArray.slice, filter = emptyArray.filter,\n    document = window.document,\n    elementDisplay = {}, classCache = {},\n    getComputedStyle = document.defaultView.getComputedStyle,\n    cssNumber = { 'column-count': 1, 'columns': 1, 'font-weight': 1, 'line-height': 1,'opacity': 1, 'z-index': 1, 'zoom': 1 },\n    fragmentRE = /^\\s*<(\\w+|!)[^>]*>/,\n    tagExpanderRE = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\\w:]+)[^>]*)\\/>/ig,\n    rootNodeRE = /^(?:body|html)$/i,\n\n    // special attributes that should be get/set via method calls\n    methodAttributes = ['val', 'css', 'html', 'text', 'data', 'width', 'height', 'offset'],\n\n    adjacencyOperators = [ 'after', 'prepend', 'before', 'append' ],\n    table = document.createElement('table'),\n    tableRow = document.createElement('tr'),\n    containers = {\n      'tr': document.createElement('tbody'),\n      'tbody': table, 'thead': table, 'tfoot': table,\n      'td': tableRow, 'th': tableRow,\n      '*': document.createElement('div')\n    },\n    readyRE = /complete|loaded|interactive/,\n    classSelectorRE = /^\\.([\\w-]+)$/,\n    idSelectorRE = /^#([\\w-]*)$/,\n    tagSelectorRE = /^[\\w-]+$/,\n    class2type = {},\n    toString = class2type.toString,\n    zepto = {},\n    camelize, uniq,\n    tempParent = document.createElement('div')\n\n  zepto.matches = function(element, selector) {\n    if (!element || element.nodeType !== 1) return false\n    var matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||\n                          element.oMatchesSelector || element.matchesSelector\n    if (matchesSelector) return matchesSelector.call(element, selector)\n    // fall back to performing a selector:\n    var match, parent = element.parentNode, temp = !parent\n    if (temp) (parent = tempParent).appendChild(element)\n    match = ~zepto.qsa(parent, selector).indexOf(element)\n    temp && tempParent.removeChild(element)\n    return match\n  }\n\n  function type(obj) {\n    return obj == null ? String(obj) :\n      class2type[toString.call(obj)] || \"object\"\n  }\n\n  function isFunction(value) { return type(value) == \"function\" }\n  function isWindow(obj)     { return obj != null && obj == obj.window }\n  function isDocument(obj)   { return obj != null && obj.nodeType == obj.DOCUMENT_NODE }\n  function isObject(obj)     { return type(obj) == \"object\" }\n  function isPlainObject(obj) {\n    return isObject(obj) && !isWindow(obj) && obj.__proto__ == Object.prototype\n  }\n  function isArray(value) { return value instanceof Array }\n  function likeArray(obj) { return typeof obj.length == 'number' }\n\n  function compact(array) { return filter.call(array, function(item){ return item != null }) }\n  function flatten(array) { return array.length > 0 ? $.fn.concat.apply([], array) : array }\n  camelize = function(str){ return str.replace(/-+(.)?/g, function(match, chr){ return chr ? chr.toUpperCase() : '' }) }\n  function dasherize(str) {\n    return str.replace(/::/g, '/')\n           .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')\n           .replace(/([a-z\\d])([A-Z])/g, '$1_$2')\n           .replace(/_/g, '-')\n           .toLowerCase()\n  }\n  uniq = function(array){ return filter.call(array, function(item, idx){ return array.indexOf(item) == idx }) }\n\n  function classRE(name) {\n    return name in classCache ?\n      classCache[name] : (classCache[name] = new RegExp('(^|\\\\s)' + name + '(\\\\s|$)'))\n  }\n\n  function maybeAddPx(name, value) {\n    return (typeof value == \"number\" && !cssNumber[dasherize(name)]) ? value + \"px\" : value\n  }\n\n  function defaultDisplay(nodeName) {\n    var element, display\n    if (!elementDisplay[nodeName]) {\n      element = document.createElement(nodeName)\n      document.body.appendChild(element)\n      display = getComputedStyle(element, '').getPropertyValue(\"display\")\n      element.parentNode.removeChild(element)\n      display == \"none\" && (display = \"block\")\n      elementDisplay[nodeName] = display\n    }\n    return elementDisplay[nodeName]\n  }\n\n  function children(element) {\n    return 'children' in element ?\n      slice.call(element.children) :\n      $.map(element.childNodes, function(node){ if (node.nodeType == 1) return node })\n  }\n\n  // `$.zepto.fragment` takes a html string and an optional tag name\n  // to generate DOM nodes nodes from the given html string.\n  // The generated DOM nodes are returned as an array.\n  // This function can be overriden in plugins for example to make\n  // it compatible with browsers that don't support the DOM fully.\n  zepto.fragment = function(html, name, properties) {\n    if (html.replace) html = html.replace(tagExpanderRE, \"<$1></$2>\")\n    if (name === undefined) name = fragmentRE.test(html) && RegExp.$1\n    if (!(name in containers)) name = '*'\n\n    var nodes, dom, container = containers[name]\n    container.innerHTML = '' + html\n    dom = $.each(slice.call(container.childNodes), function(){\n      container.removeChild(this)\n    })\n    if (isPlainObject(properties)) {\n      nodes = $(dom)\n      $.each(properties, function(key, value) {\n        if (methodAttributes.indexOf(key) > -1) nodes[key](value)\n        else nodes.attr(key, value)\n      })\n    }\n    return dom\n  }\n\n  // `$.zepto.Z` swaps out the prototype of the given `dom` array\n  // of nodes with `$.fn` and thus supplying all the Zepto functions\n  // to the array. Note that `__proto__` is not supported on Internet\n  // Explorer. This method can be overriden in plugins.\n  zepto.Z = function(dom, selector) {\n    dom = dom || []\n    dom.__proto__ = $.fn\n    dom.selector = selector || ''\n    return dom\n  }\n\n  // `$.zepto.isZ` should return `true` if the given object is a Zepto\n  // collection. This method can be overriden in plugins.\n  zepto.isZ = function(object) {\n    return object instanceof zepto.Z\n  }\n\n  // `$.zepto.init` is Zepto's counterpart to jQuery's `$.fn.init` and\n  // takes a CSS selector and an optional context (and handles various\n  // special cases).\n  // This method can be overriden in plugins.\n  zepto.init = function(selector, context) {\n    // If nothing given, return an empty Zepto collection\n    if (!selector) return zepto.Z()\n    // If a function is given, call it when the DOM is ready\n    else if (isFunction(selector)) return $(document).ready(selector)\n    // If a Zepto collection is given, juts return it\n    else if (zepto.isZ(selector)) return selector\n    else {\n      var dom\n      // normalize array if an array of nodes is given\n      if (isArray(selector)) dom = compact(selector)\n      // Wrap DOM nodes. If a plain object is given, duplicate it.\n      else if (isObject(selector))\n        dom = [isPlainObject(selector) ? $.extend({}, selector) : selector], selector = null\n      // If it's a html fragment, create nodes from it\n      else if (fragmentRE.test(selector))\n        dom = zepto.fragment(selector.trim(), RegExp.$1, context), selector = null\n      // If there's a context, create a collection on that context first, and select\n      // nodes from there\n      else if (context !== undefined) return $(context).find(selector)\n      // And last but no least, if it's a CSS selector, use it to select nodes.\n      else dom = zepto.qsa(document, selector)\n      // create a new Zepto collection from the nodes found\n      return zepto.Z(dom, selector)\n    }\n  }\n\n  // `$` will be the base `Zepto` object. When calling this\n  // function just call `$.zepto.init, which makes the implementation\n  // details of selecting nodes and creating Zepto collections\n  // patchable in plugins.\n  $ = function(selector, context){\n    return zepto.init(selector, context)\n  }\n\n  function extend(target, source, deep) {\n    for (key in source)\n      if (deep && (isPlainObject(source[key]) || isArray(source[key]))) {\n        if (isPlainObject(source[key]) && !isPlainObject(target[key]))\n          target[key] = {}\n        if (isArray(source[key]) && !isArray(target[key]))\n          target[key] = []\n        extend(target[key], source[key], deep)\n      }\n      else if (source[key] !== undefined) target[key] = source[key]\n  }\n\n  // Copy all but undefined properties from one or more\n  // objects to the `target` object.\n  $.extend = function(target){\n    var deep, args = slice.call(arguments, 1)\n    if (typeof target == 'boolean') {\n      deep = target\n      target = args.shift()\n    }\n    args.forEach(function(arg){ extend(target, arg, deep) })\n    return target\n  }\n\n  // `$.zepto.qsa` is Zepto's CSS selector implementation which\n  // uses `document.querySelectorAll` and optimizes for some special cases, like `#id`.\n  // This method can be overriden in plugins.\n  zepto.qsa = function(element, selector){\n    var found\n    return (isDocument(element) && idSelectorRE.test(selector)) ?\n      ( (found = element.getElementById(RegExp.$1)) ? [found] : [] ) :\n      (element.nodeType !== 1 && element.nodeType !== 9) ? [] :\n      slice.call(\n        classSelectorRE.test(selector) ? element.getElementsByClassName(RegExp.$1) :\n        tagSelectorRE.test(selector) ? element.getElementsByTagName(selector) :\n        element.querySelectorAll(selector)\n      )\n  }\n\n  function filtered(nodes, selector) {\n    return selector === undefined ? $(nodes) : $(nodes).filter(selector)\n  }\n\n  $.contains = function(parent, node) {\n    return parent !== node && parent.contains(node)\n  }\n\n  function funcArg(context, arg, idx, payload) {\n    return isFunction(arg) ? arg.call(context, idx, payload) : arg\n  }\n\n  function setAttribute(node, name, value) {\n    value == null ? node.removeAttribute(name) : node.setAttribute(name, value)\n  }\n\n  // access className property while respecting SVGAnimatedString\n  function className(node, value){\n    var klass = node.className,\n        svg   = klass && klass.baseVal !== undefined\n\n    if (value === undefined) return svg ? klass.baseVal : klass\n    svg ? (klass.baseVal = value) : (node.className = value)\n  }\n\n  // \"true\"  => true\n  // \"false\" => false\n  // \"null\"  => null\n  // \"42\"    => 42\n  // \"42.5\"  => 42.5\n  // JSON    => parse if valid\n  // String  => self\n  function deserializeValue(value) {\n    var num\n    try {\n      return value ?\n        value == \"true\" ||\n        ( value == \"false\" ? false :\n          value == \"null\" ? null :\n          !isNaN(num = Number(value)) ? num :\n          /^[\\[\\{]/.test(value) ? $.parseJSON(value) :\n          value )\n        : value\n    } catch(e) {\n      return value\n    }\n  }\n\n  $.type = type\n  $.isFunction = isFunction\n  $.isWindow = isWindow\n  $.isArray = isArray\n  $.isPlainObject = isPlainObject\n\n  $.isEmptyObject = function(obj) {\n    var name\n    for (name in obj) return false\n    return true\n  }\n\n  $.inArray = function(elem, array, i){\n    return emptyArray.indexOf.call(array, elem, i)\n  }\n\n  $.camelCase = camelize\n  $.trim = function(str) { return str.trim() }\n\n  // plugin compatibility\n  $.uuid = 0\n  $.support = { }\n  $.expr = { }\n\n  $.map = function(elements, callback){\n    var value, values = [], i, key\n    if (likeArray(elements))\n      for (i = 0; i < elements.length; i++) {\n        value = callback(elements[i], i)\n        if (value != null) values.push(value)\n      }\n    else\n      for (key in elements) {\n        value = callback(elements[key], key)\n        if (value != null) values.push(value)\n      }\n    return flatten(values)\n  }\n\n  $.each = function(elements, callback){\n    var i, key\n    if (likeArray(elements)) {\n      for (i = 0; i < elements.length; i++)\n        if (callback.call(elements[i], i, elements[i]) === false) return elements\n    } else {\n      for (key in elements)\n        if (callback.call(elements[key], key, elements[key]) === false) return elements\n    }\n\n    return elements\n  }\n\n  $.grep = function(elements, callback){\n    return filter.call(elements, callback)\n  }\n\n  if (window.JSON) $.parseJSON = JSON.parse\n\n  // Populate the class2type map\n  $.each(\"Boolean Number String Function Array Date RegExp Object Error\".split(\" \"), function(i, name) {\n    class2type[ \"[object \" + name + \"]\" ] = name.toLowerCase()\n  })\n\n  // Define methods that will be available on all\n  // Zepto collections\n  $.fn = {\n    // Because a collection acts like an array\n    // copy over these useful array functions.\n    forEach: emptyArray.forEach,\n    reduce: emptyArray.reduce,\n    push: emptyArray.push,\n    sort: emptyArray.sort,\n    indexOf: emptyArray.indexOf,\n    concat: emptyArray.concat,\n\n    // `map` and `slice` in the jQuery API work differently\n    // from their array counterparts\n    map: function(fn){\n      return $($.map(this, function(el, i){ return fn.call(el, i, el) }))\n    },\n    slice: function(){\n      return $(slice.apply(this, arguments))\n    },\n\n    ready: function(callback){\n      if (readyRE.test(document.readyState)) callback($)\n      else document.addEventListener('DOMContentLoaded', function(){ callback($) }, false)\n      return this\n    },\n    get: function(idx){\n      return idx === undefined ? slice.call(this) : this[idx >= 0 ? idx : idx + this.length]\n    },\n    toArray: function(){ return this.get() },\n    size: function(){\n      return this.length\n    },\n    remove: function(){\n      return this.each(function(){\n        if (this.parentNode != null)\n          this.parentNode.removeChild(this)\n      })\n    },\n    each: function(callback){\n      emptyArray.every.call(this, function(el, idx){\n        return callback.call(el, idx, el) !== false\n      })\n      return this\n    },\n    filter: function(selector){\n      if (isFunction(selector)) return this.not(this.not(selector))\n      return $(filter.call(this, function(element){\n        return zepto.matches(element, selector)\n      }))\n    },\n    add: function(selector,context){\n      return $(uniq(this.concat($(selector,context))))\n    },\n    is: function(selector){\n      return this.length > 0 && zepto.matches(this[0], selector)\n    },\n    not: function(selector){\n      var nodes=[]\n      if (isFunction(selector) && selector.call !== undefined)\n        this.each(function(idx){\n          if (!selector.call(this,idx)) nodes.push(this)\n        })\n      else {\n        var excludes = typeof selector == 'string' ? this.filter(selector) :\n          (likeArray(selector) && isFunction(selector.item)) ? slice.call(selector) : $(selector)\n        this.forEach(function(el){\n          if (excludes.indexOf(el) < 0) nodes.push(el)\n        })\n      }\n      return $(nodes)\n    },\n    has: function(selector){\n      return this.filter(function(){\n        return isObject(selector) ?\n          $.contains(this, selector) :\n          $(this).find(selector).size()\n      })\n    },\n    eq: function(idx){\n      return idx === -1 ? this.slice(idx) : this.slice(idx, + idx + 1)\n    },\n    first: function(){\n      var el = this[0]\n      return el && !isObject(el) ? el : $(el)\n    },\n    last: function(){\n      var el = this[this.length - 1]\n      return el && !isObject(el) ? el : $(el)\n    },\n    find: function(selector){\n      var result, $this = this\n      if (typeof selector == 'object')\n        result = $(selector).filter(function(){\n          var node = this\n          return emptyArray.some.call($this, function(parent){\n            return $.contains(parent, node)\n          })\n        })\n      else if (this.length == 1) result = $(zepto.qsa(this[0], selector))\n      else result = this.map(function(){ return zepto.qsa(this, selector) })\n      return result\n    },\n    closest: function(selector, context){\n      var node = this[0], collection = false\n      if (typeof selector == 'object') collection = $(selector)\n      while (node && !(collection ? collection.indexOf(node) >= 0 : zepto.matches(node, selector)))\n        node = node !== context && !isDocument(node) && node.parentNode\n      return $(node)\n    },\n    parents: function(selector){\n      var ancestors = [], nodes = this\n      while (nodes.length > 0)\n        nodes = $.map(nodes, function(node){\n          if ((node = node.parentNode) && !isDocument(node) && ancestors.indexOf(node) < 0) {\n            ancestors.push(node)\n            return node\n          }\n        })\n      return filtered(ancestors, selector)\n    },\n    parent: function(selector){\n      return filtered(uniq(this.pluck('parentNode')), selector)\n    },\n    children: function(selector){\n      return filtered(this.map(function(){ return children(this) }), selector)\n    },\n    contents: function() {\n      return this.map(function() { return slice.call(this.childNodes) })\n    },\n    siblings: function(selector){\n      return filtered(this.map(function(i, el){\n        return filter.call(children(el.parentNode), function(child){ return child!==el })\n      }), selector)\n    },\n    empty: function(){\n      return this.each(function(){ this.innerHTML = '' })\n    },\n    // `pluck` is borrowed from Prototype.js\n    pluck: function(property){\n      return $.map(this, function(el){ return el[property] })\n    },\n    show: function(){\n      return this.each(function(){\n        this.style.display == \"none\" && (this.style.display = null)\n        if (getComputedStyle(this, '').getPropertyValue(\"display\") == \"none\")\n          this.style.display = defaultDisplay(this.nodeName)\n      })\n    },\n    replaceWith: function(newContent){\n      return this.before(newContent).remove()\n    },\n    wrap: function(structure){\n      var func = isFunction(structure)\n      if (this[0] && !func)\n        var dom   = $(structure).get(0),\n            clone = dom.parentNode || this.length > 1\n\n      return this.each(function(index){\n        $(this).wrapAll(\n          func ? structure.call(this, index) :\n            clone ? dom.cloneNode(true) : dom\n        )\n      })\n    },\n    wrapAll: function(structure){\n      if (this[0]) {\n        $(this[0]).before(structure = $(structure))\n        var children\n        // drill down to the inmost element\n        while ((children = structure.children()).length) structure = children.first()\n        $(structure).append(this)\n      }\n      return this\n    },\n    wrapInner: function(structure){\n      var func = isFunction(structure)\n      return this.each(function(index){\n        var self = $(this), contents = self.contents(),\n            dom  = func ? structure.call(this, index) : structure\n        contents.length ? contents.wrapAll(dom) : self.append(dom)\n      })\n    },\n    unwrap: function(){\n      this.parent().each(function(){\n        $(this).replaceWith($(this).children())\n      })\n      return this\n    },\n    clone: function(){\n      return this.map(function(){ return this.cloneNode(true) })\n    },\n    hide: function(){\n      return this.css(\"display\", \"none\")\n    },\n    toggle: function(setting){\n      return this.each(function(){\n        var el = $(this)\n        ;(setting === undefined ? el.css(\"display\") == \"none\" : setting) ? el.show() : el.hide()\n      })\n    },\n    prev: function(selector){ return $(this.pluck('previousElementSibling')).filter(selector || '*') },\n    next: function(selector){ return $(this.pluck('nextElementSibling')).filter(selector || '*') },\n    html: function(html){\n      return html === undefined ?\n        (this.length > 0 ? this[0].innerHTML : null) :\n        this.each(function(idx){\n          var originHtml = this.innerHTML\n          $(this).empty().append( funcArg(this, html, idx, originHtml) )\n        })\n    },\n    text: function(text){\n      return text === undefined ?\n        (this.length > 0 ? this[0].textContent : null) :\n        this.each(function(){ this.textContent = text })\n    },\n    attr: function(name, value){\n      var result\n      return (typeof name == 'string' && value === undefined) ?\n        (this.length == 0 || this[0].nodeType !== 1 ? undefined :\n          (name == 'value' && this[0].nodeName == 'INPUT') ? this.val() :\n          (!(result = this[0].getAttribute(name)) && name in this[0]) ? this[0][name] : result\n        ) :\n        this.each(function(idx){\n          if (this.nodeType !== 1) return\n          if (isObject(name)) for (key in name) setAttribute(this, key, name[key])\n          else setAttribute(this, name, funcArg(this, value, idx, this.getAttribute(name)))\n        })\n    },\n    removeAttr: function(name){\n      return this.each(function(){ this.nodeType === 1 && setAttribute(this, name) })\n    },\n    prop: function(name, value){\n      return (value === undefined) ?\n        (this[0] && this[0][name]) :\n        this.each(function(idx){\n          this[name] = funcArg(this, value, idx, this[name])\n        })\n    },\n    data: function(name, value){\n      var data = this.attr('data-' + dasherize(name), value)\n      return data !== null ? deserializeValue(data) : undefined\n    },\n    val: function(value){\n      return (value === undefined) ?\n        (this[0] && (this[0].multiple ?\n           $(this[0]).find('option').filter(function(o){ return this.selected }).pluck('value') :\n           this[0].value)\n        ) :\n        this.each(function(idx){\n          this.value = funcArg(this, value, idx, this.value)\n        })\n    },\n    offset: function(coordinates){\n      if (coordinates) return this.each(function(index){\n        var $this = $(this),\n            coords = funcArg(this, coordinates, index, $this.offset()),\n            parentOffset = $this.offsetParent().offset(),\n            props = {\n              top:  coords.top  - parentOffset.top,\n              left: coords.left - parentOffset.left\n            }\n\n        if ($this.css('position') == 'static') props['position'] = 'relative'\n        $this.css(props)\n      })\n      if (this.length==0) return null\n      var obj = this[0].getBoundingClientRect()\n      return {\n        left: obj.left + window.pageXOffset,\n        top: obj.top + window.pageYOffset,\n        width: Math.round(obj.width),\n        height: Math.round(obj.height)\n      }\n    },\n    css: function(property, value){\n      if (arguments.length < 2 && typeof property == 'string')\n        return this[0] && (this[0].style[camelize(property)] || getComputedStyle(this[0], '').getPropertyValue(property))\n\n      var css = ''\n      if (type(property) == 'string') {\n        if (!value && value !== 0)\n          this.each(function(){ this.style.removeProperty(dasherize(property)) })\n        else\n          css = dasherize(property) + \":\" + maybeAddPx(property, value)\n      } else {\n        for (key in property)\n          if (!property[key] && property[key] !== 0)\n            this.each(function(){ this.style.removeProperty(dasherize(key)) })\n          else\n            css += dasherize(key) + ':' + maybeAddPx(key, property[key]) + ';'\n      }\n\n      return this.each(function(){ this.style.cssText += ';' + css })\n    },\n    index: function(element){\n      return element ? this.indexOf($(element)[0]) : this.parent().children().indexOf(this[0])\n    },\n    hasClass: function(name){\n      return emptyArray.some.call(this, function(el){\n        return this.test(className(el))\n      }, classRE(name))\n    },\n    addClass: function(name){\n      return this.each(function(idx){\n        classList = []\n        var cls = className(this), newName = funcArg(this, name, idx, cls)\n        newName.split(/\\s+/g).forEach(function(klass){\n          if (!$(this).hasClass(klass)) classList.push(klass)\n        }, this)\n        classList.length && className(this, cls + (cls ? \" \" : \"\") + classList.join(\" \"))\n      })\n    },\n    removeClass: function(name){\n      return this.each(function(idx){\n        if (name === undefined) return className(this, '')\n        classList = className(this)\n        funcArg(this, name, idx, classList).split(/\\s+/g).forEach(function(klass){\n          classList = classList.replace(classRE(klass), \" \")\n        })\n        className(this, classList.trim())\n      })\n    },\n    toggleClass: function(name, when){\n      return this.each(function(idx){\n        var $this = $(this), names = funcArg(this, name, idx, className(this))\n        names.split(/\\s+/g).forEach(function(klass){\n          (when === undefined ? !$this.hasClass(klass) : when) ?\n            $this.addClass(klass) : $this.removeClass(klass)\n        })\n      })\n    },\n    scrollTop: function(){\n      if (!this.length) return\n      return ('scrollTop' in this[0]) ? this[0].scrollTop : this[0].scrollY\n    },\n    position: function() {\n      if (!this.length) return\n\n      var elem = this[0],\n        // Get *real* offsetParent\n        offsetParent = this.offsetParent(),\n        // Get correct offsets\n        offset       = this.offset(),\n        parentOffset = rootNodeRE.test(offsetParent[0].nodeName) ? { top: 0, left: 0 } : offsetParent.offset()\n\n      // Subtract element margins\n      // note: when an element has margin: auto the offsetLeft and marginLeft\n      // are the same in Safari causing offset.left to incorrectly be 0\n      offset.top  -= parseFloat( $(elem).css('margin-top') ) || 0\n      offset.left -= parseFloat( $(elem).css('margin-left') ) || 0\n\n      // Add offsetParent borders\n      parentOffset.top  += parseFloat( $(offsetParent[0]).css('border-top-width') ) || 0\n      parentOffset.left += parseFloat( $(offsetParent[0]).css('border-left-width') ) || 0\n\n      // Subtract the two offsets\n      return {\n        top:  offset.top  - parentOffset.top,\n        left: offset.left - parentOffset.left\n      }\n    },\n    offsetParent: function() {\n      return this.map(function(){\n        var parent = this.offsetParent || document.body\n        while (parent && !rootNodeRE.test(parent.nodeName) && $(parent).css(\"position\") == \"static\")\n          parent = parent.offsetParent\n        return parent\n      })\n    }\n  }\n\n  // for now\n  $.fn.detach = $.fn.remove\n\n  // Generate the `width` and `height` functions\n  ;['width', 'height'].forEach(function(dimension){\n    $.fn[dimension] = function(value){\n      var offset, el = this[0],\n        Dimension = dimension.replace(/./, function(m){ return m[0].toUpperCase() })\n      if (value === undefined) return isWindow(el) ? el['inner' + Dimension] :\n        isDocument(el) ? el.documentElement['offset' + Dimension] :\n        (offset = this.offset()) && offset[dimension]\n      else return this.each(function(idx){\n        el = $(this)\n        el.css(dimension, funcArg(this, value, idx, el[dimension]()))\n      })\n    }\n  })\n\n  function traverseNode(node, fun) {\n    fun(node)\n    for (var key in node.childNodes) traverseNode(node.childNodes[key], fun)\n  }\n\n  // Generate the `after`, `prepend`, `before`, `append`,\n  // `insertAfter`, `insertBefore`, `appendTo`, and `prependTo` methods.\n  adjacencyOperators.forEach(function(operator, operatorIndex) {\n    var inside = operatorIndex % 2 //=> prepend, append\n\n    $.fn[operator] = function(){\n      // arguments can be nodes, arrays of nodes, Zepto objects and HTML strings\n      var argType, nodes = $.map(arguments, function(arg) {\n            argType = type(arg)\n            return argType == \"object\" || argType == \"array\" || arg == null ?\n              arg : zepto.fragment(arg)\n          }),\n          parent, copyByClone = this.length > 1\n      if (nodes.length < 1) return this\n\n      return this.each(function(_, target){\n        parent = inside ? target : target.parentNode\n\n        // convert all methods to a \"before\" operation\n        target = operatorIndex == 0 ? target.nextSibling :\n                 operatorIndex == 1 ? target.firstChild :\n                 operatorIndex == 2 ? target :\n                 null\n\n        nodes.forEach(function(node){\n          if (copyByClone) node = node.cloneNode(true)\n          else if (!parent) return $(node).remove()\n\n          traverseNode(parent.insertBefore(node, target), function(el){\n            if (el.nodeName != null && el.nodeName.toUpperCase() === 'SCRIPT' &&\n               (!el.type || el.type === 'text/javascript') && !el.src)\n              window['eval'].call(window, el.innerHTML)\n          })\n        })\n      })\n    }\n\n    // after    => insertAfter\n    // prepend  => prependTo\n    // before   => insertBefore\n    // append   => appendTo\n    $.fn[inside ? operator+'To' : 'insert'+(operatorIndex ? 'Before' : 'After')] = function(html){\n      $(html)[operator](this)\n      return this\n    }\n  })\n\n  zepto.Z.prototype = $.fn\n\n  // Export internal API functions in the `$.zepto` namespace\n  zepto.uniq = uniq\n  zepto.deserializeValue = deserializeValue\n  $.zepto = zepto\n\n  return $\n})()\n\nwindow.Zepto = Zepto\n'$' in window || (window.$ = Zepto)\n\n;(function($){\n  var $$ = $.zepto.qsa, handlers = {}, _zid = 1, specialEvents={},\n      hover = { mouseenter: 'mouseover', mouseleave: 'mouseout' }\n\n  specialEvents.click = specialEvents.mousedown = specialEvents.mouseup = specialEvents.mousemove = 'MouseEvents'\n\n  function zid(element) {\n    return element._zid || (element._zid = _zid++)\n  }\n  function findHandlers(element, event, fn, selector) {\n    event = parse(event)\n    if (event.ns) var matcher = matcherFor(event.ns)\n    return (handlers[zid(element)] || []).filter(function(handler) {\n      return handler\n        && (!event.e  || handler.e == event.e)\n        && (!event.ns || matcher.test(handler.ns))\n        && (!fn       || zid(handler.fn) === zid(fn))\n        && (!selector || handler.sel == selector)\n    })\n  }\n  function parse(event) {\n    var parts = ('' + event).split('.')\n    return {e: parts[0], ns: parts.slice(1).sort().join(' ')}\n  }\n  function matcherFor(ns) {\n    return new RegExp('(?:^| )' + ns.replace(' ', ' .* ?') + '(?: |$)')\n  }\n\n  function eachEvent(events, fn, iterator){\n    if ($.type(events) != \"string\") $.each(events, iterator)\n    else events.split(/\\s/).forEach(function(type){ iterator(type, fn) })\n  }\n\n  function eventCapture(handler, captureSetting) {\n    return handler.del &&\n      (handler.e == 'focus' || handler.e == 'blur') ||\n      !!captureSetting\n  }\n\n  function realEvent(type) {\n    return hover[type] || type\n  }\n\n  function add(element, events, fn, selector, getDelegate, capture){\n    var id = zid(element), set = (handlers[id] || (handlers[id] = []))\n    eachEvent(events, fn, function(event, fn){\n      var handler   = parse(event)\n      handler.fn    = fn\n      handler.sel   = selector\n      // emulate mouseenter, mouseleave\n      if (handler.e in hover) fn = function(e){\n        var related = e.relatedTarget\n        if (!related || (related !== this && !$.contains(this, related)))\n          return handler.fn.apply(this, arguments)\n      }\n      handler.del   = getDelegate && getDelegate(fn, event)\n      var callback  = handler.del || fn\n      handler.proxy = function (e) {\n        var result = callback.apply(element, [e].concat(e.data))\n        if (result === false) e.preventDefault(), e.stopPropagation()\n        return result\n      }\n      handler.i = set.length\n      set.push(handler)\n      element.addEventListener(realEvent(handler.e), handler.proxy, eventCapture(handler, capture))\n    })\n  }\n  function remove(element, events, fn, selector, capture){\n    var id = zid(element)\n    eachEvent(events || '', fn, function(event, fn){\n      findHandlers(element, event, fn, selector).forEach(function(handler){\n        delete handlers[id][handler.i]\n        element.removeEventListener(realEvent(handler.e), handler.proxy, eventCapture(handler, capture))\n      })\n    })\n  }\n\n  $.event = { add: add, remove: remove }\n\n  $.proxy = function(fn, context) {\n    if ($.isFunction(fn)) {\n      var proxyFn = function(){ return fn.apply(context, arguments) }\n      proxyFn._zid = zid(fn)\n      return proxyFn\n    } else if (typeof context == 'string') {\n      return $.proxy(fn[context], fn)\n    } else {\n      throw new TypeError(\"expected function\")\n    }\n  }\n\n  $.fn.bind = function(event, callback){\n    return this.each(function(){\n      add(this, event, callback)\n    })\n  }\n  $.fn.unbind = function(event, callback){\n    return this.each(function(){\n      remove(this, event, callback)\n    })\n  }\n  $.fn.one = function(event, callback){\n    return this.each(function(i, element){\n      add(this, event, callback, null, function(fn, type){\n        return function(){\n          var result = fn.apply(element, arguments)\n          remove(element, type, fn)\n          return result\n        }\n      })\n    })\n  }\n\n  var returnTrue = function(){return true},\n      returnFalse = function(){return false},\n      ignoreProperties = /^([A-Z]|layer[XY]$)/,\n      eventMethods = {\n        preventDefault: 'isDefaultPrevented',\n        stopImmediatePropagation: 'isImmediatePropagationStopped',\n        stopPropagation: 'isPropagationStopped'\n      }\n  function createProxy(event) {\n    var key, proxy = { originalEvent: event }\n    for (key in event)\n      if (!ignoreProperties.test(key) && event[key] !== undefined) proxy[key] = event[key]\n\n    $.each(eventMethods, function(name, predicate) {\n      proxy[name] = function(){\n        this[predicate] = returnTrue\n        return event[name].apply(event, arguments)\n      }\n      proxy[predicate] = returnFalse\n    })\n    return proxy\n  }\n\n  // emulates the 'defaultPrevented' property for browsers that have none\n  function fix(event) {\n    if (!('defaultPrevented' in event)) {\n      event.defaultPrevented = false\n      var prevent = event.preventDefault\n      event.preventDefault = function() {\n        this.defaultPrevented = true\n        prevent.call(this)\n      }\n    }\n  }\n\n  $.fn.delegate = function(selector, event, callback){\n    return this.each(function(i, element){\n      add(element, event, callback, selector, function(fn){\n        return function(e){\n          var evt, match = $(e.target).closest(selector, element).get(0)\n          if (match) {\n            evt = $.extend(createProxy(e), {currentTarget: match, liveFired: element})\n            return fn.apply(match, [evt].concat([].slice.call(arguments, 1)))\n          }\n        }\n      })\n    })\n  }\n  $.fn.undelegate = function(selector, event, callback){\n    return this.each(function(){\n      remove(this, event, callback, selector)\n    })\n  }\n\n  $.fn.live = function(event, callback){\n    $(document.body).delegate(this.selector, event, callback)\n    return this\n  }\n  $.fn.die = function(event, callback){\n    $(document.body).undelegate(this.selector, event, callback)\n    return this\n  }\n\n  $.fn.on = function(event, selector, callback){\n    return !selector || $.isFunction(selector) ?\n      this.bind(event, selector || callback) : this.delegate(selector, event, callback)\n  }\n  $.fn.off = function(event, selector, callback){\n    return !selector || $.isFunction(selector) ?\n      this.unbind(event, selector || callback) : this.undelegate(selector, event, callback)\n  }\n\n  $.fn.trigger = function(event, data){\n    if (typeof event == 'string' || $.isPlainObject(event)) event = $.Event(event)\n    fix(event)\n    event.data = data\n    return this.each(function(){\n      // items in the collection might not be DOM elements\n      // (todo: possibly support events on plain old objects)\n      if('dispatchEvent' in this) this.dispatchEvent(event)\n    })\n  }\n\n  // triggers event handlers on current element just as if an event occurred,\n  // doesn't trigger an actual event, doesn't bubble\n  $.fn.triggerHandler = function(event, data){\n    var e, result\n    this.each(function(i, element){\n      e = createProxy(typeof event == 'string' ? $.Event(event) : event)\n      e.data = data\n      e.target = element\n      $.each(findHandlers(element, event.type || event), function(i, handler){\n        result = handler.proxy(e)\n        if (e.isImmediatePropagationStopped()) return false\n      })\n    })\n    return result\n  }\n\n  // shortcut methods for `.bind(event, fn)` for each event type\n  ;('focusin focusout load resize scroll unload click dblclick '+\n  'mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave '+\n  'change select keydown keypress keyup error').split(' ').forEach(function(event) {\n    $.fn[event] = function(callback) {\n      return callback ?\n        this.bind(event, callback) :\n        this.trigger(event)\n    }\n  })\n\n  ;['focus', 'blur'].forEach(function(name) {\n    $.fn[name] = function(callback) {\n      if (callback) this.bind(name, callback)\n      else this.each(function(){\n        try { this[name]() }\n        catch(e) {}\n      })\n      return this\n    }\n  })\n\n  $.Event = function(type, props) {\n    if (typeof type != 'string') props = type, type = props.type\n    var event = document.createEvent(specialEvents[type] || 'Events'), bubbles = true\n    if (props) for (var name in props) (name == 'bubbles') ? (bubbles = !!props[name]) : (event[name] = props[name])\n    event.initEvent(type, bubbles, true, null, null, null, null, null, null, null, null, null, null, null, null)\n    event.isDefaultPrevented = function(){ return this.defaultPrevented }\n    return event\n  }\n\n})(Zepto)\n\n;(function($){\n  var touch = {},\n    touchTimeout, tapTimeout, swipeTimeout,\n    longTapDelay = 750, longTapTimeout\n\n  function parentIfText(node) {\n    return 'tagName' in node ? node : node.parentNode\n  }\n\n  function swipeDirection(x1, x2, y1, y2) {\n    var xDelta = Math.abs(x1 - x2), yDelta = Math.abs(y1 - y2)\n    return xDelta >= yDelta ? (x1 - x2 > 0 ? 'Left' : 'Right') : (y1 - y2 > 0 ? 'Up' : 'Down')\n  }\n\n  function longTap() {\n    longTapTimeout = null\n    if (touch.last) {\n      touch.el.trigger('longTap')\n      touch = {}\n    }\n  }\n\n  function cancelLongTap() {\n    if (longTapTimeout) clearTimeout(longTapTimeout)\n    longTapTimeout = null\n  }\n\n  function cancelAll() {\n    if (touchTimeout) clearTimeout(touchTimeout)\n    if (tapTimeout) clearTimeout(tapTimeout)\n    if (swipeTimeout) clearTimeout(swipeTimeout)\n    if (longTapTimeout) clearTimeout(longTapTimeout)\n    touchTimeout = tapTimeout = swipeTimeout = longTapTimeout = null\n    touch = {}\n  }\n\n  $(document).ready(function(){\n    var now, delta\n\n    $(document.body)\n      .bind('touchstart', function(e){\n        now = Date.now()\n        delta = now - (touch.last || now)\n        touch.el = $(parentIfText(e.touches[0].target))\n        touchTimeout && clearTimeout(touchTimeout)\n        touch.x1 = e.touches[0].pageX\n        touch.y1 = e.touches[0].pageY\n        if (delta > 0 && delta <= 250) touch.isDoubleTap = true\n        touch.last = now\n        longTapTimeout = setTimeout(longTap, longTapDelay)\n      })\n      .bind('touchmove', function(e){\n        cancelLongTap()\n        touch.x2 = e.touches[0].pageX\n        touch.y2 = e.touches[0].pageY\n        if (Math.abs(touch.x1 - touch.x2) > 10)\n          e.preventDefault()\n      })\n      .bind('touchend', function(e){\n         cancelLongTap()\n\n        // swipe\n        if ((touch.x2 && Math.abs(touch.x1 - touch.x2) > 30) ||\n            (touch.y2 && Math.abs(touch.y1 - touch.y2) > 30))\n\n          swipeTimeout = setTimeout(function() {\n            touch.el.trigger('swipe')\n            touch.el.trigger('swipe' + (swipeDirection(touch.x1, touch.x2, touch.y1, touch.y2)))\n            touch = {}\n          }, 0)\n\n        // normal tap\n        else if ('last' in touch)\n\n          // delay by one tick so we can cancel the 'tap' event if 'scroll' fires\n          // ('tap' fires before 'scroll')\n          tapTimeout = setTimeout(function() {\n\n            // trigger universal 'tap' with the option to cancelTouch()\n            // (cancelTouch cancels processing of single vs double taps for faster 'tap' response)\n            var event = $.Event('tap')\n            event.cancelTouch = cancelAll\n            touch.el.trigger(event)\n\n            // trigger double tap immediately\n            if (touch.isDoubleTap) {\n              touch.el.trigger('doubleTap')\n              touch = {}\n            }\n\n            // trigger single tap after 250ms of inactivity\n            else {\n              touchTimeout = setTimeout(function(){\n                touchTimeout = null\n                touch.el.trigger('singleTap')\n                touch = {}\n              }, 250)\n            }\n\n          }, 0)\n\n      })\n      .bind('touchcancel', cancelAll)\n\n    $(window).bind('scroll', cancelAll)\n  })\n\n  ;['swipe', 'swipeLeft', 'swipeRight', 'swipeUp', 'swipeDown', 'doubleTap', 'tap', 'singleTap', 'longTap'].forEach(function(m){\n    $.fn[m] = function(callback){ return this.bind(m, callback) }\n  })\n})(Zepto)\n\nmodule.exports = Zepto;\n\n})();\n//@ sourceURL=zepto/index.js"
-));
-require.register("namjul-backbone.localStorage/backbone.localStorage.js", Function("exports, require, module",
-"/**\n * Backbone localStorage Adapter\n * Version 1.1.3\n *\n * https://github.com/jeromegn/Backbone.localStorage\n */\n(function (root, factory) {\n   if (typeof exports === 'object') {\n     module.exports = factory(require(\"underscore\"), require(\"backbone\"));\n   } else if (typeof define === \"function\" && define.amd) {\n      // AMD. Register as an anonymous module.\n      define([\"underscore\",\"backbone\"], function(_, Backbone) {\n        // Use global variables if the locals are undefined.\n        return factory(_ || root._, Backbone || root.Backbone);\n      });\n   } else {\n      // RequireJS isn't being used. Assume underscore and backbone are loaded in <script> tags\n      factory(_, Backbone);\n   }\n}(this, function(_, Backbone) {\n// A simple module to replace `Backbone.sync` with *localStorage*-based\n// persistence. Models are given GUIDS, and saved into a JSON object. Simple\n// as that.\n\n// Hold reference to Underscore.js and Backbone.js in the closure in order\n// to make things work even if they are removed from the global namespace\n\n// Generate four random hex digits.\nfunction S4() {\n   return (((1+Math.random())*0x10000)|0).toString(16).substring(1);\n};\n\n// Generate a pseudo-GUID by concatenating random hexadecimal.\nfunction guid() {\n   return (S4()+S4()+\"-\"+S4()+\"-\"+S4()+\"-\"+S4()+\"-\"+S4()+S4()+S4());\n};\n\n// Our Store is represented by a single JS object in *localStorage*. Create it\n// with a meaningful name, like the name you'd give a table.\n// window.Store is deprectated, use Backbone.LocalStorage instead\nBackbone.LocalStorage = window.Store = function(name) {\n  this.name = name;\n  var store = this.localStorage().getItem(this.name);\n  this.records = (store && store.split(\",\")) || [];\n};\n\n_.extend(Backbone.LocalStorage.prototype, {\n\n  // Save the current state of the **Store** to *localStorage*.\n  save: function() {\n    this.localStorage().setItem(this.name, this.records.join(\",\"));\n  },\n\n  // Add a model, giving it a (hopefully)-unique GUID, if it doesn't already\n  // have an id of it's own.\n  create: function(model) {\n    if (!model.id) {\n      model.id = guid();\n      model.set(model.idAttribute, model.id);\n    }\n    this.localStorage().setItem(this.name+\"-\"+model.id, JSON.stringify(model));\n    this.records.push(model.id.toString());\n    this.save();\n    return this.find(model);\n  },\n\n  // Update a model by replacing its copy in `this.data`.\n  update: function(model) {\n    this.localStorage().setItem(this.name+\"-\"+model.id, JSON.stringify(model));\n    if (!_.include(this.records, model.id.toString()))\n      this.records.push(model.id.toString()); this.save();\n    return this.find(model);\n  },\n\n  // Retrieve a model from `this.data` by id.\n  find: function(model) {\n    return this.jsonData(this.localStorage().getItem(this.name+\"-\"+model.id));\n  },\n\n  // Return the array of all models currently in storage.\n  findAll: function() {\n    // Lodash removed _#chain in v1.0.0-rc.1\n    return (_.chain || _)(this.records)\n      .map(function(id){\n        return this.jsonData(this.localStorage().getItem(this.name+\"-\"+id));\n      }, this)\n      .compact()\n      .value();\n  },\n\n  // Delete a model from `this.data`, returning it.\n  destroy: function(model) {\n    if (model.isNew())\n      return false\n    this.localStorage().removeItem(this.name+\"-\"+model.id);\n    this.records = _.reject(this.records, function(id){\n      return id === model.id.toString();\n    });\n    this.save();\n    return model;\n  },\n\n  localStorage: function() {\n    return localStorage;\n  },\n\n  // fix for \"illegal access\" error on Android when JSON.parse is passed null\n  jsonData: function (data) {\n      return data && JSON.parse(data);\n  },\n\n  // Clear localStorage for specific collection.\n  _clear: function() {\n    var local = this.localStorage(),\n      itemRe = new RegExp(\"^\" + this.name + \"-\");\n\n    // Remove id-tracking item (e.g., \"foo\").\n    local.removeItem(this.name);\n\n    // Lodash removed _#chain in v1.0.0-rc.1\n    // Match all data items (e.g., \"foo-ID\") and remove.\n    (_.chain || _)(local).keys()\n      .filter(function (k) { return itemRe.test(k); })\n      .each(function (k) { local.removeItem(k); });\n  },\n\n  // Size of localStorage.\n  _storageSize: function() {\n    return this.localStorage().length;\n  }\n\n});\n\n// localSync delegate to the model or collection's\n// *localStorage* property, which should be an instance of `Store`.\n// window.Store.sync and Backbone.localSync is deprecated, use Backbone.LocalStorage.sync instead\nBackbone.LocalStorage.sync = window.Store.sync = Backbone.localSync = function(method, model, options) {\n  var store = model.localStorage || model.collection.localStorage;\n\n  var resp, errorMessage, syncDfd = Backbone.$.Deferred && Backbone.$.Deferred(); //If $ is having Deferred - use it.\n\n  try {\n\n    switch (method) {\n      case \"read\":\n        resp = model.id != undefined ? store.find(model) : store.findAll();\n        break;\n      case \"create\":\n        resp = store.create(model);\n        break;\n      case \"update\":\n        resp = store.update(model);\n        break;\n      case \"delete\":\n        resp = store.destroy(model);\n        break;\n    }\n\n  } catch(error) {\n    if (error.code === DOMException.QUOTA_EXCEEDED_ERR && store._storageSize() === 0)\n      errorMessage = \"Private browsing is unsupported\";\n    else\n      errorMessage = error.message;\n  }\n\n  if (resp) {\n    if (options && options.success) {\n      if (Backbone.VERSION === \"0.9.10\") {\n        options.success(model, resp, options);\n      } else {\n        options.success(resp);\n      }\n    }\n    if (syncDfd) {\n      syncDfd.resolve(resp);\n    }\n  \n  } else {\n    errorMessage = errorMessage ? errorMessage\n                                : \"Record Not Found\";\n\n    if (options && options.error)\n      if (Backbone.VERSION === \"0.9.10\") {\n        options.error(model, errorMessage, options);\n      } else {\n        options.error(errorMessage);\n      }\n\n    if (syncDfd)\n      syncDfd.reject(errorMessage);\n  }\n\n  // add compatibility with $.ajax\n  // always execute callback for success and error\n  if (options && options.complete) options.complete(resp);\n\n  return syncDfd && syncDfd.promise();\n};\n\nBackbone.ajaxSync = Backbone.sync;\n\nBackbone.getSyncMethod = function(model) {\n  if(model.localStorage || (model.collection && model.collection.localStorage)) {\n    return Backbone.localSync;\n  }\n\n  return Backbone.ajaxSync;\n};\n\n// Override 'Backbone.sync' to default to localSync,\n// the original 'Backbone.sync' is still available in 'Backbone.ajaxSync'\nBackbone.sync = function(method, model, options) {\n  return Backbone.getSyncMethod(model).apply(this, [method, model, options]);\n};\n\nreturn Backbone.LocalStorage;\n}));\n//@ sourceURL=namjul-backbone.localStorage/backbone.localStorage.js"
-));
-require.register("component-humanize-number/index.js", Function("exports, require, module",
-"\nmodule.exports = function(n, options){\n  options = options || {};\n  var d = options.delimiter || ',';\n  var s = options.separator || '.';\n  n = n.toString().split('.');\n  n[0] = n[0].replace(/(\\d)(?=(\\d\\d\\d)+(?!\\d))/g, '$1' + d);\n  return n.join(s);\n};//@ sourceURL=component-humanize-number/index.js"
-));
-require.register("amount/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar _ = require('underscore');\nvar humanize = require('humanize-number');\n\n/**\n * Expose `Amount`.\n */\n\nmodule.exports = Amount;\n\n/**\n * Initialize a new 'Amount.\n */\n\nfunction Amount(startValue) {\n  this.truncate = 2; \n  this.reset(startValue);\n}\n\nAmount.prototype.reset = function(startValue) {\n  startValue = startValue || 0;\n  this.index = 0;\n  this.amount = ['.', '0'];\n  this.isDecimal = false;\n\n  startValue = parseFloat(startValue).toString();\n\n  _.each(startValue.split(''), _.bind(function(value) {\n    if(value === '.') {\n      this.toDecimal();\n    } else {\n      this.append(value); \n    }\n  }, this));\n};\n\nAmount.prototype.value = function() {\n  return parseFloat(this.amount.join(''));\n};\n\nAmount.prototype.format = function(options) {\n  options = options || {delimiter: '.', separator: ','}; \n  var format = humanize(this.value(), options);\n\n  var arParts = format.split(options.separator);\n  var afterDecimal = (arParts[1] || '').split('');\n\n  if(afterDecimal.length > 2) {\n    afterDecimal = afterDecimal.slice(0, 2);\n  }\n\n  while (afterDecimal.length < 2) {\n    afterDecimal.push('0');\n  }\n\n  return arParts[0] + options.separator + afterDecimal.join('');\n};\n\nAmount.prototype.toDecimal = function() {\n  if(this.index <= _.indexOf(this.amount, '.')) { // prevent double click on decimal\n    this.index++;\n  }\n};\n\nAmount.prototype.append = function(value) {\n  if(this.index - _.indexOf(this.amount, '.') !== this.truncate+1) {\n    this.amount.splice(this.index, 0, value.toString());\n    this.index++;\n  }\n};\n\nAmount.prototype.remove = function() {\n  if(this.index === 0) return;\n  this.index--;\n  if(this.amount[this.index] !== '.') {\n    this.amount.splice(this.index, 1);\n  }\n};\n//@ sourceURL=amount/index.js"
-));
-require.register("purchase/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar Amount = require('amount');\n\n/**\n * Model\n */\n\nvar Model = module.exports = Backbone.Model.extend({\n\n  initialize: function() {\n    if(!this.get('date')) {\n      this.set('date', new Date().valueOf());\n    }\n    \n    this.amount = new Amount(this.get('amount'));\n\n    this.on('modifyAmount', function(value) {\n      if(isNaN(value)) {\n        if(value === 'del') {\n          this.amount.remove();\n        } else {\n          this.amount.toDecimal();\n        }\n      } else {\n        this.amount.append(value);\n      }\n      this.set('amount', this.amount.value());\n    });\n\n    this.on('change:categoryId', function() {\n      this.trigger('change:categoryColor change:categoryName');\n    }, this);\n\n  },\n\n  defaults: {\n    'amount': 0,\n    'categoryId': null,\n    'note': '',\n    'date': 0,\n    'expense': false\n  }\n\n});\n//@ sourceURL=purchase/index.js"
-));
-require.register("purchases/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar purchase = require('purchase');\nvar Store = require('backbone.localStorage');\nvar moment = require('moment');\n\n/**\n * Collection\n */\n\nvar Purchases = module.exports = Backbone.Collection.extend({\n\n  model: purchase,\n\n  localStorage: new Store('purchases'),\n\n  initialize: function() {\n    this.on('change', _.bind(function(model) {\n      var monthGroup = moment(model.get('date')).format('YYYY') + moment(model.get('date')).format('MM');\n      this.trigger('change:month' + monthGroup); \n    }, this));\n  },\n\n  comparator: function(purchase) {\n    return -purchase.get('date');\n  }\n\n});\n\n/**\n * Expose collection instance.\n */\n\nmodule.exports = new Purchases();\n//@ sourceURL=purchases/index.js"
-));
-require.register("category/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Model dependencies.\n */\n\nvar Backbone = require('backbone');\n\n/**\n * Model\n */\n\nvar Model = module.exports = Backbone.Model.extend( {\n\n  initialize: function() {\n    if(!this.get('color')) {\n      // color functions invalid!!! change!\n      this.set('color', get_random_color());\n    }\n    this.on('usage:increase', this.increaseUsage);\n    this.on('usage:decrease', this.decreaseUsage);\n  },\n  \n  defaults: {\n    'name': '',\n    'color': null,\n    'usage': 0,\n    'default': false\n  },\n  \n  increaseUsage: function() {\n    this.set('usage', this.get('usage') + 1);\n    this.save();\n  },\n\n  decreaseUsage: function() {\n    this.set('usage', this.get('usage') - 1);\n    this.save();\n  }\n});\n\nfunction get_random_color() {\n    var letters = '0123456789ABCDEF'.split('');\n    var color = '#';\n    for (var i = 0; i < 6; i++ ) {\n        color += letters[Math.round(Math.random() * 15)];\n    }\n    return color;\n}\n\nfunction getRandColor(brightness){\n  //6 levels of brightness from 0 to 5, 0 being the darkest\n  var rgb = [Math.random() * 256, Math.random() * 256, Math.random() * 256];\n  var mix = [brightness*51, brightness*51, brightness*51]; //51 => 255/5\n  var mixedrgb = [rgb[0] + mix[0], rgb[1] + mix[1], rgb[2] + mix[2]].map(function(x){ return Math.round(x/2.0);});\n  return \"rgb(\" + mixedrgb.join(\",\") + \")\";\n}\n\n/**\n * This function generates vibrant, \"evenly spaced\" colours (i.e. no clustering). This is ideal for creating easily distiguishable vibrant markers in Google Maps and other apps.\n * Adam Cole, 2011-Sept-14\n * HSV to RBG adapted from: http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript\n */\n\nfunction rainbow(numOfSteps, step) {\n    var r, g, b;\n    var h = step / numOfSteps;\n    var i = ~~(h * 6);\n    var f = h * 6 - i;\n    var q = 1 - f;\n    switch(i % 6){\n        case 0: r = 1, g = f, b = 0; break;\n        case 1: r = q, g = 1, b = 0; break;\n        case 2: r = 0, g = 1, b = f; break;\n        case 3: r = 0, g = q, b = 1; break;\n        case 4: r = f, g = 0, b = 1; break;\n        case 5: r = 1, g = 0, b = q; break;\n    }\n    var c = \"#\" + (\"00\" + (~ ~(r * 255)).toString(16)).slice(-2) + (\"00\" + (~ ~(g * 255)).toString(16)).slice(-2) + (\"00\" + (~ ~(b * 255)).toString(16)).slice(-2);\n    return (c);\n}\n//@ sourceURL=category/index.js"
-));
-require.register("categories/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar category = require('category');\nvar Store = require('backbone.localStorage');\n\n\n/**\n * Collection\n */\n\nvar Categories = module.exports = Backbone.Collection.extend({\n\n  model: category,\n\n  localStorage: new Store('categories'),\n\n  comparator: function(category) {\n    return category.get('usage');\n  },\n\n  getMostUsed: function() {\n    return this.reduce(function(previousCategory, category) {\n      return category.get('usage') > previousCategory.get('usage') ? category : previousCategory;\n    });\n  }\n\n});\n\n/**\n * Expose collection instance.\n */\n\nmodule.exports = new Categories();\n//@ sourceURL=categories/index.js"
-));
+require.register("component-zepto/index.js", function(exports, require, module){
+;(function(){//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function(undefined){
+  if (String.prototype.trim === undefined) // fix for iOS 3.2
+    String.prototype.trim = function(){ return this.replace(/^\s+/, '').replace(/\s+$/, '') }
+
+  // For iOS 3.x
+  // from https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/reduce
+  if (Array.prototype.reduce === undefined)
+    Array.prototype.reduce = function(fun){
+      if(this === void 0 || this === null) throw new TypeError()
+      var t = Object(this), len = t.length >>> 0, k = 0, accumulator
+      if(typeof fun != 'function') throw new TypeError()
+      if(len == 0 && arguments.length == 1) throw new TypeError()
+
+      if(arguments.length >= 2)
+       accumulator = arguments[1]
+      else
+        do{
+          if(k in t){
+            accumulator = t[k++]
+            break
+          }
+          if(++k >= len) throw new TypeError()
+        } while (true)
+
+      while (k < len){
+        if(k in t) accumulator = fun.call(undefined, accumulator, t[k], k, t)
+        k++
+      }
+      return accumulator
+    }
+
+})()
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+var Zepto = (function() {
+  var undefined, key, $, classList, emptyArray = [], slice = emptyArray.slice,
+    document = window.document,
+    elementDisplay = {}, classCache = {},
+    getComputedStyle = document.defaultView.getComputedStyle,
+    cssNumber = { 'column-count': 1, 'columns': 1, 'font-weight': 1, 'line-height': 1,'opacity': 1, 'z-index': 1, 'zoom': 1 },
+    fragmentRE = /^\s*<(\w+|!)[^>]*>/,
+    tagExpanderRE = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/ig,
+
+    // Used by `$.zepto.init` to wrap elements, text/comment nodes, document,
+    // and document fragment node types.
+    elementTypes = [1, 3, 8, 9, 11],
+
+    adjacencyOperators = [ 'after', 'prepend', 'before', 'append' ],
+    table = document.createElement('table'),
+    tableRow = document.createElement('tr'),
+    containers = {
+      'tr': document.createElement('tbody'),
+      'tbody': table, 'thead': table, 'tfoot': table,
+      'td': tableRow, 'th': tableRow,
+      '*': document.createElement('div')
+    },
+    readyRE = /complete|loaded|interactive/,
+    classSelectorRE = /^\.([\w-]+)$/,
+    idSelectorRE = /^#([\w-]+)$/,
+    tagSelectorRE = /^[\w-]+$/,
+    toString = {}.toString,
+    zepto = {},
+    camelize, uniq,
+    tempParent = document.createElement('div')
+
+  zepto.matches = function(element, selector) {
+    if (!element || element.nodeType !== 1) return false
+    var matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
+                          element.oMatchesSelector || element.matchesSelector
+    if (matchesSelector) return matchesSelector.call(element, selector)
+    // fall back to performing a selector:
+    var match, parent = element.parentNode, temp = !parent
+    if (temp) (parent = tempParent).appendChild(element)
+    match = ~zepto.qsa(parent, selector).indexOf(element)
+    temp && tempParent.removeChild(element)
+    return match
+  }
+
+  function isFunction(value) { return toString.call(value) == "[object Function]" }
+  function isObject(value) { return value instanceof Object }
+  function isPlainObject(value) {
+    return isObject(value) && value.__proto__ == Object.prototype
+  }
+  function isArray(value) { return value instanceof Array }
+  function likeArray(obj) { return typeof obj.length == 'number' }
+
+  function compact(array) { return array.filter(function(item){ return item !== undefined && item !== null }) }
+  function flatten(array) { return array.length > 0 ? [].concat.apply([], array) : array }
+  camelize = function(str){ return str.replace(/-+(.)?/g, function(match, chr){ return chr ? chr.toUpperCase() : '' }) }
+  function dasherize(str) {
+    return str.replace(/::/g, '/')
+           .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+           .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+           .replace(/_/g, '-')
+           .toLowerCase()
+  }
+  uniq = function(array){ return array.filter(function(item, idx){ return array.indexOf(item) == idx }) }
+
+  function classRE(name) {
+    return name in classCache ?
+      classCache[name] : (classCache[name] = new RegExp('(^|\\s)' + name + '(\\s|$)'))
+  }
+
+  function maybeAddPx(name, value) {
+    return (typeof value == "number" && !cssNumber[dasherize(name)]) ? value + "px" : value
+  }
+
+  function defaultDisplay(nodeName) {
+    var element, display
+    if (!elementDisplay[nodeName]) {
+      element = document.createElement(nodeName)
+      document.body.appendChild(element)
+      display = getComputedStyle(element, '').getPropertyValue("display")
+      element.parentNode.removeChild(element)
+      display == "none" && (display = "block")
+      elementDisplay[nodeName] = display
+    }
+    return elementDisplay[nodeName]
+  }
+
+  // `$.zepto.fragment` takes a html string and an optional tag name
+  // to generate DOM nodes nodes from the given html string.
+  // The generated DOM nodes are returned as an array.
+  // This function can be overriden in plugins for example to make
+  // it compatible with browsers that don't support the DOM fully.
+  zepto.fragment = function(html, name) {
+    if (html.replace) html = html.replace(tagExpanderRE, "<$1></$2>")
+    if (name === undefined) name = fragmentRE.test(html) && RegExp.$1
+    if (!(name in containers)) name = '*'
+
+    var container = containers[name]
+    container.innerHTML = '' + html
+    return $.each(slice.call(container.childNodes), function(){
+      container.removeChild(this)
+    })
+  }
+
+  // `$.zepto.Z` swaps out the prototype of the given `dom` array
+  // of nodes with `$.fn` and thus supplying all the Zepto functions
+  // to the array. Note that `__proto__` is not supported on Internet
+  // Explorer. This method can be overriden in plugins.
+  zepto.Z = function(dom, selector) {
+    dom = dom || []
+    dom.__proto__ = arguments.callee.prototype
+    dom.selector = selector || ''
+    return dom
+  }
+
+  // `$.zepto.isZ` should return `true` if the given object is a Zepto
+  // collection. This method can be overriden in plugins.
+  zepto.isZ = function(object) {
+    return object instanceof zepto.Z
+  }
+
+  // `$.zepto.init` is Zepto's counterpart to jQuery's `$.fn.init` and
+  // takes a CSS selector and an optional context (and handles various
+  // special cases).
+  // This method can be overriden in plugins.
+  zepto.init = function(selector, context) {
+    // If nothing given, return an empty Zepto collection
+    if (!selector) return zepto.Z()
+    // If a function is given, call it when the DOM is ready
+    else if (isFunction(selector)) return $(document).ready(selector)
+    // If a Zepto collection is given, juts return it
+    else if (zepto.isZ(selector)) return selector
+    else {
+      var dom
+      // normalize array if an array of nodes is given
+      if (isArray(selector)) dom = compact(selector)
+      // if a JavaScript object is given, return a copy of it
+      // this is a somewhat peculiar option, but supported by
+      // jQuery so we'll do it, too
+      else if (isPlainObject(selector))
+        dom = [$.extend({}, selector)], selector = null
+      // wrap stuff like `document` or `window`
+      else if (elementTypes.indexOf(selector.nodeType) >= 0 || selector === window)
+        dom = [selector], selector = null
+      // If it's a html fragment, create nodes from it
+      else if (fragmentRE.test(selector))
+        dom = zepto.fragment(selector.trim(), RegExp.$1), selector = null
+      // If there's a context, create a collection on that context first, and select
+      // nodes from there
+      else if (context !== undefined) return $(context).find(selector)
+      // And last but no least, if it's a CSS selector, use it to select nodes.
+      else dom = zepto.qsa(document, selector)
+      // create a new Zepto collection from the nodes found
+      return zepto.Z(dom, selector)
+    }
+  }
+
+  // `$` will be the base `Zepto` object. When calling this
+  // function just call `$.zepto.init, whichs makes the implementation
+  // details of selecting nodes and creating Zepto collections
+  // patchable in plugins.
+  $ = function(selector, context){
+    return zepto.init(selector, context)
+  }
+
+  // Copy all but undefined properties from one or more
+  // objects to the `target` object.
+  $.extend = function(target){
+    slice.call(arguments, 1).forEach(function(source) {
+      for (key in source)
+        if (source[key] !== undefined)
+          target[key] = source[key]
+    })
+    return target
+  }
+
+  // `$.zepto.qsa` is Zepto's CSS selector implementation which
+  // uses `document.querySelectorAll` and optimizes for some special cases, like `#id`.
+  // This method can be overriden in plugins.
+  zepto.qsa = function(element, selector){
+    var found
+    return (element === document && idSelectorRE.test(selector)) ?
+      ( (found = element.getElementById(RegExp.$1)) ? [found] : emptyArray ) :
+      (element.nodeType !== 1 && element.nodeType !== 9) ? emptyArray :
+      slice.call(
+        classSelectorRE.test(selector) ? element.getElementsByClassName(RegExp.$1) :
+        tagSelectorRE.test(selector) ? element.getElementsByTagName(selector) :
+        element.querySelectorAll(selector)
+      )
+  }
+
+  function filtered(nodes, selector) {
+    return selector === undefined ? $(nodes) : $(nodes).filter(selector)
+  }
+
+  function funcArg(context, arg, idx, payload) {
+   return isFunction(arg) ? arg.call(context, idx, payload) : arg
+  }
+
+  $.isFunction = isFunction
+  $.isObject = isObject
+  $.isArray = isArray
+  $.isPlainObject = isPlainObject
+
+  $.inArray = function(elem, array, i){
+    return emptyArray.indexOf.call(array, elem, i)
+  }
+
+  $.trim = function(str) { return str.trim() }
+
+  // plugin compatibility
+  $.uuid = 0
+
+  $.map = function(elements, callback){
+    var value, values = [], i, key
+    if (likeArray(elements))
+      for (i = 0; i < elements.length; i++) {
+        value = callback(elements[i], i)
+        if (value != null) values.push(value)
+      }
+    else
+      for (key in elements) {
+        value = callback(elements[key], key)
+        if (value != null) values.push(value)
+      }
+    return flatten(values)
+  }
+
+  $.each = function(elements, callback){
+    var i, key
+    if (likeArray(elements)) {
+      for (i = 0; i < elements.length; i++)
+        if (callback.call(elements[i], i, elements[i]) === false) return elements
+    } else {
+      for (key in elements)
+        if (callback.call(elements[key], key, elements[key]) === false) return elements
+    }
+
+    return elements
+  }
+
+  // Define methods that will be available on all
+  // Zepto collections
+  $.fn = {
+    // Because a collection acts like an array
+    // copy over these useful array functions.
+    forEach: emptyArray.forEach,
+    reduce: emptyArray.reduce,
+    push: emptyArray.push,
+    indexOf: emptyArray.indexOf,
+    concat: emptyArray.concat,
+
+    // `map` and `slice` in the jQuery API work differently
+    // from their array counterparts
+    map: function(fn){
+      return $.map(this, function(el, i){ return fn.call(el, i, el) })
+    },
+    slice: function(){
+      return $(slice.apply(this, arguments))
+    },
+
+    ready: function(callback){
+      if (readyRE.test(document.readyState)) callback($)
+      else document.addEventListener('DOMContentLoaded', function(){ callback($) }, false)
+      return this
+    },
+    get: function(idx){
+      return idx === undefined ? slice.call(this) : this[idx]
+    },
+    toArray: function(){ return this.get() },
+    size: function(){
+      return this.length
+    },
+    remove: function(){
+      return this.each(function(){
+        if (this.parentNode != null)
+          this.parentNode.removeChild(this)
+      })
+    },
+    each: function(callback){
+      this.forEach(function(el, idx){ callback.call(el, idx, el) })
+      return this
+    },
+    filter: function(selector){
+      if (isFunction(selector)) return this.not(this.not(selector))
+      return $([].filter.call(this, function(element){
+        return zepto.matches(element, selector)
+      }))
+    },
+    add: function(selector,context){
+      return $(uniq(this.concat($(selector,context))))
+    },
+    is: function(selector){
+      return this.length > 0 && zepto.matches(this[0], selector)
+    },
+    not: function(selector){
+      var nodes=[]
+      if (isFunction(selector) && selector.call !== undefined)
+        this.each(function(idx){
+          if (!selector.call(this,idx)) nodes.push(this)
+        })
+      else {
+        var excludes = typeof selector == 'string' ? this.filter(selector) :
+          (likeArray(selector) && isFunction(selector.item)) ? slice.call(selector) : $(selector)
+        this.forEach(function(el){
+          if (excludes.indexOf(el) < 0) nodes.push(el)
+        })
+      }
+      return $(nodes)
+    },
+    eq: function(idx){
+      return idx === -1 ? this.slice(idx) : this.slice(idx, + idx + 1)
+    },
+    first: function(){
+      var el = this[0]
+      return el && !isObject(el) ? el : $(el)
+    },
+    last: function(){
+      var el = this[this.length - 1]
+      return el && !isObject(el) ? el : $(el)
+    },
+    find: function(selector){
+      var result
+      if (this.length == 1) result = zepto.qsa(this[0], selector)
+      else result = this.map(function(){ return zepto.qsa(this, selector) })
+      return $(result)
+    },
+    closest: function(selector, context){
+      var node = this[0]
+      while (node && !zepto.matches(node, selector))
+        node = node !== context && node !== document && node.parentNode
+      return $(node)
+    },
+    parents: function(selector){
+      var ancestors = [], nodes = this
+      while (nodes.length > 0)
+        nodes = $.map(nodes, function(node){
+          if ((node = node.parentNode) && node !== document && ancestors.indexOf(node) < 0) {
+            ancestors.push(node)
+            return node
+          }
+        })
+      return filtered(ancestors, selector)
+    },
+    parent: function(selector){
+      return filtered(uniq(this.pluck('parentNode')), selector)
+    },
+    children: function(selector){
+      return filtered(this.map(function(){ return slice.call(this.children) }), selector)
+    },
+    siblings: function(selector){
+      return filtered(this.map(function(i, el){
+        return slice.call(el.parentNode.children).filter(function(child){ return child!==el })
+      }), selector)
+    },
+    empty: function(){
+      return this.each(function(){ this.innerHTML = '' })
+    },
+    // `pluck` is borrowed from Prototype.js
+    pluck: function(property){
+      return this.map(function(){ return this[property] })
+    },
+    show: function(){
+      return this.each(function(){
+        this.style.display == "none" && (this.style.display = null)
+        if (getComputedStyle(this, '').getPropertyValue("display") == "none")
+          this.style.display = defaultDisplay(this.nodeName)
+      })
+    },
+    replaceWith: function(newContent){
+      return this.before(newContent).remove()
+    },
+    wrap: function(newContent){
+      return this.each(function(){
+        $(this).wrapAll($(newContent)[0].cloneNode(false))
+      })
+    },
+    wrapAll: function(newContent){
+      if (this[0]) {
+        $(this[0]).before(newContent = $(newContent))
+        newContent.append(this)
+      }
+      return this
+    },
+    unwrap: function(){
+      this.parent().each(function(){
+        $(this).replaceWith($(this).children())
+      })
+      return this
+    },
+    clone: function(){
+      return $(this.map(function(){ return this.cloneNode(true) }))
+    },
+    hide: function(){
+      return this.css("display", "none")
+    },
+    toggle: function(setting){
+      return (setting === undefined ? this.css("display") == "none" : setting) ? this.show() : this.hide()
+    },
+    prev: function(selector){ return $(this.pluck('previousElementSibling')).filter(selector || '*') },
+    next: function(selector){ return $(this.pluck('nextElementSibling')).filter(selector || '*') },
+    html: function(html){
+      return html === undefined ?
+        (this.length > 0 ? this[0].innerHTML : null) :
+        this.each(function(idx){
+          var originHtml = this.innerHTML
+          $(this).empty().append( funcArg(this, html, idx, originHtml) )
+        })
+    },
+    text: function(text){
+      return text === undefined ?
+        (this.length > 0 ? this[0].textContent : null) :
+        this.each(function(){ this.textContent = text })
+    },
+    attr: function(name, value){
+      var result
+      return (typeof name == 'string' && value === undefined) ?
+        (this.length == 0 || this[0].nodeType !== 1 ? undefined :
+          (name == 'value' && this[0].nodeName == 'INPUT') ? this.val() :
+          (!(result = this[0].getAttribute(name)) && name in this[0]) ? this[0][name] : result
+        ) :
+        this.each(function(idx){
+          if (this.nodeType !== 1) return
+          if (isObject(name)) for (key in name) this.setAttribute(key, name[key])
+          else this.setAttribute(name, funcArg(this, value, idx, this.getAttribute(name)))
+        })
+    },
+    removeAttr: function(name){
+      return this.each(function(){ if (this.nodeType === 1) this.removeAttribute(name) })
+    },
+    prop: function(name, value){
+      return (value === undefined) ?
+        (this[0] ? this[0][name] : undefined) :
+        this.each(function(idx){
+          this[name] = funcArg(this, value, idx, this[name])
+        })
+    },
+    data: function(name, value){
+      var data = this.attr('data-' + dasherize(name), value)
+      return data !== null ? data : undefined
+    },
+    val: function(value){
+      return (value === undefined) ?
+        (this.length > 0 ?
+          (this[0].multiple ? $(this[0]).find('option').filter(function(o){ return this.selected }).pluck('value') : this[0].value) :
+          undefined) :
+        this.each(function(idx){
+          this.value = funcArg(this, value, idx, this.value)
+        })
+    },
+    offset: function(){
+      if (this.length==0) return null
+      var obj = this[0].getBoundingClientRect()
+      return {
+        left: obj.left + window.pageXOffset,
+        top: obj.top + window.pageYOffset,
+        width: obj.width,
+        height: obj.height
+      }
+    },
+    css: function(property, value){
+      if (value === undefined && typeof property == 'string')
+        return (
+          this.length == 0
+            ? undefined
+            : this[0].style[camelize(property)] || getComputedStyle(this[0], '').getPropertyValue(property))
+
+      var css = ''
+      for (key in property)
+        if(typeof property[key] == 'string' && property[key] == '')
+          this.each(function(){ this.style.removeProperty(dasherize(key)) })
+        else
+          css += dasherize(key) + ':' + maybeAddPx(key, property[key]) + ';'
+
+      if (typeof property == 'string')
+        if (value == '')
+          this.each(function(){ this.style.removeProperty(dasherize(property)) })
+        else
+          css = dasherize(property) + ":" + maybeAddPx(property, value)
+
+      return this.each(function(){ this.style.cssText += ';' + css })
+    },
+    index: function(element){
+      return element ? this.indexOf($(element)[0]) : this.parent().children().indexOf(this[0])
+    },
+    hasClass: function(name){
+      if (this.length < 1) return false
+      else return classRE(name).test(this[0].className)
+    },
+    addClass: function(name){
+      return this.each(function(idx){
+        classList = []
+        var cls = this.className, newName = funcArg(this, name, idx, cls)
+        newName.split(/\s+/g).forEach(function(klass){
+          if (!$(this).hasClass(klass)) classList.push(klass)
+        }, this)
+        classList.length && (this.className += (cls ? " " : "") + classList.join(" "))
+      })
+    },
+    removeClass: function(name){
+      return this.each(function(idx){
+        if (name === undefined)
+          return this.className = ''
+        classList = this.className
+        funcArg(this, name, idx, classList).split(/\s+/g).forEach(function(klass){
+          classList = classList.replace(classRE(klass), " ")
+        })
+        this.className = classList.trim()
+      })
+    },
+    toggleClass: function(name, when){
+      return this.each(function(idx){
+        var newName = funcArg(this, name, idx, this.className)
+        ;(when === undefined ? !$(this).hasClass(newName) : when) ?
+          $(this).addClass(newName) : $(this).removeClass(newName)
+      })
+    }
+  }
+
+  // Generate the `width` and `height` functions
+  ;['width', 'height'].forEach(function(dimension){
+    $.fn[dimension] = function(value){
+      var offset, Dimension = dimension.replace(/./, function(m){ return m[0].toUpperCase() })
+      if (value === undefined) return this[0] == window ? window['inner' + Dimension] :
+        this[0] == document ? document.documentElement['offset' + Dimension] :
+        (offset = this.offset()) && offset[dimension]
+      else return this.each(function(idx){
+        var el = $(this)
+        el.css(dimension, funcArg(this, value, idx, el[dimension]()))
+      })
+    }
+  })
+
+  function insert(operator, target, node) {
+    var parent = (operator % 2) ? target : target.parentNode
+    parent ? parent.insertBefore(node,
+      !operator ? target.nextSibling :      // after
+      operator == 1 ? parent.firstChild :   // prepend
+      operator == 2 ? target :              // before
+      null) :                               // append
+      $(node).remove()
+  }
+
+  function traverseNode(node, fun) {
+    fun(node)
+    for (var key in node.childNodes) traverseNode(node.childNodes[key], fun)
+  }
+
+  // Generate the `after`, `prepend`, `before`, `append`,
+  // `insertAfter`, `insertBefore`, `appendTo`, and `prependTo` methods.
+  adjacencyOperators.forEach(function(key, operator) {
+    $.fn[key] = function(){
+      // arguments can be nodes, arrays of nodes, Zepto objects and HTML strings
+      var nodes = $.map(arguments, function(n){ return isObject(n) ? n : zepto.fragment(n) })
+      if (nodes.length < 1) return this
+      var size = this.length, copyByClone = size > 1, inReverse = operator < 2
+
+      return this.each(function(index, target){
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[inReverse ? nodes.length-i-1 : i]
+          traverseNode(node, function(node){
+            if (node.nodeName != null && node.nodeName.toUpperCase() === 'SCRIPT' && (!node.type || node.type === 'text/javascript'))
+              window['eval'].call(window, node.innerHTML)
+          })
+          if (copyByClone && index < size - 1) node = node.cloneNode(true)
+          insert(operator, target, node)
+        }
+      })
+    }
+
+    $.fn[(operator % 2) ? key+'To' : 'insert'+(operator ? 'Before' : 'After')] = function(html){
+      $(html)[key](this)
+      return this
+    }
+  })
+
+  zepto.Z.prototype = $.fn
+
+  // Export internal API functions in the `$.zepto` namespace
+  zepto.camelize = camelize
+  zepto.uniq = uniq
+  $.zepto = zepto
+
+  return $
+})()
+
+// If `$` is not yet defined, point it to `Zepto`
+window.Zepto = Zepto
+'$' in window || (window.$ = Zepto)
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function($){
+  var $$ = $.zepto.qsa, handlers = {}, _zid = 1, specialEvents={}
+
+  specialEvents.click = specialEvents.mousedown = specialEvents.mouseup = specialEvents.mousemove = 'MouseEvents'
+
+  function zid(element) {
+    return element._zid || (element._zid = _zid++)
+  }
+  function findHandlers(element, event, fn, selector) {
+    event = parse(event)
+    if (event.ns) var matcher = matcherFor(event.ns)
+    return (handlers[zid(element)] || []).filter(function(handler) {
+      return handler
+        && (!event.e  || handler.e == event.e)
+        && (!event.ns || matcher.test(handler.ns))
+        && (!fn       || zid(handler.fn) === zid(fn))
+        && (!selector || handler.sel == selector)
+    })
+  }
+  function parse(event) {
+    var parts = ('' + event).split('.')
+    return {e: parts[0], ns: parts.slice(1).sort().join(' ')}
+  }
+  function matcherFor(ns) {
+    return new RegExp('(?:^| )' + ns.replace(' ', ' .* ?') + '(?: |$)')
+  }
+
+  function eachEvent(events, fn, iterator){
+    if ($.isObject(events)) $.each(events, iterator)
+    else events.split(/\s/).forEach(function(type){ iterator(type, fn) })
+  }
+
+  function add(element, events, fn, selector, getDelegate, capture){
+    capture = !!capture
+    var id = zid(element), set = (handlers[id] || (handlers[id] = []))
+    eachEvent(events, fn, function(event, fn){
+      var delegate = getDelegate && getDelegate(fn, event),
+        callback = delegate || fn
+      var proxyfn = function (event) {
+        var result = callback.apply(element, [event].concat(event.data))
+        if (result === false) event.preventDefault()
+        return result
+      }
+      var handler = $.extend(parse(event), {fn: fn, proxy: proxyfn, sel: selector, del: delegate, i: set.length})
+      set.push(handler)
+      element.addEventListener(handler.e, proxyfn, capture)
+    })
+  }
+  function remove(element, events, fn, selector){
+    var id = zid(element)
+    eachEvent(events || '', fn, function(event, fn){
+      findHandlers(element, event, fn, selector).forEach(function(handler){
+        delete handlers[id][handler.i]
+        element.removeEventListener(handler.e, handler.proxy, false)
+      })
+    })
+  }
+
+  $.event = { add: add, remove: remove }
+
+  $.proxy = function(fn, context) {
+    if ($.isFunction(fn)) {
+      var proxyFn = function(){ return fn.apply(context, arguments) }
+      proxyFn._zid = zid(fn)
+      return proxyFn
+    } else if (typeof context == 'string') {
+      return $.proxy(fn[context], fn)
+    } else {
+      throw new TypeError("expected function")
+    }
+  }
+
+  $.fn.bind = function(event, callback){
+    return this.each(function(){
+      add(this, event, callback)
+    })
+  }
+  $.fn.unbind = function(event, callback){
+    return this.each(function(){
+      remove(this, event, callback)
+    })
+  }
+  $.fn.one = function(event, callback){
+    return this.each(function(i, element){
+      add(this, event, callback, null, function(fn, type){
+        return function(){
+          var result = fn.apply(element, arguments)
+          remove(element, type, fn)
+          return result
+        }
+      })
+    })
+  }
+
+  var returnTrue = function(){return true},
+      returnFalse = function(){return false},
+      eventMethods = {
+        preventDefault: 'isDefaultPrevented',
+        stopImmediatePropagation: 'isImmediatePropagationStopped',
+        stopPropagation: 'isPropagationStopped'
+      }
+  function createProxy(event) {
+    var proxy = $.extend({originalEvent: event}, event)
+    $.each(eventMethods, function(name, predicate) {
+      proxy[name] = function(){
+        this[predicate] = returnTrue
+        return event[name].apply(event, arguments)
+      }
+      proxy[predicate] = returnFalse
+    })
+    return proxy
+  }
+
+  // emulates the 'defaultPrevented' property for browsers that have none
+  function fix(event) {
+    if (!('defaultPrevented' in event)) {
+      event.defaultPrevented = false
+      var prevent = event.preventDefault
+      event.preventDefault = function() {
+        this.defaultPrevented = true
+        prevent.call(this)
+      }
+    }
+  }
+
+  $.fn.delegate = function(selector, event, callback){
+    var capture = false
+    if(event == 'blur' || event == 'focus'){
+      if($.iswebkit)
+        event = event == 'blur' ? 'focusout' : event == 'focus' ? 'focusin' : event
+      else
+        capture = true
+    }
+
+    return this.each(function(i, element){
+      add(element, event, callback, selector, function(fn){
+        return function(e){
+          var evt, match = $(e.target).closest(selector, element).get(0)
+          if (match) {
+            evt = $.extend(createProxy(e), {currentTarget: match, liveFired: element})
+            return fn.apply(match, [evt].concat([].slice.call(arguments, 1)))
+          }
+        }
+      }, capture)
+    })
+  }
+  $.fn.undelegate = function(selector, event, callback){
+    return this.each(function(){
+      remove(this, event, callback, selector)
+    })
+  }
+
+  $.fn.live = function(event, callback){
+    $(document.body).delegate(this.selector, event, callback)
+    return this
+  }
+  $.fn.die = function(event, callback){
+    $(document.body).undelegate(this.selector, event, callback)
+    return this
+  }
+
+  $.fn.on = function(event, selector, callback){
+    return selector == undefined || $.isFunction(selector) ?
+      this.bind(event, selector || callback) : this.delegate(selector, event, callback)
+  }
+  $.fn.off = function(event, selector, callback){
+    return selector == undefined || $.isFunction(selector) ?
+      this.unbind(event, selector || callback) : this.undelegate(selector, event, callback)
+  }
+
+  $.fn.trigger = function(event, data){
+    if (typeof event == 'string') event = $.Event(event)
+    fix(event)
+    event.data = data
+    return this.each(function(){
+      // items in the collection might not be DOM elements
+      // (todo: possibly support events on plain old objects)
+      if('dispatchEvent' in this) this.dispatchEvent(event)
+    })
+  }
+
+  // triggers event handlers on current element just as if an event occurred,
+  // doesn't trigger an actual event, doesn't bubble
+  $.fn.triggerHandler = function(event, data){
+    var e, result
+    this.each(function(i, element){
+      e = createProxy(typeof event == 'string' ? $.Event(event) : event)
+      e.data = data
+      e.target = element
+      $.each(findHandlers(element, event.type || event), function(i, handler){
+        result = handler.proxy(e)
+        if (e.isImmediatePropagationStopped()) return false
+      })
+    })
+    return result
+  }
+
+  // shortcut methods for `.bind(event, fn)` for each event type
+  ;('focusin focusout load resize scroll unload click dblclick '+
+  'mousedown mouseup mousemove mouseover mouseout '+
+  'change select keydown keypress keyup error').split(' ').forEach(function(event) {
+    $.fn[event] = function(callback){ return this.bind(event, callback) }
+  })
+
+  ;['focus', 'blur'].forEach(function(name) {
+    $.fn[name] = function(callback) {
+      if (callback) this.bind(name, callback)
+      else if (this.length) try { this.get(0)[name]() } catch(e){}
+      return this
+    }
+  })
+
+  $.Event = function(type, props) {
+    var event = document.createEvent(specialEvents[type] || 'Events'), bubbles = true
+    if (props) for (var name in props) (name == 'bubbles') ? (bubbles = !!props[name]) : (event[name] = props[name])
+    event.initEvent(type, bubbles, true, null, null, null, null, null, null, null, null, null, null, null, null)
+    return event
+  }
+
+})(Zepto)
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function($){
+  function detect(ua){
+    var os = this.os = {}, browser = this.browser = {},
+      webkit = ua.match(/WebKit\/([\d.]+)/),
+      android = ua.match(/(Android)\s+([\d.]+)/),
+      ipad = ua.match(/(iPad).*OS\s([\d_]+)/),
+      iphone = !ipad && ua.match(/(iPhone\sOS)\s([\d_]+)/),
+      webos = ua.match(/(webOS|hpwOS)[\s\/]([\d.]+)/),
+      touchpad = webos && ua.match(/TouchPad/),
+      kindle = ua.match(/Kindle\/([\d.]+)/),
+      silk = ua.match(/Silk\/([\d._]+)/),
+      blackberry = ua.match(/(BlackBerry).*Version\/([\d.]+)/)
+
+    // todo clean this up with a better OS/browser
+    // separation. we need to discern between multiple
+    // browsers on android, and decide if kindle fire in
+    // silk mode is android or not
+
+    if (browser.webkit = !!webkit) browser.version = webkit[1]
+
+    if (android) os.android = true, os.version = android[2]
+    if (iphone) os.ios = os.iphone = true, os.version = iphone[2].replace(/_/g, '.')
+    if (ipad) os.ios = os.ipad = true, os.version = ipad[2].replace(/_/g, '.')
+    if (webos) os.webos = true, os.version = webos[2]
+    if (touchpad) os.touchpad = true
+    if (blackberry) os.blackberry = true, os.version = blackberry[2]
+    if (kindle) os.kindle = true, os.version = kindle[1]
+    if (silk) browser.silk = true, browser.version = silk[1]
+    if (!silk && os.android && ua.match(/Kindle Fire/)) browser.silk = true
+  }
+
+  detect.call($, navigator.userAgent)
+  // make available to unit tests
+  $.__detect = detect
+
+})(Zepto)
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function($, undefined){
+  var prefix = '', eventPrefix, endEventName, endAnimationName,
+    vendors = { Webkit: 'webkit', Moz: '', O: 'o', ms: 'MS' },
+    document = window.document, testEl = document.createElement('div'),
+    supportedTransforms = /^((translate|rotate|scale)(X|Y|Z|3d)?|matrix(3d)?|perspective|skew(X|Y)?)$/i,
+    clearProperties = {}
+
+  function downcase(str) { return str.toLowerCase() }
+  function normalizeEvent(name) { return eventPrefix ? eventPrefix + name : downcase(name) }
+
+  $.each(vendors, function(vendor, event){
+    if (testEl.style[vendor + 'TransitionProperty'] !== undefined) {
+      prefix = '-' + downcase(vendor) + '-'
+      eventPrefix = event
+      return false
+    }
+  })
+
+  clearProperties[prefix + 'transition-property'] =
+  clearProperties[prefix + 'transition-duration'] =
+  clearProperties[prefix + 'transition-timing-function'] =
+  clearProperties[prefix + 'animation-name'] =
+  clearProperties[prefix + 'animation-duration'] = ''
+
+  $.fx = {
+    off: (eventPrefix === undefined && testEl.style.transitionProperty === undefined),
+    cssPrefix: prefix,
+    transitionEnd: normalizeEvent('TransitionEnd'),
+    animationEnd: normalizeEvent('AnimationEnd')
+  }
+
+  $.fn.animate = function(properties, duration, ease, callback){
+    if ($.isObject(duration))
+      ease = duration.easing, callback = duration.complete, duration = duration.duration
+    if (duration) duration = duration / 1000
+    return this.anim(properties, duration, ease, callback)
+  }
+
+  $.fn.anim = function(properties, duration, ease, callback){
+    var transforms, cssProperties = {}, key, that = this, wrappedCallback, endEvent = $.fx.transitionEnd
+    if (duration === undefined) duration = 0.4
+    if ($.fx.off) duration = 0
+
+    if (typeof properties == 'string') {
+      // keyframe animation
+      cssProperties[prefix + 'animation-name'] = properties
+      cssProperties[prefix + 'animation-duration'] = duration + 's'
+      endEvent = $.fx.animationEnd
+    } else {
+      // CSS transitions
+      for (key in properties)
+        if (supportedTransforms.test(key)) {
+          transforms || (transforms = [])
+          transforms.push(key + '(' + properties[key] + ')')
+        }
+        else cssProperties[key] = properties[key]
+
+      if (transforms) cssProperties[prefix + 'transform'] = transforms.join(' ')
+      if (!$.fx.off && typeof properties === 'object') {
+        cssProperties[prefix + 'transition-property'] = Object.keys(properties).join(', ')
+        cssProperties[prefix + 'transition-duration'] = duration + 's'
+        cssProperties[prefix + 'transition-timing-function'] = (ease || 'linear')
+      }
+    }
+
+    wrappedCallback = function(event){
+      if (typeof event !== 'undefined') {
+        if (event.target !== event.currentTarget) return // makes sure the event didn't bubble from "below"
+        $(event.target).unbind(endEvent, arguments.callee)
+      }
+      $(this).css(clearProperties)
+      callback && callback.call(this)
+    }
+    if (duration > 0) this.bind(endEvent, wrappedCallback)
+
+    setTimeout(function() {
+      that.css(cssProperties)
+      if (duration <= 0) setTimeout(function() {
+        that.each(function(){ wrappedCallback.call(this) })
+      }, 0)
+    }, 0)
+
+    return this
+  }
+
+  testEl = null
+})(Zepto)
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function($){
+  var jsonpID = 0,
+      isObject = $.isObject,
+      document = window.document,
+      key,
+      name,
+      rscript = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+      scriptTypeRE = /^(?:text|application)\/javascript/i,
+      xmlTypeRE = /^(?:text|application)\/xml/i,
+      jsonType = 'application/json',
+      htmlType = 'text/html',
+      blankRE = /^\s*$/
+
+  // trigger a custom event and return false if it was cancelled
+  function triggerAndReturn(context, eventName, data) {
+    var event = $.Event(eventName)
+    $(context).trigger(event, data)
+    return !event.defaultPrevented
+  }
+
+  // trigger an Ajax "global" event
+  function triggerGlobal(settings, context, eventName, data) {
+    if (settings.global) return triggerAndReturn(context || document, eventName, data)
+  }
+
+  // Number of active Ajax requests
+  $.active = 0
+
+  function ajaxStart(settings) {
+    if (settings.global && $.active++ === 0) triggerGlobal(settings, null, 'ajaxStart')
+  }
+  function ajaxStop(settings) {
+    if (settings.global && !(--$.active)) triggerGlobal(settings, null, 'ajaxStop')
+  }
+
+  // triggers an extra global event "ajaxBeforeSend" that's like "ajaxSend" but cancelable
+  function ajaxBeforeSend(xhr, settings) {
+    var context = settings.context
+    if (settings.beforeSend.call(context, xhr, settings) === false ||
+        triggerGlobal(settings, context, 'ajaxBeforeSend', [xhr, settings]) === false)
+      return false
+
+    triggerGlobal(settings, context, 'ajaxSend', [xhr, settings])
+  }
+  function ajaxSuccess(data, xhr, settings) {
+    var context = settings.context, status = 'success'
+    settings.success.call(context, data, status, xhr)
+    triggerGlobal(settings, context, 'ajaxSuccess', [xhr, settings, data])
+    ajaxComplete(status, xhr, settings)
+  }
+  // type: "timeout", "error", "abort", "parsererror"
+  function ajaxError(error, type, xhr, settings) {
+    var context = settings.context
+    settings.error.call(context, xhr, type, error)
+    triggerGlobal(settings, context, 'ajaxError', [xhr, settings, error])
+    ajaxComplete(type, xhr, settings)
+  }
+  // status: "success", "notmodified", "error", "timeout", "abort", "parsererror"
+  function ajaxComplete(status, xhr, settings) {
+    var context = settings.context
+    settings.complete.call(context, xhr, status)
+    triggerGlobal(settings, context, 'ajaxComplete', [xhr, settings])
+    ajaxStop(settings)
+  }
+
+  // Empty function, used as default callback
+  function empty() {}
+
+  $.ajaxJSONP = function(options){
+    var callbackName = 'jsonp' + (++jsonpID),
+      script = document.createElement('script'),
+      abort = function(){
+        $(script).remove()
+        if (callbackName in window) window[callbackName] = empty
+        ajaxComplete('abort', xhr, options)
+      },
+      xhr = { abort: abort }, abortTimeout
+
+    if (options.error) script.onerror = function() {
+      xhr.abort()
+      options.error()
+    }
+
+    window[callbackName] = function(data){
+      clearTimeout(abortTimeout)
+      $(script).remove()
+      delete window[callbackName]
+      ajaxSuccess(data, xhr, options)
+    }
+
+    serializeData(options)
+    script.src = options.url.replace(/=\?/, '=' + callbackName)
+    $('head').append(script)
+
+    if (options.timeout > 0) abortTimeout = setTimeout(function(){
+        xhr.abort()
+        ajaxComplete('timeout', xhr, options)
+      }, options.timeout)
+
+    return xhr
+  }
+
+  $.ajaxSettings = {
+    // Default type of request
+    type: 'GET',
+    // Callback that is executed before request
+    beforeSend: empty,
+    // Callback that is executed if the request succeeds
+    success: empty,
+    // Callback that is executed the the server drops error
+    error: empty,
+    // Callback that is executed on request complete (both: error and success)
+    complete: empty,
+    // The context for the callbacks
+    context: null,
+    // Whether to trigger "global" Ajax events
+    global: true,
+    // Transport
+    xhr: function () {
+      return new window.XMLHttpRequest()
+    },
+    // MIME types mapping
+    accepts: {
+      script: 'text/javascript, application/javascript',
+      json:   jsonType,
+      xml:    'application/xml, text/xml',
+      html:   htmlType,
+      text:   'text/plain'
+    },
+    // Whether the request is to another domain
+    crossDomain: false,
+    // Default timeout
+    timeout: 0
+  }
+
+  function mimeToDataType(mime) {
+    return mime && ( mime == htmlType ? 'html' :
+      mime == jsonType ? 'json' :
+      scriptTypeRE.test(mime) ? 'script' :
+      xmlTypeRE.test(mime) && 'xml' ) || 'text'
+  }
+
+  function appendQuery(url, query) {
+    return (url + '&' + query).replace(/[&?]{1,2}/, '?')
+  }
+
+  // serialize payload and append it to the URL for GET requests
+  function serializeData(options) {
+    if (isObject(options.data)) options.data = $.param(options.data)
+    if (options.data && (!options.type || options.type.toUpperCase() == 'GET'))
+      options.url = appendQuery(options.url, options.data)
+  }
+
+  $.ajax = function(options){
+    var settings = $.extend({}, options || {})
+    for (key in $.ajaxSettings) if (settings[key] === undefined) settings[key] = $.ajaxSettings[key]
+
+    ajaxStart(settings)
+
+    if (!settings.crossDomain) settings.crossDomain = /^([\w-]+:)?\/\/([^\/]+)/.test(settings.url) &&
+      RegExp.$2 != window.location.host
+
+    var dataType = settings.dataType, hasPlaceholder = /=\?/.test(settings.url)
+    if (dataType == 'jsonp' || hasPlaceholder) {
+      if (!hasPlaceholder) settings.url = appendQuery(settings.url, 'callback=?')
+      return $.ajaxJSONP(settings)
+    }
+
+    if (!settings.url) settings.url = window.location.toString()
+    serializeData(settings)
+
+    var mime = settings.accepts[dataType],
+        baseHeaders = { },
+        protocol = /^([\w-]+:)\/\//.test(settings.url) ? RegExp.$1 : window.location.protocol,
+        xhr = $.ajaxSettings.xhr(), abortTimeout
+
+    if (!settings.crossDomain) baseHeaders['X-Requested-With'] = 'XMLHttpRequest'
+    if (mime) {
+      baseHeaders['Accept'] = mime
+      if (mime.indexOf(',') > -1) mime = mime.split(',', 2)[0]
+      xhr.overrideMimeType && xhr.overrideMimeType(mime)
+    }
+    if (settings.contentType || (settings.data && settings.type.toUpperCase() != 'GET'))
+      baseHeaders['Content-Type'] = (settings.contentType || 'application/x-www-form-urlencoded')
+    settings.headers = $.extend(baseHeaders, settings.headers || {})
+
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState == 4) {
+        clearTimeout(abortTimeout)
+        var result, error = false
+        if ((xhr.status >= 200 && xhr.status < 300) || xhr.status == 304 || (xhr.status == 0 && protocol == 'file:')) {
+          dataType = dataType || mimeToDataType(xhr.getResponseHeader('content-type'))
+          result = xhr.responseText
+
+          try {
+            if (dataType == 'script')    (1,eval)(result)
+            else if (dataType == 'xml')  result = xhr.responseXML
+            else if (dataType == 'json') result = blankRE.test(result) ? null : JSON.parse(result)
+          } catch (e) { error = e }
+
+          if (error) ajaxError(error, 'parsererror', xhr, settings)
+          else ajaxSuccess(result, xhr, settings)
+        } else {
+          ajaxError(null, 'error', xhr, settings)
+        }
+      }
+    }
+
+    var async = 'async' in settings ? settings.async : true
+    xhr.open(settings.type, settings.url, async)
+
+    for (name in settings.headers) xhr.setRequestHeader(name, settings.headers[name])
+
+    if (ajaxBeforeSend(xhr, settings) === false) {
+      xhr.abort()
+      return false
+    }
+
+    if (settings.timeout > 0) abortTimeout = setTimeout(function(){
+        xhr.onreadystatechange = empty
+        xhr.abort()
+        ajaxError(null, 'timeout', xhr, settings)
+      }, settings.timeout)
+
+    // avoid sending empty string (#319)
+    xhr.send(settings.data ? settings.data : null)
+    return xhr
+  }
+
+  $.get = function(url, success){ return $.ajax({ url: url, success: success }) }
+
+  $.post = function(url, data, success, dataType){
+    if ($.isFunction(data)) dataType = dataType || success, success = data, data = null
+    return $.ajax({ type: 'POST', url: url, data: data, success: success, dataType: dataType })
+  }
+
+  $.getJSON = function(url, success){
+    return $.ajax({ url: url, success: success, dataType: 'json' })
+  }
+
+  $.fn.load = function(url, success){
+    if (!this.length) return this
+    var self = this, parts = url.split(/\s/), selector
+    if (parts.length > 1) url = parts[0], selector = parts[1]
+    $.get(url, function(response){
+      self.html(selector ?
+        $(document.createElement('div')).html(response.replace(rscript, "")).find(selector).html()
+        : response)
+      success && success.call(self)
+    })
+    return this
+  }
+
+  var escape = encodeURIComponent
+
+  function serialize(params, obj, traditional, scope){
+    var array = $.isArray(obj)
+    $.each(obj, function(key, value) {
+      if (scope) key = traditional ? scope : scope + '[' + (array ? '' : key) + ']'
+      // handle data in serializeArray() format
+      if (!scope && array) params.add(value.name, value.value)
+      // recurse into nested objects
+      else if (traditional ? $.isArray(value) : isObject(value))
+        serialize(params, value, traditional, key)
+      else params.add(key, value)
+    })
+  }
+
+  $.param = function(obj, traditional){
+    var params = []
+    params.add = function(k, v){ this.push(escape(k) + '=' + escape(v)) }
+    serialize(params, obj, traditional)
+    return params.join('&').replace('%20', '+')
+  }
+})(Zepto)
+//     Zepto.js
+//     (c) 2010-2012 Thomas Fuchs
+//     Zepto.js may be freely distributed under the MIT license.
+
+;(function ($) {
+  $.fn.serializeArray = function () {
+    var result = [], el
+    $( Array.prototype.slice.call(this.get(0).elements) ).each(function () {
+      el = $(this)
+      var type = el.attr('type')
+      if (this.nodeName.toLowerCase() != 'fieldset' &&
+        !this.disabled && type != 'submit' && type != 'reset' && type != 'button' &&
+        ((type != 'radio' && type != 'checkbox') || this.checked))
+        result.push({
+          name: el.attr('name'),
+          value: el.val()
+        })
+    })
+    return result
+  }
+
+  $.fn.serialize = function () {
+    var result = []
+    this.serializeArray().forEach(function (elm) {
+      result.push( encodeURIComponent(elm.name) + '=' + encodeURIComponent(elm.value) )
+    })
+    return result.join('&')
+  }
+
+  $.fn.submit = function (callback) {
+    if (callback) this.bind('submit', callback)
+    else if (this.length) {
+      var event = $.Event('submit')
+      this.eq(0).trigger(event)
+      if (!event.defaultPrevented) this.get(0).submit()
+    }
+    return this
+  }
+
+})(Zepto)
+
+module.exports = Zepto;
+
+})();
+});
+require.register("component-format-parser/index.js", function(exports, require, module){
+
+/**
+ * Parse the given format `str`.
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api public
+ */
+
+module.exports = function(str){
+	return str.split(/ *\| */).map(function(call){
+		var parts = call.split(':');
+		var name = parts.shift();
+		var args = parseArgs(parts.join(':'));
+
+		return {
+			name: name,
+			args: args
+		};
+	});
+};
+
+/**
+ * Parse args `str`.
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api private
+ */
+
+function parseArgs(str) {
+	var args = [];
+	var re = /"([^"]*)"|'([^']*)'|([^ \t,]+)/g;
+	var m;
+	
+	while (m = re.exec(str)) {
+		args.push(m[2] || m[1] || m[0]);
+	}
+	
+	return args;
+}
+
+});
+require.register("component-props/index.js", function(exports, require, module){
+
+/**
+ * Return immediate identifiers parsed from `str`.
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api public
+ */
+
+module.exports = function(str, prefix){
+  var p = unique(props(str));
+  if (prefix) return prefixed(str, p, prefix);
+  return p;
+};
+
+/**
+ * Return immediate identifiers in `str`.
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api private
+ */
+
+function props(str) {
+  return str
+    .replace(/\.\w+|\w+ *\(|"[^"]*"|'[^']*'|\/([^/]+)\//g, '')
+    .match(/[a-zA-Z_]\w*/g)
+    || [];
+}
+
+/**
+ * Return `str` with `props` prefixed with `prefix`.
+ *
+ * @param {String} str
+ * @param {Array} props
+ * @param {String} prefix
+ * @return {String}
+ * @api private
+ */
+
+function prefixed(str, props, prefix) {
+  var re = /\.\w+|\w+ *\(|"[^"]*"|'[^']*'|\/([^/]+)\/|[a-zA-Z_]\w*/g;
+  return str.replace(re, function(_){
+    if ('(' == _[_.length - 1]) return prefix + _;
+    if (!~props.indexOf(_)) return _;
+    return prefix + _;
+  });
+}
+
+/**
+ * Return unique array.
+ *
+ * @param {Array} arr
+ * @return {Array}
+ * @api private
+ */
+
+function unique(arr) {
+  var ret = [];
+
+  for (var i = 0; i < arr.length; i++) {
+    if (~ret.indexOf(arr[i])) continue;
+    ret.push(arr[i]);
+  }
+
+  return ret;
+}
+
+});
+require.register("visionmedia-debug/index.js", function(exports, require, module){
+if ('undefined' == typeof window) {
+  module.exports = require('./lib/debug');
+} else {
+  module.exports = require('./debug');
+}
+
+});
+require.register("visionmedia-debug/debug.js", function(exports, require, module){
+
+/**
+ * Expose `debug()` as the module.
+ */
+
+module.exports = debug;
+
+/**
+ * Create a debugger with the given `name`.
+ *
+ * @param {String} name
+ * @return {Type}
+ * @api public
+ */
+
+function debug(name) {
+  if (!debug.enabled(name)) return function(){};
+
+  return function(fmt){
+    fmt = coerce(fmt);
+
+    var curr = new Date;
+    var ms = curr - (debug[name] || curr);
+    debug[name] = curr;
+
+    fmt = name
+      + ' '
+      + fmt
+      + ' +' + debug.humanize(ms);
+
+    // This hackery is required for IE8
+    // where `console.log` doesn't have 'apply'
+    window.console
+      && console.log
+      && Function.prototype.apply.call(console.log, console, arguments);
+  }
+}
+
+/**
+ * The currently active debug mode names.
+ */
+
+debug.names = [];
+debug.skips = [];
+
+/**
+ * Enables a debug mode by name. This can include modes
+ * separated by a colon and wildcards.
+ *
+ * @param {String} name
+ * @api public
+ */
+
+debug.enable = function(name) {
+  try {
+    localStorage.debug = name;
+  } catch(e){}
+
+  var split = (name || '').split(/[\s,]+/)
+    , len = split.length;
+
+  for (var i = 0; i < len; i++) {
+    name = split[i].replace('*', '.*?');
+    if (name[0] === '-') {
+      debug.skips.push(new RegExp('^' + name.substr(1) + '$'));
+    }
+    else {
+      debug.names.push(new RegExp('^' + name + '$'));
+    }
+  }
+};
+
+/**
+ * Disable debug output.
+ *
+ * @api public
+ */
+
+debug.disable = function(){
+  debug.enable('');
+};
+
+/**
+ * Humanize the given `ms`.
+ *
+ * @param {Number} m
+ * @return {String}
+ * @api private
+ */
+
+debug.humanize = function(ms) {
+  var sec = 1000
+    , min = 60 * 1000
+    , hour = 60 * min;
+
+  if (ms >= hour) return (ms / hour).toFixed(1) + 'h';
+  if (ms >= min) return (ms / min).toFixed(1) + 'm';
+  if (ms >= sec) return (ms / sec | 0) + 's';
+  return ms + 'ms';
+};
+
+/**
+ * Returns true if the given mode name is enabled, false otherwise.
+ *
+ * @param {String} name
+ * @return {Boolean}
+ * @api public
+ */
+
+debug.enabled = function(name) {
+  for (var i = 0, len = debug.skips.length; i < len; i++) {
+    if (debug.skips[i].test(name)) {
+      return false;
+    }
+  }
+  for (var i = 0, len = debug.names.length; i < len; i++) {
+    if (debug.names[i].test(name)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Coerce `val`.
+ */
+
+function coerce(val) {
+  if (val instanceof Error) return val.stack || val.message;
+  return val;
+}
+
+// persist
+
+if (window.localStorage) debug.enable(localStorage.debug);
+
+});
+require.register("component-event/index.js", function(exports, require, module){
+
+/**
+ * Bind `el` event `type` to `fn`.
+ *
+ * @param {Element} el
+ * @param {String} type
+ * @param {Function} fn
+ * @param {Boolean} capture
+ * @return {Function}
+ * @api public
+ */
+
+exports.bind = function(el, type, fn, capture){
+  if (el.addEventListener) {
+    el.addEventListener(type, fn, capture);
+  } else {
+    el.attachEvent('on' + type, fn);
+  }
+  return fn;
+};
+
+/**
+ * Unbind `el` event `type`'s callback `fn`.
+ *
+ * @param {Element} el
+ * @param {String} type
+ * @param {Function} fn
+ * @param {Boolean} capture
+ * @return {Function}
+ * @api public
+ */
+
+exports.unbind = function(el, type, fn, capture){
+  if (el.removeEventListener) {
+    el.removeEventListener(type, fn, capture);
+  } else {
+    el.detachEvent('on' + type, fn);
+  }
+  return fn;
+};
+
+});
+require.register("component-indexof/index.js", function(exports, require, module){
+
+var indexOf = [].indexOf;
+
+module.exports = function(arr, obj){
+  if (indexOf) return arr.indexOf(obj);
+  for (var i = 0; i < arr.length; ++i) {
+    if (arr[i] === obj) return i;
+  }
+  return -1;
+};
+});
+require.register("component-classes/index.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var index = require('indexof');
+
+/**
+ * Whitespace regexp.
+ */
+
+var re = /\s+/;
+
+/**
+ * toString reference.
+ */
+
+var toString = Object.prototype.toString;
+
+/**
+ * Wrap `el` in a `ClassList`.
+ *
+ * @param {Element} el
+ * @return {ClassList}
+ * @api public
+ */
+
+module.exports = function(el){
+  return new ClassList(el);
+};
+
+/**
+ * Initialize a new ClassList for `el`.
+ *
+ * @param {Element} el
+ * @api private
+ */
+
+function ClassList(el) {
+  this.el = el;
+  this.list = el.classList;
+}
+
+/**
+ * Add class `name` if not already present.
+ *
+ * @param {String} name
+ * @return {ClassList}
+ * @api public
+ */
+
+ClassList.prototype.add = function(name){
+  // classList
+  if (this.list) {
+    this.list.add(name);
+    return this;
+  }
+
+  // fallback
+  var arr = this.array();
+  var i = index(arr, name);
+  if (!~i) arr.push(name);
+  this.el.className = arr.join(' ');
+  return this;
+};
+
+/**
+ * Remove class `name` when present, or
+ * pass a regular expression to remove
+ * any which match.
+ *
+ * @param {String|RegExp} name
+ * @return {ClassList}
+ * @api public
+ */
+
+ClassList.prototype.remove = function(name){
+  if ('[object RegExp]' == toString.call(name)) {
+    return this.removeMatching(name);
+  }
+
+  // classList
+  if (this.list) {
+    this.list.remove(name);
+    return this;
+  }
+
+  // fallback
+  var arr = this.array();
+  var i = index(arr, name);
+  if (~i) arr.splice(i, 1);
+  this.el.className = arr.join(' ');
+  return this;
+};
+
+/**
+ * Remove all classes matching `re`.
+ *
+ * @param {RegExp} re
+ * @return {ClassList}
+ * @api private
+ */
+
+ClassList.prototype.removeMatching = function(re){
+  var arr = this.array();
+  for (var i = 0; i < arr.length; i++) {
+    if (re.test(arr[i])) {
+      this.remove(arr[i]);
+    }
+  }
+  return this;
+};
+
+/**
+ * Toggle class `name`.
+ *
+ * @param {String} name
+ * @return {ClassList}
+ * @api public
+ */
+
+ClassList.prototype.toggle = function(name){
+  // classList
+  if (this.list) {
+    this.list.toggle(name);
+    return this;
+  }
+
+  // fallback
+  if (this.has(name)) {
+    this.remove(name);
+  } else {
+    this.add(name);
+  }
+  return this;
+};
+
+/**
+ * Return an array of classes.
+ *
+ * @return {Array}
+ * @api public
+ */
+
+ClassList.prototype.array = function(){
+  var arr = this.el.className.split(re);
+  if ('' === arr[0]) arr.pop();
+  return arr;
+};
+
+/**
+ * Check if class `name` is present.
+ *
+ * @param {String} name
+ * @return {ClassList}
+ * @api public
+ */
+
+ClassList.prototype.has =
+ClassList.prototype.contains = function(name){
+  return this.list
+    ? this.list.contains(name)
+    : !! ~index(this.array(), name);
+};
+
+});
+require.register("component-query/index.js", function(exports, require, module){
+
+function one(selector, el) {
+  return el.querySelector(selector);
+}
+
+exports = module.exports = function(selector, el){
+  el = el || document;
+  return one(selector, el);
+};
+
+exports.all = function(selector, el){
+  el = el || document;
+  return el.querySelectorAll(selector);
+};
+
+exports.engine = function(obj){
+  if (!obj.one) throw new Error('.one callback required');
+  if (!obj.all) throw new Error('.all callback required');
+  one = obj.one;
+  exports.all = obj.all;
+};
+
+});
+require.register("component-reactive/lib/index.js", function(exports, require, module){
+/**
+ * Module dependencies.
+ */
+
+var AttrBinding = require('./attr-binding');
+var TextBinding = require('./text-binding');
+var debug = require('debug')('reactive');
+var bindings = require('./bindings');
+var Binding = require('./binding');
+var utils = require('./utils');
+var query = require('query');
+
+/**
+ * Expose `Reactive`.
+ */
+
+exports = module.exports = Reactive;
+
+/**
+ * Bindings.
+ */
+
+exports.bindings = {};
+
+/**
+ * Default subscription method.
+ */
+
+function subscribe(obj, prop, fn) {
+  if (!obj.on) return;
+  obj.on('change ' + prop, fn);
+};
+
+/**
+ * Default unsubscription method.
+ */
+
+function unsubscribe(obj, prop, fn) {
+  if (!obj.off) return;
+  obj.off('change ' + prop, fn);
+};
+
+/**
+ * Define subscription function.
+ *
+ * @param {Function} fn
+ * @api public
+ */
+
+exports.subscribe = function(fn){
+  subscribe = fn;
+  Binding.subscribe = fn;
+};
+
+/**
+ * Define unsubscribe function.
+ *
+ * @param {Function} fn
+ * @api public
+ */
+
+exports.unsubscribe = function(fn){
+  unsubscribe = fn;
+  Binding.unsubscribe = fn;
+};
+
+/**
+ * Define binding `name` with callback `fn(el, val)`.
+ *
+ * @param {String} name or object
+ * @param {String|Object} name
+ * @param {Function} fn
+ * @api public
+ */
+
+exports.bind = function(name, fn){
+  if ('object' == typeof name) {
+    for (var key in name) {
+      exports.bind(key, name[key]);
+    }
+    return;
+  }
+
+  exports.bindings[name] = fn;
+};
+
+/**
+ * Initialize a reactive template for `el` and `obj`.
+ *
+ * @param {Element} el
+ * @param {Element} obj
+ * @param {Object} options
+ * @api public
+ */
+
+function Reactive(el, obj, options) {
+  if (!(this instanceof Reactive)) return new Reactive(el, obj, options);
+  this.el = el;
+  this.obj = obj;
+  this.els = [];
+  this.fns = options || {};
+  this.bindAll();
+  this.bindInterpolation(this.el, []);
+}
+
+/**
+ * Subscribe to changes on `prop`.
+ *
+ * @param {String} prop
+ * @param {Function} fn
+ * @api private
+ */
+
+Reactive.prototype.sub = function(prop, fn){
+  subscribe(this.obj, prop, fn);
+};
+
+/**
+ * Unsubscribe to changes from `prop`.
+ *
+ * @param {String} prop
+ * @param {Function} fn
+ * @api public
+ */
+
+Reactive.prototype.unsub = function(prop, fn){
+  unsubscribe(this.obj, prop, fn);
+};
+
+/**
+ * Traverse and bind all interpolation within attributes and text.
+ *
+ * @param {Element} el
+ * @api private
+ */
+
+Reactive.prototype.bindInterpolation = function(el, els){
+
+  // element
+  if (el.nodeType == 1) {
+    for (var i = 0; i < el.attributes.length; i++) {
+      var attr = el.attributes[i];
+      if (utils.hasInterpolation(attr.value)) {
+        new AttrBinding(this, el, attr);
+      }
+    }
+  }
+
+  // text node
+  if (el.nodeType == 3) {
+    if (utils.hasInterpolation(el.data)) {
+      debug('bind text "%s"', el.data);
+      new TextBinding(this, el);
+    }
+  }
+
+  // walk nodes
+  for (var i = 0; i < el.childNodes.length; i++) {
+    var node = el.childNodes[i];
+    this.bindInterpolation(node, els);
+  }
+};
+
+/**
+ * Apply all bindings.
+ *
+ * @api private
+ */
+
+Reactive.prototype.bindAll = function() {
+  for (var name in exports.bindings) {
+    this.bind(name, exports.bindings[name]);
+  }
+};
+
+/**
+ * Bind `name` to `fn`.
+ *
+ * @param {String|Object} name or object
+ * @param {Function} fn
+ * @api public
+ */
+
+Reactive.prototype.bind = function(name, fn) {
+  if ('object' == typeof name) {
+    for (var key in name) {
+      this.bind(key, name[key]);
+    }
+    return;
+  }
+
+  var obj = this.obj;
+  var els = query.all('[' + name + ']', this.el);
+  if (!els.length) return;
+
+  debug('bind [%s] (%d elements)', name, els.length);
+  for (var i = 0; i < els.length; i++) {
+    var binding = new Binding(name, this, els[i], fn);
+    binding.bind();
+  }
+};
+
+// bundled bindings
+
+bindings(exports.bind);
+
+});
+require.register("component-reactive/lib/utils.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var debug = require('debug')('reactive:utils');
+var props = require('props');
+
+/**
+ * Function cache.
+ */
+
+var cache = {};
+
+/**
+ * Return interpolation property names in `str`,
+ * for example "{foo} and {bar}" would return
+ * ['foo', 'bar'].
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api private
+ */
+
+exports.interpolationProps = function(str) {
+  var m;
+  var arr = [];
+  var re = /\{([^}]+)\}/g;
+
+  while (m = re.exec(str)) {
+    var expr = m[1];
+    if (isSimple(expr)) {
+      arr.push(expr);
+    } else {
+      arr = arr.concat(props(expr));
+    }
+  }
+
+  return unique(arr);
+};
+
+/**
+ * Interpolate `str` with the given `fn`.
+ *
+ * TODO: cache compiled function
+ *
+ * @param {String} str
+ * @param {Function} fn
+ * @return {String}
+ * @api private
+ */
+
+exports.interpolate = function(str, fn){
+  return str.replace(/\{([^}]+)\}/g, function(_, expr){
+    var callback;
+
+    if (!isSimple(expr)) {
+      callback = cache[expr] || (cache[expr] = compile(expr));
+    }
+
+    return fn(expr.trim(), callback);
+  });
+};
+
+/**
+ * Check if `str` has interpolation.
+ *
+ * @param {String} str
+ * @return {Boolean}
+ * @api private
+ */
+
+exports.hasInterpolation = function(str) {
+  return ~str.indexOf('{');
+};
+
+/**
+ * Remove computed properties notation from `str`.
+ *
+ * @param {String} str
+ * @return {String}
+ * @api private
+ */
+
+exports.clean = function(str) {
+  return str.split('<')[0].trim();
+};
+
+/**
+ * Compile `expr` to a `Function`.
+ *
+ * @param {String} expr
+ * @return {Function}
+ * @api private
+ */
+
+function compile(expr) {
+  expr = 'return ' + props(expr, 'model.');
+  debug('compile `%s`', expr);
+  return new Function('model', expr);
+}
+
+/**
+ * Return unique array.
+ *
+ * @param {Array} arr
+ * @return {Array}
+ * @api private
+ */
+
+function unique(arr) {
+  var ret = [];
+
+  for (var i = 0; i < arr.length; i++) {
+    if (~ret.indexOf(arr[i])) continue;
+    ret.push(arr[i]);
+  }
+
+  return ret;
+}
+
+/**
+ * Check if `expr` is "simple" and
+ * may be optimized to reduce compiled functions.
+ *
+ * @param {String} expr
+ * @return {Boolean}
+ * @api private
+ */
+
+function isSimple(expr) {
+  return expr.match(/^ *\w+ *$/);
+}
+
+});
+require.register("component-reactive/lib/text-binding.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var debug = require('debug')('reactive:text-binding');
+var utils = require('./utils');
+
+/**
+ * Expose `TextBinding`.
+ */
+
+module.exports = TextBinding;
+
+/**
+ * Initialize a new text binding.
+ *
+ * @param {Reactive} view
+ * @param {Element} node
+ * @param {Attribute} attr
+ * @api private
+ */
+
+function TextBinding(view, node) {
+  var self = this;
+  this.view = view;
+  this.text = node.data;
+  this.node = node;
+  this.props = utils.interpolationProps(this.text);
+  this.subscribe();
+  this.render();
+}
+
+/**
+ * Subscribe to changes.
+ */
+
+TextBinding.prototype.subscribe = function(){
+  var self = this;
+  var view = this.view;
+  this.props.forEach(function(prop){
+    view.sub(prop, function(){
+      self.render();
+    });
+  });
+};
+
+/**
+ * Render text.
+ */
+
+TextBinding.prototype.render = function(){
+  var node = this.node;
+  var text = this.text;
+  var obj = this.view.obj;
+  debug('render "%s"', text);
+  node.data = utils.interpolate(text, function(prop, fn){
+    return fn
+      ? fn(obj)
+      : obj[prop];
+  });
+};
+
+});
+require.register("component-reactive/lib/attr-binding.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var debug = require('debug')('reactive:attr-binding');
+var utils = require('./utils');
+
+/**
+ * Expose `AttrBinding`.
+ */
+
+module.exports = AttrBinding;
+
+/**
+ * Initialize a new attribute binding.
+ *
+ * @param {Reactive} view
+ * @param {Element} node
+ * @param {Attribute} attr
+ * @api private
+ */
+
+function AttrBinding(view, node, attr) {
+  var self = this;
+  this.view = view;
+  this.node = node;
+  this.attr = attr;
+  this.text = attr.value;
+  this.props = utils.interpolationProps(this.text);
+  this.subscribe();
+  this.render();
+}
+
+/**
+ * Subscribe to changes.
+ */
+
+AttrBinding.prototype.subscribe = function(){
+  var self = this;
+  var view = this.view;
+  this.props.forEach(function(prop){
+    view.sub(prop, function(){
+      self.render();
+    });
+  });
+};
+
+/**
+ * Render the value.
+ */
+
+AttrBinding.prototype.render = function(){
+  var attr = this.attr;
+  var text = this.text;
+  var obj = this.view.obj;
+  debug('render %s "%s"', attr.name, text);
+  attr.value = utils.interpolate(text, function(prop, fn){
+    return fn
+      ? fn(obj)
+      : obj[prop];
+  });
+};
+
+});
+require.register("component-reactive/lib/binding.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var parse = require('format-parser');
+
+/**
+ * Expose `Binding`.
+ */
+
+module.exports = Binding;
+
+/**
+ * Initialize a binding.
+ *
+ * @api private
+ */
+
+function Binding(name, view, el, fn) {
+  this.name = name;
+  this.view = view;
+  this.obj = view.obj;
+  this.fns = view.fns;
+  this.el = el;
+  this.fn = fn;
+}
+
+/**
+ * Apply the binding.
+ *
+ * @api private
+ */
+
+Binding.prototype.bind = function() {
+  var val = this.el.getAttribute(this.name);
+  this.fn(this.el, val, this.obj);
+};
+
+/**
+ * Perform interpolation on `name`.
+ *
+ * @param {String} name
+ * @return {String}
+ * @api public
+ */
+
+Binding.prototype.interpolate = function(name) {
+  var self = this;
+  name = clean(name);
+
+  if (~name.indexOf('{')) {
+    return name.replace(/{([^}]+)}/g, function(_, name){
+      return self.value(name);
+    });
+  }
+
+  return this.formatted(name);
+};
+
+/**
+ * Return value for property `name`.
+ *
+ *  - check if the "view" has a `name` method
+ *  - check if the "model" has a `name` method
+ *  - check if the "model" has a `name` property
+ *
+ * @param {String} name
+ * @return {Mixed}
+ * @api public
+ */
+
+Binding.prototype.value = function(name) {
+  var self = this;
+  var obj = this.obj;
+  var view = this.view.fns;
+  name = clean(name);
+
+  // view method
+  if ('function' == typeof view[name]) {
+    return view[name]();
+  }
+
+  // view value
+  if (view.hasOwnProperty(name)) {
+    return view[name];
+  }
+
+  // getter-style method
+  if ('function' == typeof obj[name]) {
+    return obj[name]();
+  }
+
+  // value
+  return obj[name];
+};
+
+/**
+ * Return formatted property.
+ *
+ * @param {String} fmt
+ * @return {Mixed}
+ * @api public
+ */
+
+Binding.prototype.formatted = function(fmt) {
+  var calls = parse(clean(fmt));
+  var name = calls[0].name;
+  var val = this.value(name);
+
+  for (var i = 1; i < calls.length; ++i) {
+    var call = calls[i];
+    call.args.unshift(val);
+    var fn = this.fns[call.name];
+    val = fn.apply(this.fns, call.args);
+  }
+
+  return val;
+};
+
+/**
+ * Define subscription `fn`.
+ *
+ * @param {Function} fn
+ * @api public
+ */
+
+Binding.prototype.subscribe = function(fn){
+  this._subscribe = fn;
+};
+
+/**
+ * Define unsubscribe `fn`.
+ *
+ * @param {Function} fn
+ * @api public
+ */
+
+Binding.prototype.unsubscribe = function(fn){
+  this._unsubscribe = fn;
+};
+
+/**
+ * Invoke `fn` on changes.
+ *
+ * @param {Function} fn
+ * @api public
+ */
+
+Binding.prototype.change = function(fn) {
+  fn.call(this);
+
+  var self = this;
+  var obj = this.obj;
+  var sub = this._subscribe || Binding.subscribe;
+  var val = this.el.getAttribute(this.name);
+
+  // computed props
+  var parts = val.split('<');
+  val = parts[0];
+  var computed = parts[1];
+  if (computed) computed = computed.trim().split(/\s+/);
+
+  // interpolation
+  if (hasInterpolation(val)) {
+    var props = interpolationProps(val);
+    props.forEach(function(prop){
+      sub(obj, prop, fn.bind(self));
+    });
+    return;
+  }
+
+  // formatting
+  var calls = parse(val);
+  var prop = calls[0].name;
+
+  // computed props
+  if (computed) {
+    computed.forEach(function(prop){
+      sub(obj, prop, fn.bind(self));
+    });
+    return;
+  }
+
+  // bind to prop
+  sub(obj, prop, fn.bind(this));
+};
+
+/**
+ * Default subscription method.
+ */
+
+Binding.subscribe = function(obj, prop, fn) {
+  if (!obj.on) return;
+  obj.on('change ' + prop, fn);
+};
+
+/**
+ * Default unsubscription method.
+ */
+
+Binding.unsubscribe = function(obj, prop, fn) {
+  if (!obj.off) return;
+  obj.off('change ' + prop, fn);
+};
+
+/**
+ * Return interpolation property names in `str`,
+ * for example "{foo} and {bar}" would return
+ * ['foo', 'bar'].
+ *
+ * @param {String} str
+ * @return {Array}
+ * @api private
+ */
+
+function interpolationProps(str) {
+  var m;
+  var arr = [];
+  var re = /\{([^}]+)\}/g;
+  while (m = re.exec(str)) {
+    arr.push(m[1]);
+  }
+  return arr;
+}
+
+/**
+ * Check if `str` has interpolation.
+ *
+ * @param {String} str
+ * @return {Boolean}
+ * @api private
+ */
+
+function hasInterpolation(str) {
+  return ~str.indexOf('{');
+}
+
+/**
+ * Remove computed properties notation from `str`.
+ *
+ * @param {String} str
+ * @return {String}
+ * @api private
+ */
+
+function clean(str) {
+  return str.split('<')[0].trim();
+}
+
+});
+require.register("component-reactive/lib/bindings.js", function(exports, require, module){
+/**
+ * Module dependencies.
+ */
+
+var classes = require('classes');
+var event = require('event');
+
+/**
+ * Attributes supported.
+ */
+
+var attrs = [
+  'id',
+  'src',
+  'rel',
+  'cols',
+  'rows',
+  'name',
+  'href',
+  'title',
+  'class',
+  'style',
+  'width',
+  'value',
+  'height',
+  'tabindex',
+  'placeholder'
+];
+
+/**
+ * Events supported.
+ */
+
+var events = [
+  'change',
+  'click',
+  'dblclick',
+  'mousedown',
+  'mouseup',
+  'blur',
+  'focus',
+  'input',
+  'keydown',
+  'keypress',
+  'keyup'
+];
+
+/**
+ * Apply bindings.
+ */
+
+module.exports = function(bind){
+
+  /**
+   * Generate attribute bindings.
+   */
+
+  attrs.forEach(function(attr){
+    bind('data-' + attr, function(el, name, obj){
+      this.change(function(){
+        el.setAttribute(attr, this.interpolate(name));
+      });
+    });
+  });
+
+/**
+ * Append child element.
+ */
+
+  bind('data-append', function(el, name){
+    var other = this.value(name);
+    el.appendChild(other);
+  });
+
+/**
+ * Replace element.
+ */
+
+  bind('data-replace', function(el, name){
+    var other = this.value(name);
+    el.parentNode.replaceChild(other, el);
+  });
+
+  /**
+   * Show binding.
+   */
+
+  bind('data-show', function(el, name){
+    this.change(function(){
+      if (this.value(name)) {
+        classes(el).add('show').remove('hide');
+      } else {
+        classes(el).remove('show').add('hide');
+      }
+    });
+  });
+
+  /**
+   * Hide binding.
+   */
+
+  bind('data-hide', function(el, name){
+    this.change(function(){
+      if (this.value(name)) {
+        classes(el).remove('show').add('hide');
+      } else {
+        classes(el).add('show').remove('hide');
+      }
+    });
+  });
+
+  /**
+   * Checked binding.
+   */
+
+  bind('data-checked', function(el, name){
+    this.change(function(){
+      if (this.value(name)) {
+        el.setAttribute('checked', 'checked');
+      } else {
+        el.removeAttribute('checked');
+      }
+    });
+  });
+
+  /**
+   * Text binding.
+   */
+
+  bind('data-text', function(el, name){
+    this.change(function(){
+      el.textContent = this.interpolate(name);
+    });
+  });
+
+  /**
+   * HTML binding.
+   */
+
+  bind('data-html', function(el, name){
+    this.change(function(){
+      el.innerHTML = this.formatted(name);
+    });
+  });
+
+  /**
+   * Generate event bindings.
+   */
+
+  events.forEach(function(name){
+    bind('on-' + name, function(el, method){
+      var fns = this.view.fns
+      event.bind(el, name, function(e){
+        var fn = fns[method];
+        if (!fn) throw new Error('method .' + method + '() missing');
+        fns[method](e);
+      });
+    });
+  });
+};
+
+});
+require.register("component-underscore/index.js", function(exports, require, module){
+//     Underscore.js 1.3.3
+//     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.
+//     Underscore is freely distributable under the MIT license.
+//     Portions of Underscore are inspired or borrowed from Prototype,
+//     Oliver Steele's Functional, and John Resig's Micro-Templating.
+//     For all details and documentation:
+//     http://documentcloud.github.com/underscore
+
+(function() {
+
+  // Baseline setup
+  // --------------
+
+  // Establish the root object, `window` in the browser, or `global` on the server.
+  var root = this;
+
+  // Save the previous value of the `_` variable.
+  var previousUnderscore = root._;
+
+  // Establish the object that gets returned to break out of a loop iteration.
+  var breaker = {};
+
+  // Save bytes in the minified (but not gzipped) version:
+  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;
+
+  // Create quick reference variables for speed access to core prototypes.
+  var push             = ArrayProto.push,
+      slice            = ArrayProto.slice,
+      unshift          = ArrayProto.unshift,
+      toString         = ObjProto.toString,
+      hasOwnProperty   = ObjProto.hasOwnProperty;
+
+  // All **ECMAScript 5** native function implementations that we hope to use
+  // are declared here.
+  var
+    nativeForEach      = ArrayProto.forEach,
+    nativeMap          = ArrayProto.map,
+    nativeReduce       = ArrayProto.reduce,
+    nativeReduceRight  = ArrayProto.reduceRight,
+    nativeFilter       = ArrayProto.filter,
+    nativeEvery        = ArrayProto.every,
+    nativeSome         = ArrayProto.some,
+    nativeIndexOf      = ArrayProto.indexOf,
+    nativeLastIndexOf  = ArrayProto.lastIndexOf,
+    nativeIsArray      = Array.isArray,
+    nativeKeys         = Object.keys,
+    nativeBind         = FuncProto.bind;
+
+  // Create a safe reference to the Underscore object for use below.
+  var _ = function(obj) { return new wrapper(obj); };
+
+  // Export the Underscore object for **Node.js**, with
+  // backwards-compatibility for the old `require()` API. If we're in
+  // the browser, add `_` as a global object via a string identifier,
+  // for Closure Compiler "advanced" mode.
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      exports = module.exports = _;
+    }
+    exports._ = _;
+  } else {
+    root['_'] = _;
+  }
+
+  // Current version.
+  _.VERSION = '1.3.3';
+
+  // Collection Functions
+  // --------------------
+
+  // The cornerstone, an `each` implementation, aka `forEach`.
+  // Handles objects with the built-in `forEach`, arrays, and raw objects.
+  // Delegates to **ECMAScript 5**'s native `forEach` if available.
+  var each = _.each = _.forEach = function(obj, iterator, context) {
+    if (obj == null) return;
+    if (nativeForEach && obj.forEach === nativeForEach) {
+      obj.forEach(iterator, context);
+    } else if (obj.length === +obj.length) {
+      for (var i = 0, l = obj.length; i < l; i++) {
+        if (iterator.call(context, obj[i], i, obj) === breaker) return;
+      }
+    } else {
+      for (var key in obj) {
+        if (_.has(obj, key)) {
+          if (iterator.call(context, obj[key], key, obj) === breaker) return;
+        }
+      }
+    }
+  };
+
+  // Return the results of applying the iterator to each element.
+  // Delegates to **ECMAScript 5**'s native `map` if available.
+  _.map = _.collect = function(obj, iterator, context) {
+    var results = [];
+    if (obj == null) return results;
+    if (nativeMap && obj.map === nativeMap) return obj.map(iterator, context);
+    each(obj, function(value, index, list) {
+      results[results.length] = iterator.call(context, value, index, list);
+    });
+    return results;
+  };
+
+  // **Reduce** builds up a single result from a list of values, aka `inject`,
+  // or `foldl`. Delegates to **ECMAScript 5**'s native `reduce` if available.
+  _.reduce = _.foldl = _.inject = function(obj, iterator, memo, context) {
+    var initial = arguments.length > 2;
+    if (obj == null) obj = [];
+    if (nativeReduce && obj.reduce === nativeReduce) {
+      if (context) iterator = _.bind(iterator, context);
+      return initial ? obj.reduce(iterator, memo) : obj.reduce(iterator);
+    }
+    each(obj, function(value, index, list) {
+      if (!initial) {
+        memo = value;
+        initial = true;
+      } else {
+        memo = iterator.call(context, memo, value, index, list);
+      }
+    });
+    if (!initial) throw new TypeError('Reduce of empty array with no initial value');
+    return memo;
+  };
+
+  // The right-associative version of reduce, also known as `foldr`.
+  // Delegates to **ECMAScript 5**'s native `reduceRight` if available.
+  _.reduceRight = _.foldr = function(obj, iterator, memo, context) {
+    var initial = arguments.length > 2;
+    if (obj == null) obj = [];
+    if (nativeReduceRight && obj.reduceRight === nativeReduceRight) {
+      if (context) iterator = _.bind(iterator, context);
+      return initial ? obj.reduceRight(iterator, memo) : obj.reduceRight(iterator);
+    }
+    var reversed = _.toArray(obj).reverse();
+    if (context && !initial) iterator = _.bind(iterator, context);
+    return initial ? _.reduce(reversed, iterator, memo, context) : _.reduce(reversed, iterator);
+  };
+
+  // Return the first value which passes a truth test. Aliased as `detect`.
+  _.find = _.detect = function(obj, iterator, context) {
+    var result;
+    any(obj, function(value, index, list) {
+      if (iterator.call(context, value, index, list)) {
+        result = value;
+        return true;
+      }
+    });
+    return result;
+  };
+
+  // Return all the elements that pass a truth test.
+  // Delegates to **ECMAScript 5**'s native `filter` if available.
+  // Aliased as `select`.
+  _.filter = _.select = function(obj, iterator, context) {
+    var results = [];
+    if (obj == null) return results;
+    if (nativeFilter && obj.filter === nativeFilter) return obj.filter(iterator, context);
+    each(obj, function(value, index, list) {
+      if (iterator.call(context, value, index, list)) results[results.length] = value;
+    });
+    return results;
+  };
+
+  // Return all the elements for which a truth test fails.
+  _.reject = function(obj, iterator, context) {
+    var results = [];
+    if (obj == null) return results;
+    each(obj, function(value, index, list) {
+      if (!iterator.call(context, value, index, list)) results[results.length] = value;
+    });
+    return results;
+  };
+
+  // Determine whether all of the elements match a truth test.
+  // Delegates to **ECMAScript 5**'s native `every` if available.
+  // Aliased as `all`.
+  _.every = _.all = function(obj, iterator, context) {
+    var result = true;
+    if (obj == null) return result;
+    if (nativeEvery && obj.every === nativeEvery) return obj.every(iterator, context);
+    each(obj, function(value, index, list) {
+      if (!(result = result && iterator.call(context, value, index, list))) return breaker;
+    });
+    return !!result;
+  };
+
+  // Determine if at least one element in the object matches a truth test.
+  // Delegates to **ECMAScript 5**'s native `some` if available.
+  // Aliased as `any`.
+  var any = _.some = _.any = function(obj, iterator, context) {
+    iterator || (iterator = _.identity);
+    var result = false;
+    if (obj == null) return result;
+    if (nativeSome && obj.some === nativeSome) return obj.some(iterator, context);
+    each(obj, function(value, index, list) {
+      if (result || (result = iterator.call(context, value, index, list))) return breaker;
+    });
+    return !!result;
+  };
+
+  // Determine if a given value is included in the array or object using `===`.
+  // Aliased as `contains`.
+  _.include = _.contains = function(obj, target) {
+    var found = false;
+    if (obj == null) return found;
+    if (nativeIndexOf && obj.indexOf === nativeIndexOf) return obj.indexOf(target) != -1;
+    found = any(obj, function(value) {
+      return value === target;
+    });
+    return found;
+  };
+
+  // Invoke a method (with arguments) on every item in a collection.
+  _.invoke = function(obj, method) {
+    var args = slice.call(arguments, 2);
+    return _.map(obj, function(value) {
+      return (_.isFunction(method) ? method : value[method]).apply(value, args);
+    });
+  };
+
+  // Convenience version of a common use case of `map`: fetching a property.
+  _.pluck = function(obj, key) {
+    return _.map(obj, function(value){ return value[key]; });
+  };
+
+  // Return the maximum element or (element-based computation).
+  // Can't optimize arrays of integers longer than 65,535 elements.
+  // See: https://bugs.webkit.org/show_bug.cgi?id=80797
+  _.max = function(obj, iterator, context) {
+    if (!iterator && _.isArray(obj) && obj[0] === +obj[0] && obj.length < 65535) {
+      return Math.max.apply(Math, obj);
+    }
+    if (!iterator && _.isEmpty(obj)) return -Infinity;
+    var result = {computed : -Infinity};
+    each(obj, function(value, index, list) {
+      var computed = iterator ? iterator.call(context, value, index, list) : value;
+      computed >= result.computed && (result = {value : value, computed : computed});
+    });
+    return result.value;
+  };
+
+  // Return the minimum element (or element-based computation).
+  _.min = function(obj, iterator, context) {
+    if (!iterator && _.isArray(obj) && obj[0] === +obj[0] && obj.length < 65535) {
+      return Math.min.apply(Math, obj);
+    }
+    if (!iterator && _.isEmpty(obj)) return Infinity;
+    var result = {computed : Infinity};
+    each(obj, function(value, index, list) {
+      var computed = iterator ? iterator.call(context, value, index, list) : value;
+      computed < result.computed && (result = {value : value, computed : computed});
+    });
+    return result.value;
+  };
+
+  // Shuffle an array.
+  _.shuffle = function(obj) {
+    var rand;
+    var index = 0;
+    var shuffled = [];
+    each(obj, function(value) {
+      rand = Math.floor(Math.random() * ++index);
+      shuffled[index - 1] = shuffled[rand];
+      shuffled[rand] = value;
+    });
+    return shuffled;
+  };
+
+  // Sort the object's values by a criterion produced by an iterator.
+  _.sortBy = function(obj, val, context) {
+    var iterator = lookupIterator(obj, val);
+    return _.pluck(_.map(obj, function(value, index, list) {
+      return {
+        value : value,
+        criteria : iterator.call(context, value, index, list)
+      };
+    }).sort(function(left, right) {
+      var a = left.criteria, b = right.criteria;
+      if (a === void 0) return 1;
+      if (b === void 0) return -1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    }), 'value');
+  };
+
+  // An internal function to generate lookup iterators.
+  var lookupIterator = function(obj, val) {
+    return _.isFunction(val) ? val : function(obj) { return obj[val]; };
+  };
+
+  // An internal function used for aggregate "group by" operations.
+  var group = function(obj, val, behavior) {
+    var result = {};
+    var iterator = lookupIterator(obj, val);
+    each(obj, function(value, index) {
+      var key = iterator(value, index);
+      behavior(result, key, value);
+    });
+    return result;
+  };
+
+  // Groups the object's values by a criterion. Pass either a string attribute
+  // to group by, or a function that returns the criterion.
+  _.groupBy = function(obj, val) {
+    return group(obj, val, function(result, key, value) {
+      (result[key] || (result[key] = [])).push(value);
+    });
+  };
+
+  // Counts instances of an object that group by a certain criterion. Pass
+  // either a string attribute to count by, or a function that returns the
+  // criterion.
+  _.countBy = function(obj, val) {
+    return group(obj, val, function(result, key, value) {
+      result[key] || (result[key] = 0);
+      result[key]++;
+    });
+  };
+
+  // Use a comparator function to figure out the smallest index at which
+  // an object should be inserted so as to maintain order. Uses binary search.
+  _.sortedIndex = function(array, obj, iterator) {
+    iterator || (iterator = _.identity);
+    var value = iterator(obj);
+    var low = 0, high = array.length;
+    while (low < high) {
+      var mid = (low + high) >> 1;
+      iterator(array[mid]) < value ? low = mid + 1 : high = mid;
+    }
+    return low;
+  };
+
+  // Safely convert anything iterable into a real, live array.
+  _.toArray = function(obj) {
+    if (!obj)                                     return [];
+    if (_.isArray(obj))                           return slice.call(obj);
+    if (_.isArguments(obj))                       return slice.call(obj);
+    if (obj.toArray && _.isFunction(obj.toArray)) return obj.toArray();
+    return _.values(obj);
+  };
+
+  // Return the number of elements in an object.
+  _.size = function(obj) {
+    return _.isArray(obj) ? obj.length : _.keys(obj).length;
+  };
+
+  // Array Functions
+  // ---------------
+
+  // Get the first element of an array. Passing **n** will return the first N
+  // values in the array. Aliased as `head` and `take`. The **guard** check
+  // allows it to work with `_.map`.
+  _.first = _.head = _.take = function(array, n, guard) {
+    return (n != null) && !guard ? slice.call(array, 0, n) : array[0];
+  };
+
+  // Returns everything but the last entry of the array. Especially useful on
+  // the arguments object. Passing **n** will return all the values in
+  // the array, excluding the last N. The **guard** check allows it to work with
+  // `_.map`.
+  _.initial = function(array, n, guard) {
+    return slice.call(array, 0, array.length - ((n == null) || guard ? 1 : n));
+  };
+
+  // Get the last element of an array. Passing **n** will return the last N
+  // values in the array. The **guard** check allows it to work with `_.map`.
+  _.last = function(array, n, guard) {
+    if ((n != null) && !guard) {
+      return slice.call(array, Math.max(array.length - n, 0));
+    } else {
+      return array[array.length - 1];
+    }
+  };
+
+  // Returns everything but the first entry of the array. Aliased as `tail`.
+  // Especially useful on the arguments object. Passing an **index** will return
+  // the rest of the values in the array from that index onward. The **guard**
+  // check allows it to work with `_.map`.
+  _.rest = _.tail = function(array, index, guard) {
+    return slice.call(array, (index == null) || guard ? 1 : index);
+  };
+
+  // Trim out all falsy values from an array.
+  _.compact = function(array) {
+    return _.filter(array, function(value){ return !!value; });
+  };
+
+  // Internal implementation of a recursive `flatten` function.
+  var flatten = function(input, shallow, output) {
+    each(input, function(value) {
+      if (_.isArray(value)) {
+        shallow ? push.apply(output, value) : flatten(value, shallow, output);
+      } else {
+        output.push(value);
+      }
+    });
+    return output;
+  };
+
+  // Return a completely flattened version of an array.
+  _.flatten = function(array, shallow) {
+    return flatten(array, shallow, []);
+  };
+
+  // Return a version of the array that does not contain the specified value(s).
+  _.without = function(array) {
+    return _.difference(array, slice.call(arguments, 1));
+  };
+
+  // Produce a duplicate-free version of the array. If the array has already
+  // been sorted, you have the option of using a faster algorithm.
+  // Aliased as `unique`.
+  _.uniq = _.unique = function(array, isSorted, iterator) {
+    var initial = iterator ? _.map(array, iterator) : array;
+    var results = [];
+    _.reduce(initial, function(memo, value, index) {
+      if (isSorted ? (_.last(memo) !== value || !memo.length) : !_.include(memo, value)) {
+        memo.push(value);
+        results.push(array[index]);
+      }
+      return memo;
+    }, []);
+    return results;
+  };
+
+  // Produce an array that contains the union: each distinct element from all of
+  // the passed-in arrays.
+  _.union = function() {
+    return _.uniq(flatten(arguments, true, []));
+  };
+
+  // Produce an array that contains every item shared between all the
+  // passed-in arrays.
+  _.intersection = function(array) {
+    var rest = slice.call(arguments, 1);
+    return _.filter(_.uniq(array), function(item) {
+      return _.every(rest, function(other) {
+        return _.indexOf(other, item) >= 0;
+      });
+    });
+  };
+
+  // Take the difference between one array and a number of other arrays.
+  // Only the elements present in just the first array will remain.
+  _.difference = function(array) {
+    var rest = flatten(slice.call(arguments, 1), true, []);
+    return _.filter(array, function(value){ return !_.include(rest, value); });
+  };
+
+  // Zip together multiple lists into a single array -- elements that share
+  // an index go together.
+  _.zip = function() {
+    var args = slice.call(arguments);
+    var length = _.max(_.pluck(args, 'length'));
+    var results = new Array(length);
+    for (var i = 0; i < length; i++) {
+      results[i] = _.pluck(args, "" + i);
+    }
+    return results;
+  };
+
+  // Zip together two arrays -- an array of keys and an array of values -- into
+  // a single object.
+  _.zipObject = function(keys, values) {
+    var result = {};
+    for (var i = 0, l = keys.length; i < l; i++) {
+      result[keys[i]] = values[i];
+    }
+    return result;
+  };
+
+  // If the browser doesn't supply us with indexOf (I'm looking at you, **MSIE**),
+  // we need this function. Return the position of the first occurrence of an
+  // item in an array, or -1 if the item is not included in the array.
+  // Delegates to **ECMAScript 5**'s native `indexOf` if available.
+  // If the array is large and already in sort order, pass `true`
+  // for **isSorted** to use binary search.
+  _.indexOf = function(array, item, isSorted) {
+    if (array == null) return -1;
+    var i, l;
+    if (isSorted) {
+      i = _.sortedIndex(array, item);
+      return array[i] === item ? i : -1;
+    }
+    if (nativeIndexOf && array.indexOf === nativeIndexOf) return array.indexOf(item);
+    for (i = 0, l = array.length; i < l; i++) if (array[i] === item) return i;
+    return -1;
+  };
+
+  // Delegates to **ECMAScript 5**'s native `lastIndexOf` if available.
+  _.lastIndexOf = function(array, item) {
+    if (array == null) return -1;
+    if (nativeLastIndexOf && array.lastIndexOf === nativeLastIndexOf) return array.lastIndexOf(item);
+    var i = array.length;
+    while (i--) if (array[i] === item) return i;
+    return -1;
+  };
+
+  // Generate an integer Array containing an arithmetic progression. A port of
+  // the native Python `range()` function. See
+  // [the Python documentation](http://docs.python.org/library/functions.html#range).
+  _.range = function(start, stop, step) {
+    if (arguments.length <= 1) {
+      stop = start || 0;
+      start = 0;
+    }
+    step = arguments[2] || 1;
+
+    var len = Math.max(Math.ceil((stop - start) / step), 0);
+    var idx = 0;
+    var range = new Array(len);
+
+    while(idx < len) {
+      range[idx++] = start;
+      start += step;
+    }
+
+    return range;
+  };
+
+  // Function (ahem) Functions
+  // ------------------
+
+  // Reusable constructor function for prototype setting.
+  var ctor = function(){};
+
+  // Create a function bound to a given object (assigning `this`, and arguments,
+  // optionally). Binding with arguments is also known as `curry`.
+  // Delegates to **ECMAScript 5**'s native `Function.bind` if available.
+  // We check for `func.bind` first, to fail fast when `func` is undefined.
+  _.bind = function bind(func, context) {
+    var bound, args;
+    if (func.bind === nativeBind && nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
+    if (!_.isFunction(func)) throw new TypeError;
+    args = slice.call(arguments, 2);
+    return bound = function() {
+      if (!(this instanceof bound)) return func.apply(context, args.concat(slice.call(arguments)));
+      ctor.prototype = func.prototype;
+      var self = new ctor;
+      var result = func.apply(self, args.concat(slice.call(arguments)));
+      if (Object(result) === result) return result;
+      return self;
+    };
+  };
+
+  // Bind all of an object's methods to that object. Useful for ensuring that
+  // all callbacks defined on an object belong to it.
+  _.bindAll = function(obj) {
+    var funcs = slice.call(arguments, 1);
+    if (funcs.length == 0) funcs = _.functions(obj);
+    each(funcs, function(f) { obj[f] = _.bind(obj[f], obj); });
+    return obj;
+  };
+
+  // Memoize an expensive function by storing its results.
+  _.memoize = function(func, hasher) {
+    var memo = {};
+    hasher || (hasher = _.identity);
+    return function() {
+      var key = hasher.apply(this, arguments);
+      return _.has(memo, key) ? memo[key] : (memo[key] = func.apply(this, arguments));
+    };
+  };
+
+  // Delays a function for the given number of milliseconds, and then calls
+  // it with the arguments supplied.
+  _.delay = function(func, wait) {
+    var args = slice.call(arguments, 2);
+    return setTimeout(function(){ return func.apply(null, args); }, wait);
+  };
+
+  // Defers a function, scheduling it to run after the current call stack has
+  // cleared.
+  _.defer = function(func) {
+    return _.delay.apply(_, [func, 1].concat(slice.call(arguments, 1)));
+  };
+
+  // Returns a function, that, when invoked, will only be triggered at most once
+  // during a given window of time.
+  _.throttle = function(func, wait) {
+    var context, args, timeout, throttling, more, result;
+    var whenDone = _.debounce(function(){ more = throttling = false; }, wait);
+    return function() {
+      context = this; args = arguments;
+      var later = function() {
+        timeout = null;
+        if (more) func.apply(context, args);
+        whenDone();
+      };
+      if (!timeout) timeout = setTimeout(later, wait);
+      if (throttling) {
+        more = true;
+      } else {
+        throttling = true;
+        result = func.apply(context, args);
+      }
+      whenDone();
+      return result;
+    };
+  };
+
+  // Returns a function, that, as long as it continues to be invoked, will not
+  // be triggered. The function will be called after it stops being called for
+  // N milliseconds. If `immediate` is passed, trigger the function on the
+  // leading edge, instead of the trailing.
+  _.debounce = function(func, wait, immediate) {
+    var timeout;
+    return function() {
+      var context = this, args = arguments;
+      var later = function() {
+        timeout = null;
+        if (!immediate) func.apply(context, args);
+      };
+      var callNow = immediate && !timeout;
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+      if (callNow) func.apply(context, args);
+    };
+  };
+
+  // Returns a function that will be executed at most one time, no matter how
+  // often you call it. Useful for lazy initialization.
+  _.once = function(func) {
+    var ran = false, memo;
+    return function() {
+      if (ran) return memo;
+      ran = true;
+      return memo = func.apply(this, arguments);
+    };
+  };
+
+  // Returns the first function passed as an argument to the second,
+  // allowing you to adjust arguments, run code before and after, and
+  // conditionally execute the original function.
+  _.wrap = function(func, wrapper) {
+    return function() {
+      var args = [func].concat(slice.call(arguments, 0));
+      return wrapper.apply(this, args);
+    };
+  };
+
+  // Returns a function that is the composition of a list of functions, each
+  // consuming the return value of the function that follows.
+  _.compose = function() {
+    var funcs = arguments;
+    return function() {
+      var args = arguments;
+      for (var i = funcs.length - 1; i >= 0; i--) {
+        args = [funcs[i].apply(this, args)];
+      }
+      return args[0];
+    };
+  };
+
+  // Returns a function that will only be executed after being called N times.
+  _.after = function(times, func) {
+    if (times <= 0) return func();
+    return function() {
+      if (--times < 1) {
+        return func.apply(this, arguments);
+      }
+    };
+  };
+
+  // Object Functions
+  // ----------------
+
+  // Retrieve the names of an object's properties.
+  // Delegates to **ECMAScript 5**'s native `Object.keys`
+  _.keys = nativeKeys || function(obj) {
+    if (obj !== Object(obj)) throw new TypeError('Invalid object');
+    var keys = [];
+    for (var key in obj) if (_.has(obj, key)) keys[keys.length] = key;
+    return keys;
+  };
+
+  // Retrieve the values of an object's properties.
+  _.values = function(obj) {
+    return _.map(obj, _.identity);
+  };
+
+  // Return a sorted list of the function names available on the object.
+  // Aliased as `methods`
+  _.functions = _.methods = function(obj) {
+    var names = [];
+    for (var key in obj) {
+      if (_.isFunction(obj[key])) names.push(key);
+    }
+    return names.sort();
+  };
+
+  // Extend a given object with all the properties in passed-in object(s).
+  _.extend = function(obj) {
+    each(slice.call(arguments, 1), function(source) {
+      for (var prop in source) {
+        obj[prop] = source[prop];
+      }
+    });
+    return obj;
+  };
+
+  // Return a copy of the object only containing the whitelisted properties.
+  _.pick = function(obj) {
+    var result = {};
+    each(flatten(slice.call(arguments, 1), true, []), function(key) {
+      if (key in obj) result[key] = obj[key];
+    });
+    return result;
+  };
+
+  // Fill in a given object with default properties.
+  _.defaults = function(obj) {
+    each(slice.call(arguments, 1), function(source) {
+      for (var prop in source) {
+        if (obj[prop] == null) obj[prop] = source[prop];
+      }
+    });
+    return obj;
+  };
+
+  // Create a (shallow-cloned) duplicate of an object.
+  _.clone = function(obj) {
+    if (!_.isObject(obj)) return obj;
+    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+  };
+
+  // Invokes interceptor with the obj, and then returns obj.
+  // The primary purpose of this method is to "tap into" a method chain, in
+  // order to perform operations on intermediate results within the chain.
+  _.tap = function(obj, interceptor) {
+    interceptor(obj);
+    return obj;
+  };
+
+  // Internal recursive comparison function for `isEqual`.
+  var eq = function(a, b, stack) {
+    // Identical objects are equal. `0 === -0`, but they aren't identical.
+    // See the Harmony `egal` proposal: http://wiki.ecmascript.org/doku.php?id=harmony:egal.
+    if (a === b) return a !== 0 || 1 / a == 1 / b;
+    // A strict comparison is necessary because `null == undefined`.
+    if (a == null || b == null) return a === b;
+    // Unwrap any wrapped objects.
+    if (a._chain) a = a._wrapped;
+    if (b._chain) b = b._wrapped;
+    // Invoke a custom `isEqual` method if one is provided.
+    if (a.isEqual && _.isFunction(a.isEqual)) return a.isEqual(b);
+    if (b.isEqual && _.isFunction(b.isEqual)) return b.isEqual(a);
+    // Compare `[[Class]]` names.
+    var className = toString.call(a);
+    if (className != toString.call(b)) return false;
+    switch (className) {
+      // Strings, numbers, dates, and booleans are compared by value.
+      case '[object String]':
+        // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
+        // equivalent to `new String("5")`.
+        return a == String(b);
+      case '[object Number]':
+        // `NaN`s are equivalent, but non-reflexive. An `egal` comparison is performed for
+        // other numeric values.
+        return a != +a ? b != +b : (a == 0 ? 1 / a == 1 / b : a == +b);
+      case '[object Date]':
+      case '[object Boolean]':
+        // Coerce dates and booleans to numeric primitive values. Dates are compared by their
+        // millisecond representations. Note that invalid dates with millisecond representations
+        // of `NaN` are not equivalent.
+        return +a == +b;
+      // RegExps are compared by their source patterns and flags.
+      case '[object RegExp]':
+        return a.source == b.source &&
+               a.global == b.global &&
+               a.multiline == b.multiline &&
+               a.ignoreCase == b.ignoreCase;
+    }
+    if (typeof a != 'object' || typeof b != 'object') return false;
+    // Assume equality for cyclic structures. The algorithm for detecting cyclic
+    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
+    var length = stack.length;
+    while (length--) {
+      // Linear search. Performance is inversely proportional to the number of
+      // unique nested structures.
+      if (stack[length] == a) return true;
+    }
+    // Add the first object to the stack of traversed objects.
+    stack.push(a);
+    var size = 0, result = true;
+    // Recursively compare objects and arrays.
+    if (className == '[object Array]') {
+      // Compare array lengths to determine if a deep comparison is necessary.
+      size = a.length;
+      result = size == b.length;
+      if (result) {
+        // Deep compare the contents, ignoring non-numeric properties.
+        while (size--) {
+          // Ensure commutative equality for sparse arrays.
+          if (!(result = size in a == size in b && eq(a[size], b[size], stack))) break;
+        }
+      }
+    } else {
+      // Objects with different constructors are not equivalent.
+      if ('constructor' in a != 'constructor' in b || a.constructor != b.constructor) return false;
+      // Deep compare objects.
+      for (var key in a) {
+        if (_.has(a, key)) {
+          // Count the expected number of properties.
+          size++;
+          // Deep compare each member.
+          if (!(result = _.has(b, key) && eq(a[key], b[key], stack))) break;
+        }
+      }
+      // Ensure that both objects contain the same number of properties.
+      if (result) {
+        for (key in b) {
+          if (_.has(b, key) && !(size--)) break;
+        }
+        result = !size;
+      }
+    }
+    // Remove the first object from the stack of traversed objects.
+    stack.pop();
+    return result;
+  };
+
+  // Perform a deep comparison to check if two objects are equal.
+  _.isEqual = function(a, b) {
+    return eq(a, b, []);
+  };
+
+  // Is a given array, string, or object empty?
+  // An "empty" object has no enumerable own-properties.
+  _.isEmpty = function(obj) {
+    if (obj == null) return true;
+    if (_.isArray(obj) || _.isString(obj)) return obj.length === 0;
+    for (var key in obj) if (_.has(obj, key)) return false;
+    return true;
+  };
+
+  // Is a given value a DOM element?
+  _.isElement = function(obj) {
+    return !!(obj && obj.nodeType == 1);
+  };
+
+  // Is a given value an array?
+  // Delegates to ECMA5's native Array.isArray
+  _.isArray = nativeIsArray || function(obj) {
+    return toString.call(obj) == '[object Array]';
+  };
+
+  // Is a given variable an object?
+  _.isObject = function(obj) {
+    return obj === Object(obj);
+  };
+
+  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp.
+  each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp'], function(name) {
+    _['is' + name] = function(obj) {
+      return toString.call(obj) == '[object ' + name + ']';
+    };
+  });
+
+  // Define a fallback version of the method in browsers (ahem, IE), where
+  // there isn't any inspectable "Arguments" type.
+  if (!_.isArguments(arguments)) {
+    _.isArguments = function(obj) {
+      return !!(obj && _.has(obj, 'callee'));
+    };
+  }
+
+  // Is a given object a finite number?
+  _.isFinite = function(obj) {
+    return _.isNumber(obj) && isFinite(obj);
+  };
+
+  // Is the given value `NaN`?
+  _.isNaN = function(obj) {
+    // `NaN` is the only value for which `===` is not reflexive.
+    return obj !== obj;
+  };
+
+  // Is a given value a boolean?
+  _.isBoolean = function(obj) {
+    return obj === true || obj === false || toString.call(obj) == '[object Boolean]';
+  };
+
+  // Is a given value equal to null?
+  _.isNull = function(obj) {
+    return obj === null;
+  };
+
+  // Is a given variable undefined?
+  _.isUndefined = function(obj) {
+    return obj === void 0;
+  };
+
+  // Shortcut function for checking if an object has a given property directly
+  // on itself (in other words, not on a prototype).
+  _.has = function(obj, key) {
+    return hasOwnProperty.call(obj, key);
+  };
+
+  // Utility Functions
+  // -----------------
+
+  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its
+  // previous owner. Returns a reference to the Underscore object.
+  _.noConflict = function() {
+    root._ = previousUnderscore;
+    return this;
+  };
+
+  // Keep the identity function around for default iterators.
+  _.identity = function(value) {
+    return value;
+  };
+
+  // Run a function **n** times.
+  _.times = function(n, iterator, context) {
+    for (var i = 0; i < n; i++) iterator.call(context, i);
+  };
+
+  // List of HTML entities for escaping.
+  var htmlEscapes = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;'
+  };
+
+  // Regex containing the keys listed immediately above.
+  var htmlEscaper = /[&<>"'\/]/g;
+
+  // Escape a string for HTML interpolation.
+  _.escape = function(string) {
+    return ('' + string).replace(htmlEscaper, function(match) {
+      return htmlEscapes[match];
+    });
+  };
+
+  // If the value of the named property is a function then invoke it;
+  // otherwise, return it.
+  _.result = function(object, property) {
+    if (object == null) return null;
+    var value = object[property];
+    return _.isFunction(value) ? value.call(object) : value;
+  };
+
+  // Add your own custom functions to the Underscore object, ensuring that
+  // they're correctly added to the OOP wrapper as well.
+  _.mixin = function(obj) {
+    each(_.functions(obj), function(name){
+      addToWrapper(name, _[name] = obj[name]);
+    });
+  };
+
+  // Generate a unique integer id (unique within the entire client session).
+  // Useful for temporary DOM ids.
+  var idCounter = 0;
+  _.uniqueId = function(prefix) {
+    var id = idCounter++;
+    return prefix ? prefix + id : id;
+  };
+
+  // By default, Underscore uses ERB-style template delimiters, change the
+  // following template settings to use alternative delimiters.
+  _.templateSettings = {
+    evaluate    : /<%([\s\S]+?)%>/g,
+    interpolate : /<%=([\s\S]+?)%>/g,
+    escape      : /<%-([\s\S]+?)%>/g
+  };
+
+  // When customizing `templateSettings`, if you don't want to define an
+  // interpolation, evaluation or escaping regex, we need one that is
+  // guaranteed not to match.
+  var noMatch = /.^/;
+
+  // Certain characters need to be escaped so that they can be put into a
+  // string literal.
+  var escapes = {
+    '\\':   '\\',
+    "'":    "'",
+    r:      '\r',
+    n:      '\n',
+    t:      '\t',
+    u2028:  '\u2028',
+    u2029:  '\u2029'
+  };
+
+  for (var key in escapes) escapes[escapes[key]] = key;
+  var escaper = /\\|'|\r|\n|\t|\u2028|\u2029/g;
+  var unescaper = /\\(\\|'|r|n|t|u2028|u2029)/g;
+
+  // Within an interpolation, evaluation, or escaping, remove HTML escaping
+  // that had been previously added.
+  var unescape = function(code) {
+    return code.replace(unescaper, function(match, escape) {
+      return escapes[escape];
+    });
+  };
+
+  // JavaScript micro-templating, similar to John Resig's implementation.
+  // Underscore templating handles arbitrary delimiters, preserves whitespace,
+  // and correctly escapes quotes within interpolated code.
+  _.template = function(text, data, settings) {
+    settings = _.defaults(settings || {}, _.templateSettings);
+
+    // Compile the template source, taking care to escape characters that
+    // cannot be included in a string literal and then unescape them in code
+    // blocks.
+    var source = "__p+='" + text
+      .replace(escaper, function(match) {
+        return '\\' + escapes[match];
+      })
+      .replace(settings.escape || noMatch, function(match, code) {
+        return "'+\n((__t=(" + unescape(code) + "))==null?'':_.escape(__t))+\n'";
+      })
+      .replace(settings.interpolate || noMatch, function(match, code) {
+        return "'+\n((__t=(" + unescape(code) + "))==null?'':__t)+\n'";
+      })
+      .replace(settings.evaluate || noMatch, function(match, code) {
+        return "';\n" + unescape(code) + "\n__p+='";
+      }) + "';\n";
+
+    // If a variable is not specified, place data values in local scope.
+    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+
+    source = "var __t,__p='',__j=Array.prototype.join," +
+      "print=function(){__p+=__j.call(arguments,'')};\n" +
+      source + "return __p;\n";
+
+    var render = new Function(settings.variable || 'obj', '_', source);
+    if (data) return render(data, _);
+    var template = function(data) {
+      return render.call(this, data, _);
+    };
+
+    // Provide the compiled function source as a convenience for precompilation.
+    template.source = 'function(' + (settings.variable || 'obj') + '){\n' + source + '}';
+
+    return template;
+  };
+
+  // Add a "chain" function, which will delegate to the wrapper.
+  _.chain = function(obj) {
+    return _(obj).chain();
+  };
+
+  // The OOP Wrapper
+  // ---------------
+
+  // If Underscore is called as a function, it returns a wrapped object that
+  // can be used OO-style. This wrapper holds altered versions of all the
+  // underscore functions. Wrapped objects may be chained.
+  var wrapper = function(obj) { this._wrapped = obj; };
+
+  // Expose `wrapper.prototype` as `_.prototype`
+  _.prototype = wrapper.prototype;
+
+  // Helper function to continue chaining intermediate results.
+  var result = function(obj, chain) {
+    return chain ? _(obj).chain() : obj;
+  };
+
+  // A method to easily add functions to the OOP wrapper.
+  var addToWrapper = function(name, func) {
+    wrapper.prototype[name] = function() {
+      var args = slice.call(arguments);
+      unshift.call(args, this._wrapped);
+      return result(func.apply(_, args), this._chain);
+    };
+  };
+
+  // Add all of the Underscore functions to the wrapper object.
+  _.mixin(_);
+
+  // Add all mutator Array functions to the wrapper.
+  each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+    var method = ArrayProto[name];
+    wrapper.prototype[name] = function() {
+      var obj = this._wrapped;
+      method.apply(obj, arguments);
+      if ((name == 'shift' || name == 'splice') && obj.length === 0) delete obj[0];
+      return result(obj, this._chain);
+    };
+  });
+
+  // Add all accessor Array functions to the wrapper.
+  each(['concat', 'join', 'slice'], function(name) {
+    var method = ArrayProto[name];
+    wrapper.prototype[name] = function() {
+      return result(method.apply(this._wrapped, arguments), this._chain);
+    };
+  });
+
+  // Start chaining a wrapped Underscore object.
+  wrapper.prototype.chain = function() {
+    this._chain = true;
+    return this;
+  };
+
+  // Extracts the result from a wrapped and chained object.
+  wrapper.prototype.value = function() {
+    return this._wrapped;
+  };
+
+}).call(this);
+
+});
+require.register("namjul-backbone/backbone.js", function(exports, require, module){
+//     Backbone.js 1.0.0
+
+//     (c) 2010-2011 Jeremy Ashkenas, DocumentCloud Inc.
+//     (c) 2011-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+//     Backbone may be freely distributed under the MIT license.
+//     For all details and documentation:
+//     http://backbonejs.org
+
+(function(){
+
+  // Initial Setup
+  // -------------
+
+  // Save a reference to the global object (`window` in the browser, `exports`
+  // on the server).
+  var root = this;
+
+  // Save the previous value of the `Backbone` variable, so that it can be
+  // restored later on, if `noConflict` is used.
+  var previousBackbone = root.Backbone;
+
+  // Create local references to array methods we'll want to use later.
+  var array = [];
+  var push = array.push;
+  var slice = array.slice;
+  var splice = array.splice;
+
+  // The top-level namespace. All public Backbone classes and modules will
+  // be attached to this. Exported for both the browser and the server.
+  var Backbone;
+  if (typeof exports !== 'undefined') {
+    Backbone = exports;
+  } else {
+    Backbone = root.Backbone = {};
+  }
+
+  // Current version of the library. Keep in sync with `package.json`.
+  Backbone.VERSION = '1.0.0';
+
+  // Require Underscore, if we're on the server, and it's not already present.
+  var _ = root._;
+  if (!_ && (typeof require !== 'undefined')) _ = require('underscore');
+
+  // For Backbone's purposes, jQuery, Zepto, Ender, or My Library (kidding) owns
+  // the `$` variable.
+  Backbone.$ = root.jQuery || root.Zepto || root.ender || root.$;
+
+  // Runs Backbone.js in *noConflict* mode, returning the `Backbone` variable
+  // to its previous owner. Returns a reference to this Backbone object.
+  Backbone.noConflict = function() {
+    root.Backbone = previousBackbone;
+    return this;
+  };
+
+  // Turn on `emulateHTTP` to support legacy HTTP servers. Setting this option
+  // will fake `"PUT"` and `"DELETE"` requests via the `_method` parameter and
+  // set a `X-Http-Method-Override` header.
+  Backbone.emulateHTTP = false;
+
+  // Turn on `emulateJSON` to support legacy servers that can't deal with direct
+  // `application/json` requests ... will encode the body as
+  // `application/x-www-form-urlencoded` instead and will send the model in a
+  // form param named `model`.
+  Backbone.emulateJSON = false;
+
+  // Backbone.Events
+  // ---------------
+
+  // A module that can be mixed in to *any object* in order to provide it with
+  // custom events. You may bind with `on` or remove with `off` callback
+  // functions to an event; `trigger`-ing an event fires all callbacks in
+  // succession.
+  //
+  //     var object = {};
+  //     _.extend(object, Backbone.Events);
+  //     object.on('expand', function(){ alert('expanded'); });
+  //     object.trigger('expand');
+  //
+  var Events = Backbone.Events = {
+
+    // Bind an event to a `callback` function. Passing `"all"` will bind
+    // the callback to all events fired.
+    on: function(name, callback, context) {
+      if (!eventsApi(this, 'on', name, [callback, context]) || !callback) return this;
+      this._events || (this._events = {});
+      var events = this._events[name] || (this._events[name] = []);
+      events.push({callback: callback, context: context, ctx: context || this});
+      return this;
+    },
+
+    // Bind an event to only be triggered a single time. After the first time
+    // the callback is invoked, it will be removed.
+    once: function(name, callback, context) {
+      if (!eventsApi(this, 'once', name, [callback, context]) || !callback) return this;
+      var self = this;
+      var once = _.once(function() {
+        self.off(name, once);
+        callback.apply(this, arguments);
+      });
+      once._callback = callback;
+      return this.on(name, once, context);
+    },
+
+    // Remove one or many callbacks. If `context` is null, removes all
+    // callbacks with that function. If `callback` is null, removes all
+    // callbacks for the event. If `name` is null, removes all bound
+    // callbacks for all events.
+    off: function(name, callback, context) {
+      var retain, ev, events, names, i, l, j, k;
+      if (!this._events || !eventsApi(this, 'off', name, [callback, context])) return this;
+      if (!name && !callback && !context) {
+        this._events = {};
+        return this;
+      }
+
+      names = name ? [name] : _.keys(this._events);
+      for (i = 0, l = names.length; i < l; i++) {
+        name = names[i];
+        if (events = this._events[name]) {
+          this._events[name] = retain = [];
+          if (callback || context) {
+            for (j = 0, k = events.length; j < k; j++) {
+              ev = events[j];
+              if ((callback && callback !== ev.callback && callback !== ev.callback._callback) ||
+                  (context && context !== ev.context)) {
+                retain.push(ev);
+              }
+            }
+          }
+          if (!retain.length) delete this._events[name];
+        }
+      }
+
+      return this;
+    },
+
+    // Trigger one or many events, firing all bound callbacks. Callbacks are
+    // passed the same arguments as `trigger` is, apart from the event name
+    // (unless you're listening on `"all"`, which will cause your callback to
+    // receive the true name of the event as the first argument).
+    trigger: function(name) {
+      if (!this._events) return this;
+      var args = slice.call(arguments, 1);
+      if (!eventsApi(this, 'trigger', name, args)) return this;
+      var events = this._events[name];
+      var allEvents = this._events.all;
+      if (events) triggerEvents(events, args);
+      if (allEvents) triggerEvents(allEvents, arguments);
+      return this;
+    },
+
+    // Tell this object to stop listening to either specific events ... or
+    // to every object it's currently listening to.
+    stopListening: function(obj, name, callback) {
+      var listeners = this._listeners;
+      if (!listeners) return this;
+      var deleteListener = !name && !callback;
+      if (typeof name === 'object') callback = this;
+      if (obj) (listeners = {})[obj._listenerId] = obj;
+      for (var id in listeners) {
+        listeners[id].off(name, callback, this);
+        if (deleteListener) delete this._listeners[id];
+      }
+      return this;
+    }
+
+  };
+
+  // Regular expression used to split event strings.
+  var eventSplitter = /\s+/;
+
+  // Implement fancy features of the Events API such as multiple event
+  // names `"change blur"` and jQuery-style event maps `{change: action}`
+  // in terms of the existing API.
+  var eventsApi = function(obj, action, name, rest) {
+    if (!name) return true;
+
+    // Handle event maps.
+    if (typeof name === 'object') {
+      for (var key in name) {
+        obj[action].apply(obj, [key, name[key]].concat(rest));
+      }
+      return false;
+    }
+
+    // Handle space separated event names.
+    if (eventSplitter.test(name)) {
+      var names = name.split(eventSplitter);
+      for (var i = 0, l = names.length; i < l; i++) {
+        obj[action].apply(obj, [names[i]].concat(rest));
+      }
+      return false;
+    }
+
+    return true;
+  };
+
+  // A difficult-to-believe, but optimized internal dispatch function for
+  // triggering events. Tries to keep the usual cases speedy (most internal
+  // Backbone events have 3 arguments).
+  var triggerEvents = function(events, args) {
+    var ev, i = -1, l = events.length, a1 = args[0], a2 = args[1], a3 = args[2];
+    switch (args.length) {
+      case 0: while (++i < l) (ev = events[i]).callback.call(ev.ctx); return;
+      case 1: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1); return;
+      case 2: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1, a2); return;
+      case 3: while (++i < l) (ev = events[i]).callback.call(ev.ctx, a1, a2, a3); return;
+      default: while (++i < l) (ev = events[i]).callback.apply(ev.ctx, args);
+    }
+  };
+
+  var listenMethods = {listenTo: 'on', listenToOnce: 'once'};
+
+  // Inversion-of-control versions of `on` and `once`. Tell *this* object to
+  // listen to an event in another object ... keeping track of what it's
+  // listening to.
+  _.each(listenMethods, function(implementation, method) {
+    Events[method] = function(obj, name, callback) {
+      var listeners = this._listeners || (this._listeners = {});
+      var id = obj._listenerId || (obj._listenerId = _.uniqueId('l'));
+      listeners[id] = obj;
+      if (typeof name === 'object') callback = this;
+      obj[implementation](name, callback, this);
+      return this;
+    };
+  });
+
+  // Aliases for backwards compatibility.
+  Events.bind   = Events.on;
+  Events.unbind = Events.off;
+
+  // Allow the `Backbone` object to serve as a global event bus, for folks who
+  // want global "pubsub" in a convenient place.
+  _.extend(Backbone, Events);
+
+  // Backbone.Model
+  // --------------
+
+  // Backbone **Models** are the basic data object in the framework --
+  // frequently representing a row in a table in a database on your server.
+  // A discrete chunk of data and a bunch of useful, related methods for
+  // performing computations and transformations on that data.
+
+  // Create a new model with the specified attributes. A client id (`cid`)
+  // is automatically generated and assigned for you.
+  var Model = Backbone.Model = function(attributes, options) {
+    var defaults;
+    var attrs = attributes || {};
+    options || (options = {});
+    this.cid = _.uniqueId('c');
+    this.attributes = {};
+    if (options.collection) this.collection = options.collection;
+    if (options.parse) attrs = this.parse(attrs, options) || {};
+    options._attrs || (options._attrs = attrs);
+    if (defaults = _.result(this, 'defaults')) {
+      attrs = _.defaults({}, attrs, defaults);
+    }
+    this.set(attrs, options);
+    this.changed = {};
+    this.initialize.apply(this, arguments);
+  };
+
+  // Attach all inheritable methods to the Model prototype.
+  _.extend(Model.prototype, Events, {
+
+    // A hash of attributes whose current and previous value differ.
+    changed: null,
+
+    // The value returned during the last failed validation.
+    validationError: null,
+
+    // The default name for the JSON `id` attribute is `"id"`. MongoDB and
+    // CouchDB users may want to set this to `"_id"`.
+    idAttribute: 'id',
+
+    // Initialize is an empty function by default. Override it with your own
+    // initialization logic.
+    initialize: function(){},
+
+    // Return a copy of the model's `attributes` object.
+    toJSON: function(options) {
+      return _.clone(this.attributes);
+    },
+
+    // Proxy `Backbone.sync` by default -- but override this if you need
+    // custom syncing semantics for *this* particular model.
+    sync: function() {
+      return Backbone.sync.apply(this, arguments);
+    },
+
+    // Get the value of an attribute.
+    get: function(attr) {
+      return this.attributes[attr];
+    },
+
+    // Get the HTML-escaped value of an attribute.
+    escape: function(attr) {
+      return _.escape(this.get(attr));
+    },
+
+    // Returns `true` if the attribute contains a value that is not null
+    // or undefined.
+    has: function(attr) {
+      return this.get(attr) != null;
+    },
+
+    // Set a hash of model attributes on the object, firing `"change"`. This is
+    // the core primitive operation of a model, updating the data and notifying
+    // anyone who needs to know about the change in state. The heart of the beast.
+    set: function(key, val, options) {
+      var attr, attrs, unset, changes, silent, changing, prev, current;
+      if (key == null) return this;
+
+      // Handle both `"key", value` and `{key: value}` -style arguments.
+      if (typeof key === 'object') {
+        attrs = key;
+        options = val;
+      } else {
+        (attrs = {})[key] = val;
+      }
+
+      options || (options = {});
+
+      // Run validation.
+      if (!this._validate(attrs, options)) return false;
+
+      // Extract attributes and options.
+      unset           = options.unset;
+      silent          = options.silent;
+      changes         = [];
+      changing        = this._changing;
+      this._changing  = true;
+
+      if (!changing) {
+        this._previousAttributes = _.clone(this.attributes);
+        this.changed = {};
+      }
+      current = this.attributes, prev = this._previousAttributes;
+
+      // Check for changes of `id`.
+      if (this.idAttribute in attrs) this.id = attrs[this.idAttribute];
+
+      // For each `set` attribute, update or delete the current value.
+      for (attr in attrs) {
+        val = attrs[attr];
+        if (!_.isEqual(current[attr], val)) changes.push(attr);
+        if (!_.isEqual(prev[attr], val)) {
+          this.changed[attr] = val;
+        } else {
+          delete this.changed[attr];
+        }
+        unset ? delete current[attr] : current[attr] = val;
+      }
+
+      // Trigger all relevant attribute changes.
+      if (!silent) {
+        if (changes.length) this._pending = true;
+        for (var i = 0, l = changes.length; i < l; i++) {
+          this.trigger('change:' + changes[i], this, current[changes[i]], options);
+        }
+      }
+
+      // You might be wondering why there's a `while` loop here. Changes can
+      // be recursively nested within `"change"` events.
+      if (changing) return this;
+      if (!silent) {
+        while (this._pending) {
+          this._pending = false;
+          this.trigger('change', this, options);
+        }
+      }
+      this._pending = false;
+      this._changing = false;
+      return this;
+    },
+
+    // Remove an attribute from the model, firing `"change"`. `unset` is a noop
+    // if the attribute doesn't exist.
+    unset: function(attr, options) {
+      return this.set(attr, void 0, _.extend({}, options, {unset: true}));
+    },
+
+    // Clear all attributes on the model, firing `"change"`.
+    clear: function(options) {
+      var attrs = {};
+      for (var key in this.attributes) attrs[key] = void 0;
+      return this.set(attrs, _.extend({}, options, {unset: true}));
+    },
+
+    // Determine if the model has changed since the last `"change"` event.
+    // If you specify an attribute name, determine if that attribute has changed.
+    hasChanged: function(attr) {
+      if (attr == null) return !_.isEmpty(this.changed);
+      return _.has(this.changed, attr);
+    },
+
+    // Return an object containing all the attributes that have changed, or
+    // false if there are no changed attributes. Useful for determining what
+    // parts of a view need to be updated and/or what attributes need to be
+    // persisted to the server. Unset attributes will be set to undefined.
+    // You can also pass an attributes object to diff against the model,
+    // determining if there *would be* a change.
+    changedAttributes: function(diff) {
+      if (!diff) return this.hasChanged() ? _.clone(this.changed) : false;
+      var val, changed = false;
+      var old = this._changing ? this._previousAttributes : this.attributes;
+      for (var attr in diff) {
+        if (_.isEqual(old[attr], (val = diff[attr]))) continue;
+        (changed || (changed = {}))[attr] = val;
+      }
+      return changed;
+    },
+
+    // Get the previous value of an attribute, recorded at the time the last
+    // `"change"` event was fired.
+    previous: function(attr) {
+      if (attr == null || !this._previousAttributes) return null;
+      return this._previousAttributes[attr];
+    },
+
+    // Get all of the attributes of the model at the time of the previous
+    // `"change"` event.
+    previousAttributes: function() {
+      return _.clone(this._previousAttributes);
+    },
+
+    // Fetch the model from the server. If the server's representation of the
+    // model differs from its current attributes, they will be overridden,
+    // triggering a `"change"` event.
+    fetch: function(options) {
+      options = options ? _.clone(options) : {};
+      if (options.parse === void 0) options.parse = true;
+      var model = this;
+      var success = options.success;
+      options.success = function(resp) {
+        if (!model.set(model.parse(resp, options), options)) return false;
+        if (success) success(model, resp, options);
+        model.trigger('sync', model, resp, options);
+      };
+      wrapError(this, options);
+      return this.sync('read', this, options);
+    },
+
+    // Set a hash of model attributes, and sync the model to the server.
+    // If the server returns an attributes hash that differs, the model's
+    // state will be `set` again.
+    save: function(key, val, options) {
+      var attrs, method, xhr, attributes = this.attributes;
+
+      // Handle both `"key", value` and `{key: value}` -style arguments.
+      if (key == null || typeof key === 'object') {
+        attrs = key;
+        options = val;
+      } else {
+        (attrs = {})[key] = val;
+      }
+
+      options = _.extend({validate: true}, options);
+
+      // If we're not waiting and attributes exist, save acts as
+      // `set(attr).save(null, opts)` with validation. Otherwise, check if
+      // the model will be valid when the attributes, if any, are set.
+      if (attrs && !options.wait) {
+        if (!this.set(attrs, options)) return false;
+      } else {
+        if (!this._validate(attrs, options)) return false;
+      }
+
+      // Set temporary attributes if `{wait: true}`.
+      if (attrs && options.wait) {
+        this.attributes = _.extend({}, attributes, attrs);
+      }
+
+      // After a successful server-side save, the client is (optionally)
+      // updated with the server-side state.
+      if (options.parse === void 0) options.parse = true;
+      var model = this;
+      var success = options.success;
+      options.success = function(resp) {
+        // Ensure attributes are restored during synchronous saves.
+        model.attributes = attributes;
+        var serverAttrs = model.parse(resp, options);
+        if (options.wait) serverAttrs = _.extend(attrs || {}, serverAttrs);
+        if (_.isObject(serverAttrs) && !model.set(serverAttrs, options)) {
+          return false;
+        }
+        if (success) success(model, resp, options);
+        model.trigger('sync', model, resp, options);
+      };
+      wrapError(this, options);
+
+      method = this.isNew() ? 'create' : (options.patch ? 'patch' : 'update');
+      if (method === 'patch') options.attrs = attrs;
+      xhr = this.sync(method, this, options);
+
+      // Restore attributes.
+      if (attrs && options.wait) this.attributes = attributes;
+
+      return xhr;
+    },
+
+    // Destroy this model on the server if it was already persisted.
+    // Optimistically removes the model from its collection, if it has one.
+    // If `wait: true` is passed, waits for the server to respond before removal.
+    destroy: function(options) {
+      options = options ? _.clone(options) : {};
+      var model = this;
+      var success = options.success;
+
+      var destroy = function() {
+        model.trigger('destroy', model, model.collection, options);
+      };
+
+      options.success = function(resp) {
+        if (options.wait || model.isNew()) destroy();
+        if (success) success(model, resp, options);
+        if (!model.isNew()) model.trigger('sync', model, resp, options);
+      };
+
+      if (this.isNew()) {
+        options.success();
+        return false;
+      }
+      wrapError(this, options);
+
+      var xhr = this.sync('delete', this, options);
+      if (!options.wait) destroy();
+      return xhr;
+    },
+
+    // Default URL for the model's representation on the server -- if you're
+    // using Backbone's restful methods, override this to change the endpoint
+    // that will be called.
+    url: function() {
+      var base = _.result(this, 'urlRoot') || _.result(this.collection, 'url') || urlError();
+      if (this.isNew()) return base;
+      return base + (base.charAt(base.length - 1) === '/' ? '' : '/') + encodeURIComponent(this.id);
+    },
+
+    // **parse** converts a response into the hash of attributes to be `set` on
+    // the model. The default implementation is just to pass the response along.
+    parse: function(resp, options) {
+      return resp;
+    },
+
+    // Create a new model with identical attributes to this one.
+    clone: function() {
+      return new this.constructor(this.attributes);
+    },
+
+    // A model is new if it has never been saved to the server, and lacks an id.
+    isNew: function() {
+      return this.id == null;
+    },
+
+    // Check if the model is currently in a valid state.
+    isValid: function(options) {
+      return this._validate({}, _.extend(options || {}, { validate: true }));
+    },
+
+    // Run validation against the next complete set of model attributes,
+    // returning `true` if all is well. Otherwise, fire an `"invalid"` event.
+    _validate: function(attrs, options) {
+      if (!options.validate || !this.validate) return true;
+      attrs = _.extend({}, this.attributes, attrs);
+      var error = this.validationError = this.validate(attrs, options) || null;
+      if (!error) return true;
+      this.trigger('invalid', this, error, _.extend(options || {}, {validationError: error}));
+      return false;
+    }
+
+  });
+
+  // Underscore methods that we want to implement on the Model.
+  var modelMethods = ['keys', 'values', 'pairs', 'invert', 'pick', 'omit'];
+
+  // Mix in each Underscore method as a proxy to `Model#attributes`.
+  _.each(modelMethods, function(method) {
+    Model.prototype[method] = function() {
+      var args = slice.call(arguments);
+      args.unshift(this.attributes);
+      return _[method].apply(_, args);
+    };
+  });
+
+  // Backbone.Collection
+  // -------------------
+
+  // If models tend to represent a single row of data, a Backbone Collection is
+  // more analagous to a table full of data ... or a small slice or page of that
+  // table, or a collection of rows that belong together for a particular reason
+  // -- all of the messages in this particular folder, all of the documents
+  // belonging to this particular author, and so on. Collections maintain
+  // indexes of their models, both in order, and for lookup by `id`.
+
+  // Create a new **Collection**, perhaps to contain a specific type of `model`.
+  // If a `comparator` is specified, the Collection will maintain
+  // its models in sort order, as they're added and removed.
+  var Collection = Backbone.Collection = function(models, options) {
+    options || (options = {});
+    if (options.model) this.model = options.model;
+    if (options.comparator !== void 0) this.comparator = options.comparator;
+    this._reset();
+    this.initialize.apply(this, arguments);
+    if (models) this.reset(models, _.extend({silent: true}, options));
+  };
+
+  // Default options for `Collection#set`.
+  var setOptions = {add: true, remove: true, merge: true};
+  var addOptions = {add: true, remove: false};
+
+  // Define the Collection's inheritable methods.
+  _.extend(Collection.prototype, Events, {
+
+    // The default model for a collection is just a **Backbone.Model**.
+    // This should be overridden in most cases.
+    model: Model,
+
+    // Initialize is an empty function by default. Override it with your own
+    // initialization logic.
+    initialize: function(){},
+
+    // The JSON representation of a Collection is an array of the
+    // models' attributes.
+    toJSON: function(options) {
+      return this.map(function(model){ return model.toJSON(options); });
+    },
+
+    // Proxy `Backbone.sync` by default.
+    sync: function() {
+      return Backbone.sync.apply(this, arguments);
+    },
+
+    // Add a model, or list of models to the set.
+    add: function(models, options) {
+      return this.set(models, _.extend({merge: false}, options, addOptions));
+    },
+
+    // Remove a model, or a list of models from the set.
+    remove: function(models, options) {
+      models = _.isArray(models) ? models.slice() : [models];
+      options || (options = {});
+      var i, l, index, model;
+      for (i = 0, l = models.length; i < l; i++) {
+        model = this.get(models[i]);
+        if (!model) continue;
+        delete this._byId[model.id];
+        delete this._byId[model.cid];
+        index = this.indexOf(model);
+        this.models.splice(index, 1);
+        this.length--;
+        if (!options.silent) {
+          options.index = index;
+          model.trigger('remove', model, this, options);
+        }
+        this._removeReference(model);
+      }
+      return this;
+    },
+
+    // Update a collection by `set`-ing a new list of models, adding new ones,
+    // removing models that are no longer present, and merging models that
+    // already exist in the collection, as necessary. Similar to **Model#set**,
+    // the core operation for updating the data contained by the collection.
+    set: function(models, options) {
+      options = _.defaults({}, options, setOptions);
+      if (options.parse) models = this.parse(models, options);
+      if (!_.isArray(models)) models = models ? [models] : [];
+      var i, l, model, attrs, existing, sort;
+      var at = options.at;
+      var sortable = this.comparator && (at == null) && options.sort !== false;
+      var sortAttr = _.isString(this.comparator) ? this.comparator : null;
+      var toAdd = [], toRemove = [], modelMap = {};
+      var add = options.add, merge = options.merge, remove = options.remove;
+      var order = !sortable && add && remove ? [] : false;
+
+      // Turn bare objects into model references, and prevent invalid models
+      // from being added.
+      for (i = 0, l = models.length; i < l; i++) {
+        if (!(model = this._prepareModel(attrs = models[i], options))) continue;
+
+        // If a duplicate is found, prevent it from being added and
+        // optionally merge it into the existing model.
+        if (existing = this.get(model)) {
+          if (remove) modelMap[existing.cid] = true;
+          if (merge) {
+            attrs = attrs === model ? model.attributes : options._attrs;
+            delete options._attrs;
+            existing.set(attrs, options);
+            if (sortable && !sort && existing.hasChanged(sortAttr)) sort = true;
+          }
+
+        // This is a new model, push it to the `toAdd` list.
+        } else if (add) {
+          toAdd.push(model);
+
+          // Listen to added models' events, and index models for lookup by
+          // `id` and by `cid`.
+          model.on('all', this._onModelEvent, this);
+          this._byId[model.cid] = model;
+          if (model.id != null) this._byId[model.id] = model;
+        }
+        if (order) order.push(existing || model);
+      }
+
+      // Remove nonexistent models if appropriate.
+      if (remove) {
+        for (i = 0, l = this.length; i < l; ++i) {
+          if (!modelMap[(model = this.models[i]).cid]) toRemove.push(model);
+        }
+        if (toRemove.length) this.remove(toRemove, options);
+      }
+
+      // See if sorting is needed, update `length` and splice in new models.
+      if (toAdd.length || (order && order.length)) {
+        if (sortable) sort = true;
+        this.length += toAdd.length;
+        if (at != null) {
+          splice.apply(this.models, [at, 0].concat(toAdd));
+        } else {
+          if (order) this.models.length = 0;
+          push.apply(this.models, order || toAdd);
+        }
+      }
+
+      // Silently sort the collection if appropriate.
+      if (sort) this.sort({silent: true});
+
+      if (options.silent) return this;
+
+      // Trigger `add` events.
+      for (i = 0, l = toAdd.length; i < l; i++) {
+        (model = toAdd[i]).trigger('add', model, this, options);
+      }
+
+      // Trigger `sort` if the collection was sorted.
+      if (sort || (order && order.length)) this.trigger('sort', this, options);
+      return this;
+    },
+
+    // When you have more items than you want to add or remove individually,
+    // you can reset the entire set with a new list of models, without firing
+    // any granular `add` or `remove` events. Fires `reset` when finished.
+    // Useful for bulk operations and optimizations.
+    reset: function(models, options) {
+      options || (options = {});
+      for (var i = 0, l = this.models.length; i < l; i++) {
+        this._removeReference(this.models[i]);
+      }
+      options.previousModels = this.models;
+      this._reset();
+      this.add(models, _.extend({silent: true}, options));
+      if (!options.silent) this.trigger('reset', this, options);
+      return this;
+    },
+
+    // Add a model to the end of the collection.
+    push: function(model, options) {
+      model = this._prepareModel(model, options);
+      this.add(model, _.extend({at: this.length}, options));
+      return model;
+    },
+
+    // Remove a model from the end of the collection.
+    pop: function(options) {
+      var model = this.at(this.length - 1);
+      this.remove(model, options);
+      return model;
+    },
+
+    // Add a model to the beginning of the collection.
+    unshift: function(model, options) {
+      model = this._prepareModel(model, options);
+      this.add(model, _.extend({at: 0}, options));
+      return model;
+    },
+
+    // Remove a model from the beginning of the collection.
+    shift: function(options) {
+      var model = this.at(0);
+      this.remove(model, options);
+      return model;
+    },
+
+    // Slice out a sub-array of models from the collection.
+    slice: function() {
+      return slice.apply(this.models, arguments);
+    },
+
+    // Get a model from the set by id.
+    get: function(obj) {
+      if (obj == null) return void 0;
+      return this._byId[obj.id != null ? obj.id : obj.cid || obj];
+    },
+
+    // Get the model at the given index.
+    at: function(index) {
+      return this.models[index];
+    },
+
+    // Return models with matching attributes. Useful for simple cases of
+    // `filter`.
+    where: function(attrs, first) {
+      if (_.isEmpty(attrs)) return first ? void 0 : [];
+      return this[first ? 'find' : 'filter'](function(model) {
+        for (var key in attrs) {
+          if (attrs[key] !== model.get(key)) return false;
+        }
+        return true;
+      });
+    },
+
+    // Return the first model with matching attributes. Useful for simple cases
+    // of `find`.
+    findWhere: function(attrs) {
+      return this.where(attrs, true);
+    },
+
+    // Force the collection to re-sort itself. You don't need to call this under
+    // normal circumstances, as the set will maintain sort order as each item
+    // is added.
+    sort: function(options) {
+      if (!this.comparator) throw new Error('Cannot sort a set without a comparator');
+      options || (options = {});
+
+      // Run sort based on type of `comparator`.
+      if (_.isString(this.comparator) || this.comparator.length === 1) {
+        this.models = this.sortBy(this.comparator, this);
+      } else {
+        this.models.sort(_.bind(this.comparator, this));
+      }
+
+      if (!options.silent) this.trigger('sort', this, options);
+      return this;
+    },
+
+    // Figure out the smallest index at which a model should be inserted so as
+    // to maintain order.
+    sortedIndex: function(model, value, context) {
+      value || (value = this.comparator);
+      var iterator = _.isFunction(value) ? value : function(model) {
+        return model.get(value);
+      };
+      return _.sortedIndex(this.models, model, iterator, context);
+    },
+
+    // Pluck an attribute from each model in the collection.
+    pluck: function(attr) {
+      return _.invoke(this.models, 'get', attr);
+    },
+
+    // Fetch the default set of models for this collection, resetting the
+    // collection when they arrive. If `reset: true` is passed, the response
+    // data will be passed through the `reset` method instead of `set`.
+    fetch: function(options) {
+      options = options ? _.clone(options) : {};
+      if (options.parse === void 0) options.parse = true;
+      var success = options.success;
+      var collection = this;
+      options.success = function(resp) {
+        var method = options.reset ? 'reset' : 'set';
+        collection[method](resp, options);
+        if (success) success(collection, resp, options);
+        collection.trigger('sync', collection, resp, options);
+      };
+      wrapError(this, options);
+      return this.sync('read', this, options);
+    },
+
+    // Create a new instance of a model in this collection. Add the model to the
+    // collection immediately, unless `wait: true` is passed, in which case we
+    // wait for the server to agree.
+    create: function(model, options) {
+      options = options ? _.clone(options) : {};
+      if (!(model = this._prepareModel(model, options))) return false;
+      if (!options.wait) this.add(model, options);
+      var collection = this;
+      var success = options.success;
+      options.success = function(resp) {
+        if (options.wait) collection.add(model, options);
+        if (success) success(model, resp, options);
+      };
+      model.save(null, options);
+      return model;
+    },
+
+    // **parse** converts a response into a list of models to be added to the
+    // collection. The default implementation is just to pass it through.
+    parse: function(resp, options) {
+      return resp;
+    },
+
+    // Create a new collection with an identical list of models as this one.
+    clone: function() {
+      return new this.constructor(this.models);
+    },
+
+    // Private method to reset all internal state. Called when the collection
+    // is first initialized or reset.
+    _reset: function() {
+      this.length = 0;
+      this.models = [];
+      this._byId  = {};
+    },
+
+    // Prepare a hash of attributes (or other model) to be added to this
+    // collection.
+    _prepareModel: function(attrs, options) {
+      if (attrs instanceof Model) {
+        if (!attrs.collection) attrs.collection = this;
+        return attrs;
+      }
+      options || (options = {});
+      options.collection = this;
+      var model = new this.model(attrs, options);
+      if (!model._validate(attrs, options)) {
+        this.trigger('invalid', this, attrs, options);
+        return false;
+      }
+      return model;
+    },
+
+    // Internal method to sever a model's ties to a collection.
+    _removeReference: function(model) {
+      if (this === model.collection) delete model.collection;
+      model.off('all', this._onModelEvent, this);
+    },
+
+    // Internal method called every time a model in the set fires an event.
+    // Sets need to update their indexes when models change ids. All other
+    // events simply proxy through. "add" and "remove" events that originate
+    // in other collections are ignored.
+    _onModelEvent: function(event, model, collection, options) {
+      if ((event === 'add' || event === 'remove') && collection !== this) return;
+      if (event === 'destroy') this.remove(model, options);
+      if (model && event === 'change:' + model.idAttribute) {
+        delete this._byId[model.previous(model.idAttribute)];
+        if (model.id != null) this._byId[model.id] = model;
+      }
+      this.trigger.apply(this, arguments);
+    }
+
+  });
+
+  // Underscore methods that we want to implement on the Collection.
+  // 90% of the core usefulness of Backbone Collections is actually implemented
+  // right here:
+  var methods = ['forEach', 'each', 'map', 'collect', 'reduce', 'foldl',
+    'inject', 'reduceRight', 'foldr', 'find', 'detect', 'filter', 'select',
+    'reject', 'every', 'all', 'some', 'any', 'include', 'contains', 'invoke',
+    'max', 'min', 'toArray', 'size', 'first', 'head', 'take', 'initial', 'rest',
+    'tail', 'drop', 'last', 'without', 'indexOf', 'shuffle', 'lastIndexOf',
+    'isEmpty', 'chain'];
+
+  // Mix in each Underscore method as a proxy to `Collection#models`.
+  _.each(methods, function(method) {
+    Collection.prototype[method] = function() {
+      var args = slice.call(arguments);
+      args.unshift(this.models);
+      return _[method].apply(_, args);
+    };
+  });
+
+  // Underscore methods that take a property name as an argument.
+  var attributeMethods = ['groupBy', 'countBy', 'sortBy'];
+
+  // Use attributes instead of properties.
+  _.each(attributeMethods, function(method) {
+    Collection.prototype[method] = function(value, context) {
+      var iterator = _.isFunction(value) ? value : function(model) {
+        return model.get(value);
+      };
+      return _[method](this.models, iterator, context);
+    };
+  });
+
+  // Backbone.View
+  // -------------
+
+  // Backbone Views are almost more convention than they are actual code. A View
+  // is simply a JavaScript object that represents a logical chunk of UI in the
+  // DOM. This might be a single item, an entire list, a sidebar or panel, or
+  // even the surrounding frame which wraps your whole app. Defining a chunk of
+  // UI as a **View** allows you to define your DOM events declaratively, without
+  // having to worry about render order ... and makes it easy for the view to
+  // react to specific changes in the state of your models.
+
+  // Options with special meaning *(e.g. model, collection, id, className)* are
+  // attached directly to the view.  See `viewOptions` for an exhaustive
+  // list.
+
+  // Creating a Backbone.View creates its initial element outside of the DOM,
+  // if an existing element is not provided...
+  var View = Backbone.View = function(options) {
+    this.cid = _.uniqueId('view');
+    options || (options = {});
+    _.extend(this, _.pick(options, viewOptions));
+    this._ensureElement();
+    this.initialize.apply(this, arguments);
+    this.delegateEvents();
+  };
+
+  // Cached regex to split keys for `delegate`.
+  var delegateEventSplitter = /^(\S+)\s*(.*)$/;
+
+  // List of view options to be merged as properties.
+  var viewOptions = ['model', 'collection', 'el', 'id', 'attributes', 'className', 'tagName', 'events'];
+
+  // Set up all inheritable **Backbone.View** properties and methods.
+  _.extend(View.prototype, Events, {
+
+    // The default `tagName` of a View's element is `"div"`.
+    tagName: 'div',
+
+    // jQuery delegate for element lookup, scoped to DOM elements within the
+    // current view. This should be prefered to global lookups where possible.
+    $: function(selector) {
+      return this.$el.find(selector);
+    },
+
+    // Initialize is an empty function by default. Override it with your own
+    // initialization logic.
+    initialize: function(){},
+
+    // **render** is the core function that your view should override, in order
+    // to populate its element (`this.el`), with the appropriate HTML. The
+    // convention is for **render** to always return `this`.
+    render: function() {
+      return this;
+    },
+
+    // Remove this view by taking the element out of the DOM, and removing any
+    // applicable Backbone.Events listeners.
+    remove: function() {
+      this.$el.remove();
+      this.stopListening();
+      return this;
+    },
+
+    // Change the view's element (`this.el` property), including event
+    // re-delegation.
+    setElement: function(element, delegate) {
+      if (this.$el) this.undelegateEvents();
+      this.$el = element instanceof Backbone.$ ? element : Backbone.$(element);
+      this.el = this.$el[0];
+      if (delegate !== false) this.delegateEvents();
+      return this;
+    },
+
+    // Set callbacks, where `this.events` is a hash of
+    //
+    // *{"event selector": "callback"}*
+    //
+    //     {
+    //       'mousedown .title':  'edit',
+    //       'click .button':     'save'
+    //       'click .open':       function(e) { ... }
+    //     }
+    //
+    // pairs. Callbacks will be bound to the view, with `this` set properly.
+    // Uses event delegation for efficiency.
+    // Omitting the selector binds the event to `this.el`.
+    // This only works for delegate-able events: not `focus`, `blur`, and
+    // not `change`, `submit`, and `reset` in Internet Explorer.
+    delegateEvents: function(events) {
+      if (!(events || (events = _.result(this, 'events')))) return this;
+      this.undelegateEvents();
+      for (var key in events) {
+        var method = events[key];
+        if (!_.isFunction(method)) method = this[events[key]];
+        if (!method) continue;
+
+        var match = key.match(delegateEventSplitter);
+        var eventName = match[1], selector = match[2];
+        method = _.bind(method, this);
+        eventName += '.delegateEvents' + this.cid;
+        if (selector === '') {
+          this.$el.on(eventName, method);
+        } else {
+          this.$el.on(eventName, selector, method);
+        }
+      }
+      return this;
+    },
+
+    // Clears all callbacks previously bound to the view with `delegateEvents`.
+    // You usually don't need to use this, but may wish to if you have multiple
+    // Backbone views attached to the same DOM element.
+    undelegateEvents: function() {
+      this.$el.off('.delegateEvents' + this.cid);
+      return this;
+    },
+
+    // Ensure that the View has a DOM element to render into.
+    // If `this.el` is a string, pass it through `$()`, take the first
+    // matching element, and re-assign it to `el`. Otherwise, create
+    // an element from the `id`, `className` and `tagName` properties.
+    _ensureElement: function() {
+      if (!this.el) {
+        var attrs = _.extend({}, _.result(this, 'attributes'));
+        if (this.id) attrs.id = _.result(this, 'id');
+        if (this.className) attrs['class'] = _.result(this, 'className');
+        var $el = Backbone.$('<' + _.result(this, 'tagName') + '>').attr(attrs);
+        this.setElement($el, false);
+      } else {
+        this.setElement(_.result(this, 'el'), false);
+      }
+    }
+
+  });
+
+  // Backbone.sync
+  // -------------
+
+  // Override this function to change the manner in which Backbone persists
+  // models to the server. You will be passed the type of request, and the
+  // model in question. By default, makes a RESTful Ajax request
+  // to the model's `url()`. Some possible customizations could be:
+  //
+  // * Use `setTimeout` to batch rapid-fire updates into a single request.
+  // * Send up the models as XML instead of JSON.
+  // * Persist models via WebSockets instead of Ajax.
+  //
+  // Turn on `Backbone.emulateHTTP` in order to send `PUT` and `DELETE` requests
+  // as `POST`, with a `_method` parameter containing the true HTTP method,
+  // as well as all requests with the body as `application/x-www-form-urlencoded`
+  // instead of `application/json` with the model in a param named `model`.
+  // Useful when interfacing with server-side languages like **PHP** that make
+  // it difficult to read the body of `PUT` requests.
+  Backbone.sync = function(method, model, options) {
+    var type = methodMap[method];
+
+    // Default options, unless specified.
+    _.defaults(options || (options = {}), {
+      emulateHTTP: Backbone.emulateHTTP,
+      emulateJSON: Backbone.emulateJSON
+    });
+
+    // Default JSON-request options.
+    var params = {type: type, dataType: 'json'};
+
+    // Ensure that we have a URL.
+    if (!options.url) {
+      params.url = _.result(model, 'url') || urlError();
+    }
+
+    // Ensure that we have the appropriate request data.
+    if (options.data == null && model && (method === 'create' || method === 'update' || method === 'patch')) {
+      params.contentType = 'application/json';
+      params.data = JSON.stringify(options.attrs || model.toJSON(options));
+    }
+
+    // For older servers, emulate JSON by encoding the request into an HTML-form.
+    if (options.emulateJSON) {
+      params.contentType = 'application/x-www-form-urlencoded';
+      params.data = params.data ? {model: params.data} : {};
+    }
+
+    // For older servers, emulate HTTP by mimicking the HTTP method with `_method`
+    // And an `X-HTTP-Method-Override` header.
+    if (options.emulateHTTP && (type === 'PUT' || type === 'DELETE' || type === 'PATCH')) {
+      params.type = 'POST';
+      if (options.emulateJSON) params.data._method = type;
+      var beforeSend = options.beforeSend;
+      options.beforeSend = function(xhr) {
+        xhr.setRequestHeader('X-HTTP-Method-Override', type);
+        if (beforeSend) return beforeSend.apply(this, arguments);
+      };
+    }
+
+    // Don't process data on a non-GET request.
+    if (params.type !== 'GET' && !options.emulateJSON) {
+      params.processData = false;
+    }
+
+    // If we're sending a `PATCH` request, and we're in an old Internet Explorer
+    // that still has ActiveX enabled by default, override jQuery to use that
+    // for XHR instead. Remove this line when jQuery supports `PATCH` on IE8.
+    if (params.type === 'PATCH' && window.ActiveXObject &&
+          !(window.external && window.external.msActiveXFilteringEnabled)) {
+      params.xhr = function() {
+        return new ActiveXObject("Microsoft.XMLHTTP");
+      };
+    }
+
+    // Make the request, allowing the user to override any Ajax options.
+    var xhr = options.xhr = Backbone.ajax(_.extend(params, options));
+    model.trigger('request', model, xhr, options);
+    return xhr;
+  };
+
+  // Map from CRUD to HTTP for our default `Backbone.sync` implementation.
+  var methodMap = {
+    'create': 'POST',
+    'update': 'PUT',
+    'patch':  'PATCH',
+    'delete': 'DELETE',
+    'read':   'GET'
+  };
+
+  // Set the default implementation of `Backbone.ajax` to proxy through to `$`.
+  // Override this if you'd like to use a different library.
+  Backbone.ajax = function() {
+    return Backbone.$.ajax.apply(Backbone.$, arguments);
+  };
+
+  // Backbone.Router
+  // ---------------
+
+  // Routers map faux-URLs to actions, and fire events when routes are
+  // matched. Creating a new one sets its `routes` hash, if not set statically.
+  var Router = Backbone.Router = function(options) {
+    options || (options = {});
+    if (options.routes) this.routes = options.routes;
+    this._bindRoutes();
+    this.initialize.apply(this, arguments);
+  };
+
+  // Cached regular expressions for matching named param parts and splatted
+  // parts of route strings.
+  var optionalParam = /\((.*?)\)/g;
+  var namedParam    = /(\(\?)?:\w+/g;
+  var splatParam    = /\*\w+/g;
+  var escapeRegExp  = /[\-{}\[\]+?.,\\\^$|#\s]/g;
+
+  // Set up all inheritable **Backbone.Router** properties and methods.
+  _.extend(Router.prototype, Events, {
+
+    // Initialize is an empty function by default. Override it with your own
+    // initialization logic.
+    initialize: function(){},
+
+    // Manually bind a single named route to a callback. For example:
+    //
+    //     this.route('search/:query/p:num', 'search', function(query, num) {
+    //       ...
+    //     });
+    //
+    route: function(route, name, callback) {
+      if (!_.isRegExp(route)) route = this._routeToRegExp(route);
+      if (_.isFunction(name)) {
+        callback = name;
+        name = '';
+      }
+      if (!callback) callback = this[name];
+      var router = this;
+      Backbone.history.route(route, function(fragment) {
+        var args = router._extractParameters(route, fragment);
+        callback && callback.apply(router, args);
+        router.trigger.apply(router, ['route:' + name].concat(args));
+        router.trigger('route', name, args);
+        Backbone.history.trigger('route', router, name, args);
+      });
+      return this;
+    },
+
+    // Simple proxy to `Backbone.history` to save a fragment into the history.
+    navigate: function(fragment, options) {
+      Backbone.history.navigate(fragment, options);
+      return this;
+    },
+
+    // Bind all defined routes to `Backbone.history`. We have to reverse the
+    // order of the routes here to support behavior where the most general
+    // routes can be defined at the bottom of the route map.
+    _bindRoutes: function() {
+      if (!this.routes) return;
+      this.routes = _.result(this, 'routes');
+      var route, routes = _.keys(this.routes);
+      while ((route = routes.pop()) != null) {
+        this.route(route, this.routes[route]);
+      }
+    },
+
+    // Convert a route string into a regular expression, suitable for matching
+    // against the current location hash.
+    _routeToRegExp: function(route) {
+      route = route.replace(escapeRegExp, '\\$&')
+                   .replace(optionalParam, '(?:$1)?')
+                   .replace(namedParam, function(match, optional){
+                     return optional ? match : '([^\/]+)';
+                   })
+                   .replace(splatParam, '(.*?)');
+      return new RegExp('^' + route + '$');
+    },
+
+    // Given a route, and a URL fragment that it matches, return the array of
+    // extracted decoded parameters. Empty or unmatched parameters will be
+    // treated as `null` to normalize cross-browser behavior.
+    _extractParameters: function(route, fragment) {
+      var params = route.exec(fragment).slice(1);
+      return _.map(params, function(param) {
+        return param ? decodeURIComponent(param) : null;
+      });
+    }
+
+  });
+
+  // Backbone.History
+  // ----------------
+
+  // Handles cross-browser history management, based on either
+  // [pushState](http://diveintohtml5.info/history.html) and real URLs, or
+  // [onhashchange](https://developer.mozilla.org/en-US/docs/DOM/window.onhashchange)
+  // and URL fragments. If the browser supports neither (old IE, natch),
+  // falls back to polling.
+  var History = Backbone.History = function() {
+    this.handlers = [];
+    _.bindAll(this, 'checkUrl');
+
+    // Ensure that `History` can be used outside of the browser.
+    if (typeof window !== 'undefined') {
+      this.location = window.location;
+      this.history = window.history;
+    }
+  };
+
+  // Cached regex for stripping a leading hash/slash and trailing space.
+  var routeStripper = /^[#\/]|\s+$/g;
+
+  // Cached regex for stripping leading and trailing slashes.
+  var rootStripper = /^\/+|\/+$/g;
+
+  // Cached regex for detecting MSIE.
+  var isExplorer = /msie [\w.]+/;
+
+  // Cached regex for removing a trailing slash.
+  var trailingSlash = /\/$/;
+
+  // Has the history handling already been started?
+  History.started = false;
+
+  // Set up all inheritable **Backbone.History** properties and methods.
+  _.extend(History.prototype, Events, {
+
+    // The default interval to poll for hash changes, if necessary, is
+    // twenty times a second.
+    interval: 50,
+
+    // Gets the true hash value. Cannot use location.hash directly due to bug
+    // in Firefox where location.hash will always be decoded.
+    getHash: function(window) {
+      var match = (window || this).location.href.match(/#(.*)$/);
+      return match ? match[1] : '';
+    },
+
+    // Get the cross-browser normalized URL fragment, either from the URL,
+    // the hash, or the override.
+    getFragment: function(fragment, forcePushState) {
+      if (fragment == null) {
+        if (this._hasPushState || !this._wantsHashChange || forcePushState) {
+          fragment = this.location.pathname;
+          var root = this.root.replace(trailingSlash, '');
+          if (!fragment.indexOf(root)) fragment = fragment.substr(root.length);
+        } else {
+          fragment = this.getHash();
+        }
+      }
+      return fragment.replace(routeStripper, '');
+    },
+
+    // Start the hash change handling, returning `true` if the current URL matches
+    // an existing route, and `false` otherwise.
+    start: function(options) {
+      if (History.started) throw new Error("Backbone.history has already been started");
+      History.started = true;
+
+      // Figure out the initial configuration. Do we need an iframe?
+      // Is pushState desired ... is it available?
+      this.options          = _.extend({}, {root: '/'}, this.options, options);
+      this.root             = this.options.root;
+      this._wantsHashChange = this.options.hashChange !== false;
+      this._wantsPushState  = !!this.options.pushState;
+      this._hasPushState    = !!(this.options.pushState && this.history && this.history.pushState);
+      var fragment          = this.getFragment();
+      var docMode           = document.documentMode;
+      var oldIE             = (isExplorer.exec(navigator.userAgent.toLowerCase()) && (!docMode || docMode <= 7));
+
+      // Normalize root to always include a leading and trailing slash.
+      this.root = ('/' + this.root + '/').replace(rootStripper, '/');
+
+      if (oldIE && this._wantsHashChange) {
+        this.iframe = Backbone.$('<iframe src="javascript:0" tabindex="-1" />').hide().appendTo('body')[0].contentWindow;
+        this.navigate(fragment);
+      }
+
+      // Depending on whether we're using pushState or hashes, and whether
+      // 'onhashchange' is supported, determine how we check the URL state.
+      if (this._hasPushState) {
+        Backbone.$(window).on('popstate', this.checkUrl);
+      } else if (this._wantsHashChange && ('onhashchange' in window) && !oldIE) {
+        Backbone.$(window).on('hashchange', this.checkUrl);
+      } else if (this._wantsHashChange) {
+        this._checkUrlInterval = setInterval(this.checkUrl, this.interval);
+      }
+
+      // Determine if we need to change the base url, for a pushState link
+      // opened by a non-pushState browser.
+      this.fragment = fragment;
+      var loc = this.location;
+      var atRoot = loc.pathname.replace(/[^\/]$/, '$&/') === this.root;
+
+      // If we've started off with a route from a `pushState`-enabled browser,
+      // but we're currently in a browser that doesn't support it...
+      if (this._wantsHashChange && this._wantsPushState && !this._hasPushState && !atRoot) {
+        this.fragment = this.getFragment(null, true);
+        this.location.replace(this.root + this.location.search + '#' + this.fragment);
+        // Return immediately as browser will do redirect to new url
+        return true;
+
+      // Or if we've started out with a hash-based route, but we're currently
+      // in a browser where it could be `pushState`-based instead...
+      } else if (this._wantsPushState && this._hasPushState && atRoot && loc.hash) {
+        this.fragment = this.getHash().replace(routeStripper, '');
+        this.history.replaceState({}, document.title, this.root + this.fragment + loc.search);
+      }
+
+      if (!this.options.silent) return this.loadUrl();
+    },
+
+    // Disable Backbone.history, perhaps temporarily. Not useful in a real app,
+    // but possibly useful for unit testing Routers.
+    stop: function() {
+      Backbone.$(window).off('popstate', this.checkUrl).off('hashchange', this.checkUrl);
+      clearInterval(this._checkUrlInterval);
+      History.started = false;
+    },
+
+    // Add a route to be tested when the fragment changes. Routes added later
+    // may override previous routes.
+    route: function(route, callback) {
+      this.handlers.unshift({route: route, callback: callback});
+    },
+
+    // Checks the current URL to see if it has changed, and if it has,
+    // calls `loadUrl`, normalizing across the hidden iframe.
+    checkUrl: function(e) {
+      var current = this.getFragment();
+      if (current === this.fragment && this.iframe) {
+        current = this.getFragment(this.getHash(this.iframe));
+      }
+      if (current === this.fragment) return false;
+      if (this.iframe) this.navigate(current);
+      this.loadUrl() || this.loadUrl(this.getHash());
+    },
+
+    // Attempt to load the current URL fragment. If a route succeeds with a
+    // match, returns `true`. If no defined routes matches the fragment,
+    // returns `false`.
+    loadUrl: function(fragmentOverride) {
+      var fragment = this.fragment = this.getFragment(fragmentOverride);
+      var matched = _.any(this.handlers, function(handler) {
+        if (handler.route.test(fragment)) {
+          handler.callback(fragment);
+          return true;
+        }
+      });
+      return matched;
+    },
+
+    // Save a fragment into the hash history, or replace the URL state if the
+    // 'replace' option is passed. You are responsible for properly URL-encoding
+    // the fragment in advance.
+    //
+    // The options object can contain `trigger: true` if you wish to have the
+    // route callback be fired (not usually desirable), or `replace: true`, if
+    // you wish to modify the current URL without adding an entry to the history.
+    navigate: function(fragment, options) {
+      if (!History.started) return false;
+      if (!options || options === true) options = {trigger: options};
+      fragment = this.getFragment(fragment || '');
+      if (this.fragment === fragment) return;
+      this.fragment = fragment;
+      var url = this.root + fragment;
+
+      // If pushState is available, we use it to set the fragment as a real URL.
+      if (this._hasPushState) {
+        this.history[options.replace ? 'replaceState' : 'pushState']({}, document.title, url);
+
+      // If hash changes haven't been explicitly disabled, update the hash
+      // fragment to store history.
+      } else if (this._wantsHashChange) {
+        this._updateHash(this.location, fragment, options.replace);
+        if (this.iframe && (fragment !== this.getFragment(this.getHash(this.iframe)))) {
+          // Opening and closing the iframe tricks IE7 and earlier to push a
+          // history entry on hash-tag change.  When replace is true, we don't
+          // want this.
+          if(!options.replace) this.iframe.document.open().close();
+          this._updateHash(this.iframe.location, fragment, options.replace);
+        }
+
+      // If you've told us that you explicitly don't want fallback hashchange-
+      // based history, then `navigate` becomes a page refresh.
+      } else {
+        return this.location.assign(url);
+      }
+      if (options.trigger) return this.loadUrl(fragment);
+    },
+
+    // Update the hash location, either replacing the current entry, or adding
+    // a new one to the browser history.
+    _updateHash: function(location, fragment, replace) {
+      if (replace) {
+        var href = location.href.replace(/(javascript:|#).*$/, '');
+        location.replace(href + '#' + fragment);
+      } else {
+        // Some browsers require that `hash` contains a leading #.
+        location.hash = '#' + fragment;
+      }
+    }
+
+  });
+
+  // Create the default Backbone.history.
+  Backbone.history = new History;
+
+  // Helpers
+  // -------
+
+  // Helper function to correctly set up the prototype chain, for subclasses.
+  // Similar to `goog.inherits`, but uses a hash of prototype properties and
+  // class properties to be extended.
+  var extend = function(protoProps, staticProps) {
+    var parent = this;
+    var child;
+
+    // The constructor function for the new subclass is either defined by you
+    // (the "constructor" property in your `extend` definition), or defaulted
+    // by us to simply call the parent's constructor.
+    if (protoProps && _.has(protoProps, 'constructor')) {
+      child = protoProps.constructor;
+    } else {
+      child = function(){ return parent.apply(this, arguments); };
+    }
+
+    // Add static properties to the constructor function, if supplied.
+    _.extend(child, parent, staticProps);
+
+    // Set the prototype chain to inherit from `parent`, without calling
+    // `parent`'s constructor function.
+    var Surrogate = function(){ this.constructor = child; };
+    Surrogate.prototype = parent.prototype;
+    child.prototype = new Surrogate;
+
+    // Add prototype properties (instance properties) to the subclass,
+    // if supplied.
+    if (protoProps) _.extend(child.prototype, protoProps);
+
+    // Set a convenience property in case the parent's prototype is needed
+    // later.
+    child.__super__ = parent.prototype;
+
+    return child;
+  };
+
+  // Set up inheritance for the model, collection, router, view and history.
+  Model.extend = Collection.extend = Router.extend = View.extend = History.extend = extend;
+
+  // Throw an error when a URL is needed, and none is supplied.
+  var urlError = function() {
+    throw new Error('A "url" property or function must be specified');
+  };
+
+  // Wrap an optional error callback with a fallback error event.
+  var wrapError = function(model, options) {
+    var error = options.error;
+    options.error = function(resp) {
+      if (error) error(model, resp, options);
+      model.trigger('error', model, resp, options);
+    };
+  };
+
+}).call(this);
+
+});
+require.register("namjul-backbone/index.js", function(exports, require, module){
+module.exports = require('./backbone');
+
+});
+require.register("component-moment/index.js", function(exports, require, module){
+// moment.js
+// version : 2.0.0
+// author : Tim Wood
+// license : MIT
+// momentjs.com
+
+(function (undefined) {
+
+    /************************************
+        Constants
+    ************************************/
+
+    var moment,
+        VERSION = "2.0.0",
+        round = Math.round, i,
+        // internal storage for language config files
+        languages = {},
+
+        // check for nodeJS
+        hasModule = (typeof module !== 'undefined' && module.exports),
+
+        // ASP.NET json date format regex
+        aspNetJsonRegex = /^\/?Date\((\-?\d+)/i,
+
+        // format tokens
+        formattingTokens = /(\[[^\[]*\])|(\\)?(Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|YYYYY|YYYY|YY|a|A|hh?|HH?|mm?|ss?|SS?S?|X|zz?|ZZ?|.)/g,
+        localFormattingTokens = /(\[[^\[]*\])|(\\)?(LT|LL?L?L?|l{1,4})/g,
+
+        // parsing tokens
+        parseMultipleFormatChunker = /([0-9a-zA-Z\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+)/gi,
+
+        // parsing token regexes
+        parseTokenOneOrTwoDigits = /\d\d?/, // 0 - 99
+        parseTokenOneToThreeDigits = /\d{1,3}/, // 0 - 999
+        parseTokenThreeDigits = /\d{3}/, // 000 - 999
+        parseTokenFourDigits = /\d{1,4}/, // 0 - 9999
+        parseTokenSixDigits = /[+\-]?\d{1,6}/, // -999,999 - 999,999
+        parseTokenWord = /[0-9]*[a-z\u00A0-\u05FF\u0700-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+|[\u0600-\u06FF]+\s*?[\u0600-\u06FF]+/i, // any word (or two) characters or numbers including two word month in arabic.
+        parseTokenTimezone = /Z|[\+\-]\d\d:?\d\d/i, // +00:00 -00:00 +0000 -0000 or Z
+        parseTokenT = /T/i, // T (ISO seperator)
+        parseTokenTimestampMs = /[\+\-]?\d+(\.\d{1,3})?/, // 123456789 123456789.123
+
+        // preliminary iso regex
+        // 0000-00-00 + T + 00 or 00:00 or 00:00:00 or 00:00:00.000 + +00:00 or +0000
+        isoRegex = /^\s*\d{4}-\d\d-\d\d((T| )(\d\d(:\d\d(:\d\d(\.\d\d?\d?)?)?)?)?([\+\-]\d\d:?\d\d)?)?/,
+        isoFormat = 'YYYY-MM-DDTHH:mm:ssZ',
+
+        // iso time formats and regexes
+        isoTimes = [
+            ['HH:mm:ss.S', /(T| )\d\d:\d\d:\d\d\.\d{1,3}/],
+            ['HH:mm:ss', /(T| )\d\d:\d\d:\d\d/],
+            ['HH:mm', /(T| )\d\d:\d\d/],
+            ['HH', /(T| )\d\d/]
+        ],
+
+        // timezone chunker "+10:00" > ["10", "00"] or "-1530" > ["-15", "30"]
+        parseTimezoneChunker = /([\+\-]|\d\d)/gi,
+
+        // getter and setter names
+        proxyGettersAndSetters = 'Month|Date|Hours|Minutes|Seconds|Milliseconds'.split('|'),
+        unitMillisecondFactors = {
+            'Milliseconds' : 1,
+            'Seconds' : 1e3,
+            'Minutes' : 6e4,
+            'Hours' : 36e5,
+            'Days' : 864e5,
+            'Months' : 2592e6,
+            'Years' : 31536e6
+        },
+
+        // format function strings
+        formatFunctions = {},
+
+        // tokens to ordinalize and pad
+        ordinalizeTokens = 'DDD w W M D d'.split(' '),
+        paddedTokens = 'M D H h m s w W'.split(' '),
+
+        formatTokenFunctions = {
+            M    : function () {
+                return this.month() + 1;
+            },
+            MMM  : function (format) {
+                return this.lang().monthsShort(this, format);
+            },
+            MMMM : function (format) {
+                return this.lang().months(this, format);
+            },
+            D    : function () {
+                return this.date();
+            },
+            DDD  : function () {
+                return this.dayOfYear();
+            },
+            d    : function () {
+                return this.day();
+            },
+            dd   : function (format) {
+                return this.lang().weekdaysMin(this, format);
+            },
+            ddd  : function (format) {
+                return this.lang().weekdaysShort(this, format);
+            },
+            dddd : function (format) {
+                return this.lang().weekdays(this, format);
+            },
+            w    : function () {
+                return this.week();
+            },
+            W    : function () {
+                return this.isoWeek();
+            },
+            YY   : function () {
+                return leftZeroFill(this.year() % 100, 2);
+            },
+            YYYY : function () {
+                return leftZeroFill(this.year(), 4);
+            },
+            YYYYY : function () {
+                return leftZeroFill(this.year(), 5);
+            },
+            a    : function () {
+                return this.lang().meridiem(this.hours(), this.minutes(), true);
+            },
+            A    : function () {
+                return this.lang().meridiem(this.hours(), this.minutes(), false);
+            },
+            H    : function () {
+                return this.hours();
+            },
+            h    : function () {
+                return this.hours() % 12 || 12;
+            },
+            m    : function () {
+                return this.minutes();
+            },
+            s    : function () {
+                return this.seconds();
+            },
+            S    : function () {
+                return ~~(this.milliseconds() / 100);
+            },
+            SS   : function () {
+                return leftZeroFill(~~(this.milliseconds() / 10), 2);
+            },
+            SSS  : function () {
+                return leftZeroFill(this.milliseconds(), 3);
+            },
+            Z    : function () {
+                var a = -this.zone(),
+                    b = "+";
+                if (a < 0) {
+                    a = -a;
+                    b = "-";
+                }
+                return b + leftZeroFill(~~(a / 60), 2) + ":" + leftZeroFill(~~a % 60, 2);
+            },
+            ZZ   : function () {
+                var a = -this.zone(),
+                    b = "+";
+                if (a < 0) {
+                    a = -a;
+                    b = "-";
+                }
+                return b + leftZeroFill(~~(10 * a / 6), 4);
+            },
+            X    : function () {
+                return this.unix();
+            }
+        };
+
+    function padToken(func, count) {
+        return function (a) {
+            return leftZeroFill(func.call(this, a), count);
+        };
+    }
+    function ordinalizeToken(func) {
+        return function (a) {
+            return this.lang().ordinal(func.call(this, a));
+        };
+    }
+
+    while (ordinalizeTokens.length) {
+        i = ordinalizeTokens.pop();
+        formatTokenFunctions[i + 'o'] = ordinalizeToken(formatTokenFunctions[i]);
+    }
+    while (paddedTokens.length) {
+        i = paddedTokens.pop();
+        formatTokenFunctions[i + i] = padToken(formatTokenFunctions[i], 2);
+    }
+    formatTokenFunctions.DDDD = padToken(formatTokenFunctions.DDD, 3);
+
+
+    /************************************
+        Constructors
+    ************************************/
+
+    function Language() {
+
+    }
+
+    // Moment prototype object
+    function Moment(config) {
+        extend(this, config);
+    }
+
+    // Duration Constructor
+    function Duration(duration) {
+        var data = this._data = {},
+            years = duration.years || duration.year || duration.y || 0,
+            months = duration.months || duration.month || duration.M || 0,
+            weeks = duration.weeks || duration.week || duration.w || 0,
+            days = duration.days || duration.day || duration.d || 0,
+            hours = duration.hours || duration.hour || duration.h || 0,
+            minutes = duration.minutes || duration.minute || duration.m || 0,
+            seconds = duration.seconds || duration.second || duration.s || 0,
+            milliseconds = duration.milliseconds || duration.millisecond || duration.ms || 0;
+
+        // representation for dateAddRemove
+        this._milliseconds = milliseconds +
+            seconds * 1e3 + // 1000
+            minutes * 6e4 + // 1000 * 60
+            hours * 36e5; // 1000 * 60 * 60
+        // Because of dateAddRemove treats 24 hours as different from a
+        // day when working around DST, we need to store them separately
+        this._days = days +
+            weeks * 7;
+        // It is impossible translate months into days without knowing
+        // which months you are are talking about, so we have to store
+        // it separately.
+        this._months = months +
+            years * 12;
+
+        // The following code bubbles up values, see the tests for
+        // examples of what that means.
+        data.milliseconds = milliseconds % 1000;
+        seconds += absRound(milliseconds / 1000);
+
+        data.seconds = seconds % 60;
+        minutes += absRound(seconds / 60);
+
+        data.minutes = minutes % 60;
+        hours += absRound(minutes / 60);
+
+        data.hours = hours % 24;
+        days += absRound(hours / 24);
+
+        days += weeks * 7;
+        data.days = days % 30;
+
+        months += absRound(days / 30);
+
+        data.months = months % 12;
+        years += absRound(months / 12);
+
+        data.years = years;
+    }
+
+
+    /************************************
+        Helpers
+    ************************************/
+
+
+    function extend(a, b) {
+        for (var i in b) {
+            if (b.hasOwnProperty(i)) {
+                a[i] = b[i];
+            }
+        }
+        return a;
+    }
+
+    function absRound(number) {
+        if (number < 0) {
+            return Math.ceil(number);
+        } else {
+            return Math.floor(number);
+        }
+    }
+
+    // left zero fill a number
+    // see http://jsperf.com/left-zero-filling for performance comparison
+    function leftZeroFill(number, targetLength) {
+        var output = number + '';
+        while (output.length < targetLength) {
+            output = '0' + output;
+        }
+        return output;
+    }
+
+    // helper function for _.addTime and _.subtractTime
+    function addOrSubtractDurationFromMoment(mom, duration, isAdding) {
+        var ms = duration._milliseconds,
+            d = duration._days,
+            M = duration._months,
+            currentDate;
+
+        if (ms) {
+            mom._d.setTime(+mom + ms * isAdding);
+        }
+        if (d) {
+            mom.date(mom.date() + d * isAdding);
+        }
+        if (M) {
+            currentDate = mom.date();
+            mom.date(1)
+                .month(mom.month() + M * isAdding)
+                .date(Math.min(currentDate, mom.daysInMonth()));
+        }
+    }
+
+    // check if is an array
+    function isArray(input) {
+        return Object.prototype.toString.call(input) === '[object Array]';
+    }
+
+    // compare two arrays, return the number of differences
+    function compareArrays(array1, array2) {
+        var len = Math.min(array1.length, array2.length),
+            lengthDiff = Math.abs(array1.length - array2.length),
+            diffs = 0,
+            i;
+        for (i = 0; i < len; i++) {
+            if (~~array1[i] !== ~~array2[i]) {
+                diffs++;
+            }
+        }
+        return diffs + lengthDiff;
+    }
+
+
+    /************************************
+        Languages
+    ************************************/
+
+
+    Language.prototype = {
+        set : function (config) {
+            var prop, i;
+            for (i in config) {
+                prop = config[i];
+                if (typeof prop === 'function') {
+                    this[i] = prop;
+                } else {
+                    this['_' + i] = prop;
+                }
+            }
+        },
+
+        _months : "January_February_March_April_May_June_July_August_September_October_November_December".split("_"),
+        months : function (m) {
+            return this._months[m.month()];
+        },
+
+        _monthsShort : "Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec".split("_"),
+        monthsShort : function (m) {
+            return this._monthsShort[m.month()];
+        },
+
+        monthsParse : function (monthName) {
+            var i, mom, regex, output;
+
+            if (!this._monthsParse) {
+                this._monthsParse = [];
+            }
+
+            for (i = 0; i < 12; i++) {
+                // make the regex if we don't have it already
+                if (!this._monthsParse[i]) {
+                    mom = moment([2000, i]);
+                    regex = '^' + this.months(mom, '') + '|^' + this.monthsShort(mom, '');
+                    this._monthsParse[i] = new RegExp(regex.replace('.', ''), 'i');
+                }
+                // test the regex
+                if (this._monthsParse[i].test(monthName)) {
+                    return i;
+                }
+            }
+        },
+
+        _weekdays : "Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday".split("_"),
+        weekdays : function (m) {
+            return this._weekdays[m.day()];
+        },
+
+        _weekdaysShort : "Sun_Mon_Tue_Wed_Thu_Fri_Sat".split("_"),
+        weekdaysShort : function (m) {
+            return this._weekdaysShort[m.day()];
+        },
+
+        _weekdaysMin : "Su_Mo_Tu_We_Th_Fr_Sa".split("_"),
+        weekdaysMin : function (m) {
+            return this._weekdaysMin[m.day()];
+        },
+
+        _longDateFormat : {
+            LT : "h:mm A",
+            L : "MM/DD/YYYY",
+            LL : "MMMM D YYYY",
+            LLL : "MMMM D YYYY LT",
+            LLLL : "dddd, MMMM D YYYY LT"
+        },
+        longDateFormat : function (key) {
+            var output = this._longDateFormat[key];
+            if (!output && this._longDateFormat[key.toUpperCase()]) {
+                output = this._longDateFormat[key.toUpperCase()].replace(/MMMM|MM|DD|dddd/g, function (val) {
+                    return val.slice(1);
+                });
+                this._longDateFormat[key] = output;
+            }
+            return output;
+        },
+
+        meridiem : function (hours, minutes, isLower) {
+            if (hours > 11) {
+                return isLower ? 'pm' : 'PM';
+            } else {
+                return isLower ? 'am' : 'AM';
+            }
+        },
+
+        _calendar : {
+            sameDay : '[Today at] LT',
+            nextDay : '[Tomorrow at] LT',
+            nextWeek : 'dddd [at] LT',
+            lastDay : '[Yesterday at] LT',
+            lastWeek : '[last] dddd [at] LT',
+            sameElse : 'L'
+        },
+        calendar : function (key, mom) {
+            var output = this._calendar[key];
+            return typeof output === 'function' ? output.apply(mom) : output;
+        },
+
+        _relativeTime : {
+            future : "in %s",
+            past : "%s ago",
+            s : "a few seconds",
+            m : "a minute",
+            mm : "%d minutes",
+            h : "an hour",
+            hh : "%d hours",
+            d : "a day",
+            dd : "%d days",
+            M : "a month",
+            MM : "%d months",
+            y : "a year",
+            yy : "%d years"
+        },
+        relativeTime : function (number, withoutSuffix, string, isFuture) {
+            var output = this._relativeTime[string];
+            return (typeof output === 'function') ?
+                output(number, withoutSuffix, string, isFuture) :
+                output.replace(/%d/i, number);
+        },
+        pastFuture : function (diff, output) {
+            var format = this._relativeTime[diff > 0 ? 'future' : 'past'];
+            return typeof format === 'function' ? format(output) : format.replace(/%s/i, output);
+        },
+
+        ordinal : function (number) {
+            return this._ordinal.replace("%d", number);
+        },
+        _ordinal : "%d",
+
+        preparse : function (string) {
+            return string;
+        },
+
+        postformat : function (string) {
+            return string;
+        },
+
+        week : function (mom) {
+            return weekOfYear(mom, this._week.dow, this._week.doy);
+        },
+        _week : {
+            dow : 0, // Sunday is the first day of the week.
+            doy : 6  // The week that contains Jan 1st is the first week of the year.
+        }
+    };
+
+    // Loads a language definition into the `languages` cache.  The function
+    // takes a key and optionally values.  If not in the browser and no values
+    // are provided, it will load the language file module.  As a convenience,
+    // this function also returns the language values.
+    function loadLang(key, values) {
+        values.abbr = key;
+        if (!languages[key]) {
+            languages[key] = new Language();
+        }
+        languages[key].set(values);
+        return languages[key];
+    }
+
+    // Determines which language definition to use and returns it.
+    //
+    // With no parameters, it will return the global language.  If you
+    // pass in a language key, such as 'en', it will return the
+    // definition for 'en', so long as 'en' has already been loaded using
+    // moment.lang.
+    function getLangDefinition(key) {
+        if (!key) {
+            return moment.fn._lang;
+        }
+        if (!languages[key] && hasModule) {
+            require('./lang/' + key);
+        }
+        return languages[key];
+    }
+
+
+    /************************************
+        Formatting
+    ************************************/
+
+
+    function removeFormattingTokens(input) {
+        if (input.match(/\[.*\]/)) {
+            return input.replace(/^\[|\]$/g, "");
+        }
+        return input.replace(/\\/g, "");
+    }
+
+    function makeFormatFunction(format) {
+        var array = format.match(formattingTokens), i, length;
+
+        for (i = 0, length = array.length; i < length; i++) {
+            if (formatTokenFunctions[array[i]]) {
+                array[i] = formatTokenFunctions[array[i]];
+            } else {
+                array[i] = removeFormattingTokens(array[i]);
+            }
+        }
+
+        return function (mom) {
+            var output = "";
+            for (i = 0; i < length; i++) {
+                output += typeof array[i].call === 'function' ? array[i].call(mom, format) : array[i];
+            }
+            return output;
+        };
+    }
+
+    // format date using native date object
+    function formatMoment(m, format) {
+        var i = 5;
+
+        function replaceLongDateFormatTokens(input) {
+            return m.lang().longDateFormat(input) || input;
+        }
+
+        while (i-- && localFormattingTokens.test(format)) {
+            format = format.replace(localFormattingTokens, replaceLongDateFormatTokens);
+        }
+
+        if (!formatFunctions[format]) {
+            formatFunctions[format] = makeFormatFunction(format);
+        }
+
+        return formatFunctions[format](m);
+    }
+
+
+    /************************************
+        Parsing
+    ************************************/
+
+
+    // get the regex to find the next token
+    function getParseRegexForToken(token) {
+        switch (token) {
+        case 'DDDD':
+            return parseTokenThreeDigits;
+        case 'YYYY':
+            return parseTokenFourDigits;
+        case 'YYYYY':
+            return parseTokenSixDigits;
+        case 'S':
+        case 'SS':
+        case 'SSS':
+        case 'DDD':
+            return parseTokenOneToThreeDigits;
+        case 'MMM':
+        case 'MMMM':
+        case 'dd':
+        case 'ddd':
+        case 'dddd':
+        case 'a':
+        case 'A':
+            return parseTokenWord;
+        case 'X':
+            return parseTokenTimestampMs;
+        case 'Z':
+        case 'ZZ':
+            return parseTokenTimezone;
+        case 'T':
+            return parseTokenT;
+        case 'MM':
+        case 'DD':
+        case 'YY':
+        case 'HH':
+        case 'hh':
+        case 'mm':
+        case 'ss':
+        case 'M':
+        case 'D':
+        case 'd':
+        case 'H':
+        case 'h':
+        case 'm':
+        case 's':
+            return parseTokenOneOrTwoDigits;
+        default :
+            return new RegExp(token.replace('\\', ''));
+        }
+    }
+
+    // function to convert string input to date
+    function addTimeToArrayFromToken(token, input, config) {
+        var a, b,
+            datePartArray = config._a;
+
+        switch (token) {
+        // MONTH
+        case 'M' : // fall through to MM
+        case 'MM' :
+            datePartArray[1] = (input == null) ? 0 : ~~input - 1;
+            break;
+        case 'MMM' : // fall through to MMMM
+        case 'MMMM' :
+            a = getLangDefinition(config._l).monthsParse(input);
+            // if we didn't find a month name, mark the date as invalid.
+            if (a != null) {
+                datePartArray[1] = a;
+            } else {
+                config._isValid = false;
+            }
+            break;
+        // DAY OF MONTH
+        case 'D' : // fall through to DDDD
+        case 'DD' : // fall through to DDDD
+        case 'DDD' : // fall through to DDDD
+        case 'DDDD' :
+            if (input != null) {
+                datePartArray[2] = ~~input;
+            }
+            break;
+        // YEAR
+        case 'YY' :
+            datePartArray[0] = ~~input + (~~input > 68 ? 1900 : 2000);
+            break;
+        case 'YYYY' :
+        case 'YYYYY' :
+            datePartArray[0] = ~~input;
+            break;
+        // AM / PM
+        case 'a' : // fall through to A
+        case 'A' :
+            config._isPm = ((input + '').toLowerCase() === 'pm');
+            break;
+        // 24 HOUR
+        case 'H' : // fall through to hh
+        case 'HH' : // fall through to hh
+        case 'h' : // fall through to hh
+        case 'hh' :
+            datePartArray[3] = ~~input;
+            break;
+        // MINUTE
+        case 'm' : // fall through to mm
+        case 'mm' :
+            datePartArray[4] = ~~input;
+            break;
+        // SECOND
+        case 's' : // fall through to ss
+        case 'ss' :
+            datePartArray[5] = ~~input;
+            break;
+        // MILLISECOND
+        case 'S' :
+        case 'SS' :
+        case 'SSS' :
+            datePartArray[6] = ~~ (('0.' + input) * 1000);
+            break;
+        // UNIX TIMESTAMP WITH MS
+        case 'X':
+            config._d = new Date(parseFloat(input) * 1000);
+            break;
+        // TIMEZONE
+        case 'Z' : // fall through to ZZ
+        case 'ZZ' :
+            config._useUTC = true;
+            a = (input + '').match(parseTimezoneChunker);
+            if (a && a[1]) {
+                config._tzh = ~~a[1];
+            }
+            if (a && a[2]) {
+                config._tzm = ~~a[2];
+            }
+            // reverse offsets
+            if (a && a[0] === '+') {
+                config._tzh = -config._tzh;
+                config._tzm = -config._tzm;
+            }
+            break;
+        }
+
+        // if the input is null, the date is not valid
+        if (input == null) {
+            config._isValid = false;
+        }
+    }
+
+    // convert an array to a date.
+    // the array should mirror the parameters below
+    // note: all values past the year are optional and will default to the lowest possible value.
+    // [year, month, day , hour, minute, second, millisecond]
+    function dateFromArray(config) {
+        var i, date, input = [];
+
+        if (config._d) {
+            return;
+        }
+
+        for (i = 0; i < 7; i++) {
+            config._a[i] = input[i] = (config._a[i] == null) ? (i === 2 ? 1 : 0) : config._a[i];
+        }
+
+        // add the offsets to the time to be parsed so that we can have a clean array for checking isValid
+        input[3] += config._tzh || 0;
+        input[4] += config._tzm || 0;
+
+        date = new Date(0);
+
+        if (config._useUTC) {
+            date.setUTCFullYear(input[0], input[1], input[2]);
+            date.setUTCHours(input[3], input[4], input[5], input[6]);
+        } else {
+            date.setFullYear(input[0], input[1], input[2]);
+            date.setHours(input[3], input[4], input[5], input[6]);
+        }
+
+        config._d = date;
+    }
+
+    // date from string and format string
+    function makeDateFromStringAndFormat(config) {
+        // This array is used to make a Date, either with `new Date` or `Date.UTC`
+        var tokens = config._f.match(formattingTokens),
+            string = config._i,
+            i, parsedInput;
+
+        config._a = [];
+
+        for (i = 0; i < tokens.length; i++) {
+            parsedInput = (getParseRegexForToken(tokens[i]).exec(string) || [])[0];
+            if (parsedInput) {
+                string = string.slice(string.indexOf(parsedInput) + parsedInput.length);
+            }
+            // don't parse if its not a known token
+            if (formatTokenFunctions[tokens[i]]) {
+                addTimeToArrayFromToken(tokens[i], parsedInput, config);
+            }
+        }
+        // handle am pm
+        if (config._isPm && config._a[3] < 12) {
+            config._a[3] += 12;
+        }
+        // if is 12 am, change hours to 0
+        if (config._isPm === false && config._a[3] === 12) {
+            config._a[3] = 0;
+        }
+        // return
+        dateFromArray(config);
+    }
+
+    // date from string and array of format strings
+    function makeDateFromStringAndArray(config) {
+        var tempConfig,
+            tempMoment,
+            bestMoment,
+
+            scoreToBeat = 99,
+            i,
+            currentScore;
+
+        for (i = config._f.length; i > 0; i--) {
+            tempConfig = extend({}, config);
+            tempConfig._f = config._f[i - 1];
+            makeDateFromStringAndFormat(tempConfig);
+            tempMoment = new Moment(tempConfig);
+
+            if (tempMoment.isValid()) {
+                bestMoment = tempMoment;
+                break;
+            }
+
+            currentScore = compareArrays(tempConfig._a, tempMoment.toArray());
+
+            if (currentScore < scoreToBeat) {
+                scoreToBeat = currentScore;
+                bestMoment = tempMoment;
+            }
+        }
+
+        extend(config, bestMoment);
+    }
+
+    // date from iso format
+    function makeDateFromString(config) {
+        var i,
+            string = config._i;
+        if (isoRegex.exec(string)) {
+            config._f = 'YYYY-MM-DDT';
+            for (i = 0; i < 4; i++) {
+                if (isoTimes[i][1].exec(string)) {
+                    config._f += isoTimes[i][0];
+                    break;
+                }
+            }
+            if (parseTokenTimezone.exec(string)) {
+                config._f += " Z";
+            }
+            makeDateFromStringAndFormat(config);
+        } else {
+            config._d = new Date(string);
+        }
+    }
+
+    function makeDateFromInput(config) {
+        var input = config._i,
+            matched = aspNetJsonRegex.exec(input);
+
+        if (input === undefined) {
+            config._d = new Date();
+        } else if (matched) {
+            config._d = new Date(+matched[1]);
+        } else if (typeof input === 'string') {
+            makeDateFromString(config);
+        } else if (isArray(input)) {
+            config._a = input.slice(0);
+            dateFromArray(config);
+        } else {
+            config._d = input instanceof Date ? new Date(+input) : new Date(input);
+        }
+    }
+
+
+    /************************************
+        Relative Time
+    ************************************/
+
+
+    // helper function for moment.fn.from, moment.fn.fromNow, and moment.duration.fn.humanize
+    function substituteTimeAgo(string, number, withoutSuffix, isFuture, lang) {
+        return lang.relativeTime(number || 1, !!withoutSuffix, string, isFuture);
+    }
+
+    function relativeTime(milliseconds, withoutSuffix, lang) {
+        var seconds = round(Math.abs(milliseconds) / 1000),
+            minutes = round(seconds / 60),
+            hours = round(minutes / 60),
+            days = round(hours / 24),
+            years = round(days / 365),
+            args = seconds < 45 && ['s', seconds] ||
+                minutes === 1 && ['m'] ||
+                minutes < 45 && ['mm', minutes] ||
+                hours === 1 && ['h'] ||
+                hours < 22 && ['hh', hours] ||
+                days === 1 && ['d'] ||
+                days <= 25 && ['dd', days] ||
+                days <= 45 && ['M'] ||
+                days < 345 && ['MM', round(days / 30)] ||
+                years === 1 && ['y'] || ['yy', years];
+        args[2] = withoutSuffix;
+        args[3] = milliseconds > 0;
+        args[4] = lang;
+        return substituteTimeAgo.apply({}, args);
+    }
+
+
+    /************************************
+        Week of Year
+    ************************************/
+
+
+    // firstDayOfWeek       0 = sun, 6 = sat
+    //                      the day of the week that starts the week
+    //                      (usually sunday or monday)
+    // firstDayOfWeekOfYear 0 = sun, 6 = sat
+    //                      the first week is the week that contains the first
+    //                      of this day of the week
+    //                      (eg. ISO weeks use thursday (4))
+    function weekOfYear(mom, firstDayOfWeek, firstDayOfWeekOfYear) {
+        var end = firstDayOfWeekOfYear - firstDayOfWeek,
+            daysToDayOfWeek = firstDayOfWeekOfYear - mom.day();
+
+
+        if (daysToDayOfWeek > end) {
+            daysToDayOfWeek -= 7;
+        }
+
+        if (daysToDayOfWeek < end - 7) {
+            daysToDayOfWeek += 7;
+        }
+
+        return Math.ceil(moment(mom).add('d', daysToDayOfWeek).dayOfYear() / 7);
+    }
+
+
+    /************************************
+        Top Level Functions
+    ************************************/
+
+    function makeMoment(config) {
+        var input = config._i,
+            format = config._f;
+
+        if (input === null || input === '') {
+            return null;
+        }
+
+        if (typeof input === 'string') {
+            config._i = input = getLangDefinition().preparse(input);
+        }
+
+        if (moment.isMoment(input)) {
+            config = extend({}, input);
+            config._d = new Date(+input._d);
+        } else if (format) {
+            if (isArray(format)) {
+                makeDateFromStringAndArray(config);
+            } else {
+                makeDateFromStringAndFormat(config);
+            }
+        } else {
+            makeDateFromInput(config);
+        }
+
+        return new Moment(config);
+    }
+
+    moment = function (input, format, lang) {
+        return makeMoment({
+            _i : input,
+            _f : format,
+            _l : lang,
+            _isUTC : false
+        });
+    };
+
+    // creating with utc
+    moment.utc = function (input, format, lang) {
+        return makeMoment({
+            _useUTC : true,
+            _isUTC : true,
+            _l : lang,
+            _i : input,
+            _f : format
+        });
+    };
+
+    // creating with unix timestamp (in seconds)
+    moment.unix = function (input) {
+        return moment(input * 1000);
+    };
+
+    // duration
+    moment.duration = function (input, key) {
+        var isDuration = moment.isDuration(input),
+            isNumber = (typeof input === 'number'),
+            duration = (isDuration ? input._data : (isNumber ? {} : input)),
+            ret;
+
+        if (isNumber) {
+            if (key) {
+                duration[key] = input;
+            } else {
+                duration.milliseconds = input;
+            }
+        }
+
+        ret = new Duration(duration);
+
+        if (isDuration && input.hasOwnProperty('_lang')) {
+            ret._lang = input._lang;
+        }
+
+        return ret;
+    };
+
+    // version number
+    moment.version = VERSION;
+
+    // default format
+    moment.defaultFormat = isoFormat;
+
+    // This function will load languages and then set the global language.  If
+    // no arguments are passed in, it will simply return the current global
+    // language key.
+    moment.lang = function (key, values) {
+        var i;
+
+        if (!key) {
+            return moment.fn._lang._abbr;
+        }
+        if (values) {
+            loadLang(key, values);
+        } else if (!languages[key]) {
+            getLangDefinition(key);
+        }
+        moment.duration.fn._lang = moment.fn._lang = getLangDefinition(key);
+    };
+
+    // returns language data
+    moment.langData = function (key) {
+        if (key && key._lang && key._lang._abbr) {
+            key = key._lang._abbr;
+        }
+        return getLangDefinition(key);
+    };
+
+    // compare moment object
+    moment.isMoment = function (obj) {
+        return obj instanceof Moment;
+    };
+
+    // for typechecking Duration objects
+    moment.isDuration = function (obj) {
+        return obj instanceof Duration;
+    };
+
+
+    /************************************
+        Moment Prototype
+    ************************************/
+
+
+    moment.fn = Moment.prototype = {
+
+        clone : function () {
+            return moment(this);
+        },
+
+        valueOf : function () {
+            return +this._d;
+        },
+
+        unix : function () {
+            return Math.floor(+this._d / 1000);
+        },
+
+        toString : function () {
+            return this.format("ddd MMM DD YYYY HH:mm:ss [GMT]ZZ");
+        },
+
+        toDate : function () {
+            return this._d;
+        },
+
+        toJSON : function () {
+            return moment.utc(this).format('YYYY-MM-DD[T]HH:mm:ss.SSS[Z]');
+        },
+
+        toArray : function () {
+            var m = this;
+            return [
+                m.year(),
+                m.month(),
+                m.date(),
+                m.hours(),
+                m.minutes(),
+                m.seconds(),
+                m.milliseconds()
+            ];
+        },
+
+        isValid : function () {
+            if (this._isValid == null) {
+                if (this._a) {
+                    this._isValid = !compareArrays(this._a, (this._isUTC ? moment.utc(this._a) : moment(this._a)).toArray());
+                } else {
+                    this._isValid = !isNaN(this._d.getTime());
+                }
+            }
+            return !!this._isValid;
+        },
+
+        utc : function () {
+            this._isUTC = true;
+            return this;
+        },
+
+        local : function () {
+            this._isUTC = false;
+            return this;
+        },
+
+        format : function (inputString) {
+            var output = formatMoment(this, inputString || moment.defaultFormat);
+            return this.lang().postformat(output);
+        },
+
+        add : function (input, val) {
+            var dur;
+            // switch args to support add('s', 1) and add(1, 's')
+            if (typeof input === 'string') {
+                dur = moment.duration(+val, input);
+            } else {
+                dur = moment.duration(input, val);
+            }
+            addOrSubtractDurationFromMoment(this, dur, 1);
+            return this;
+        },
+
+        subtract : function (input, val) {
+            var dur;
+            // switch args to support subtract('s', 1) and subtract(1, 's')
+            if (typeof input === 'string') {
+                dur = moment.duration(+val, input);
+            } else {
+                dur = moment.duration(input, val);
+            }
+            addOrSubtractDurationFromMoment(this, dur, -1);
+            return this;
+        },
+
+        diff : function (input, units, asFloat) {
+            var that = this._isUTC ? moment(input).utc() : moment(input).local(),
+                zoneDiff = (this.zone() - that.zone()) * 6e4,
+                diff, output;
+
+            if (units) {
+                // standardize on singular form
+                units = units.replace(/s$/, '');
+            }
+
+            if (units === 'year' || units === 'month') {
+                diff = (this.daysInMonth() + that.daysInMonth()) * 432e5; // 24 * 60 * 60 * 1000 / 2
+                output = ((this.year() - that.year()) * 12) + (this.month() - that.month());
+                output += ((this - moment(this).startOf('month')) - (that - moment(that).startOf('month'))) / diff;
+                if (units === 'year') {
+                    output = output / 12;
+                }
+            } else {
+                diff = (this - that) - zoneDiff;
+                output = units === 'second' ? diff / 1e3 : // 1000
+                    units === 'minute' ? diff / 6e4 : // 1000 * 60
+                    units === 'hour' ? diff / 36e5 : // 1000 * 60 * 60
+                    units === 'day' ? diff / 864e5 : // 1000 * 60 * 60 * 24
+                    units === 'week' ? diff / 6048e5 : // 1000 * 60 * 60 * 24 * 7
+                    diff;
+            }
+            return asFloat ? output : absRound(output);
+        },
+
+        from : function (time, withoutSuffix) {
+            return moment.duration(this.diff(time)).lang(this.lang()._abbr).humanize(!withoutSuffix);
+        },
+
+        fromNow : function (withoutSuffix) {
+            return this.from(moment(), withoutSuffix);
+        },
+
+        calendar : function () {
+            var diff = this.diff(moment().startOf('day'), 'days', true),
+                format = diff < -6 ? 'sameElse' :
+                diff < -1 ? 'lastWeek' :
+                diff < 0 ? 'lastDay' :
+                diff < 1 ? 'sameDay' :
+                diff < 2 ? 'nextDay' :
+                diff < 7 ? 'nextWeek' : 'sameElse';
+            return this.format(this.lang().calendar(format, this));
+        },
+
+        isLeapYear : function () {
+            var year = this.year();
+            return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+        },
+
+        isDST : function () {
+            return (this.zone() < moment([this.year()]).zone() ||
+                this.zone() < moment([this.year(), 5]).zone());
+        },
+
+        day : function (input) {
+            var day = this._isUTC ? this._d.getUTCDay() : this._d.getDay();
+            return input == null ? day :
+                this.add({ d : input - day });
+        },
+
+        startOf: function (units) {
+            units = units.replace(/s$/, '');
+            // the following switch intentionally omits break keywords
+            // to utilize falling through the cases.
+            switch (units) {
+            case 'year':
+                this.month(0);
+                /* falls through */
+            case 'month':
+                this.date(1);
+                /* falls through */
+            case 'week':
+            case 'day':
+                this.hours(0);
+                /* falls through */
+            case 'hour':
+                this.minutes(0);
+                /* falls through */
+            case 'minute':
+                this.seconds(0);
+                /* falls through */
+            case 'second':
+                this.milliseconds(0);
+                /* falls through */
+            }
+
+            // weeks are a special case
+            if (units === 'week') {
+                this.day(0);
+            }
+
+            return this;
+        },
+
+        endOf: function (units) {
+            return this.startOf(units).add(units.replace(/s?$/, 's'), 1).subtract('ms', 1);
+        },
+
+        isAfter: function (input, units) {
+            units = typeof units !== 'undefined' ? units : 'millisecond';
+            return +this.clone().startOf(units) > +moment(input).startOf(units);
+        },
+
+        isBefore: function (input, units) {
+            units = typeof units !== 'undefined' ? units : 'millisecond';
+            return +this.clone().startOf(units) < +moment(input).startOf(units);
+        },
+
+        isSame: function (input, units) {
+            units = typeof units !== 'undefined' ? units : 'millisecond';
+            return +this.clone().startOf(units) === +moment(input).startOf(units);
+        },
+
+        zone : function () {
+            return this._isUTC ? 0 : this._d.getTimezoneOffset();
+        },
+
+        daysInMonth : function () {
+            return moment.utc([this.year(), this.month() + 1, 0]).date();
+        },
+
+        dayOfYear : function (input) {
+            var dayOfYear = round((moment(this).startOf('day') - moment(this).startOf('year')) / 864e5) + 1;
+            return input == null ? dayOfYear : this.add("d", (input - dayOfYear));
+        },
+
+        isoWeek : function (input) {
+            var week = weekOfYear(this, 1, 4);
+            return input == null ? week : this.add("d", (input - week) * 7);
+        },
+
+        week : function (input) {
+            var week = this.lang().week(this);
+            return input == null ? week : this.add("d", (input - week) * 7);
+        },
+
+        // If passed a language key, it will set the language for this
+        // instance.  Otherwise, it will return the language configuration
+        // variables for this instance.
+        lang : function (key) {
+            if (key === undefined) {
+                return this._lang;
+            } else {
+                this._lang = getLangDefinition(key);
+                return this;
+            }
+        }
+    };
+
+    // helper for adding shortcuts
+    function makeGetterAndSetter(name, key) {
+        moment.fn[name] = moment.fn[name + 's'] = function (input) {
+            var utc = this._isUTC ? 'UTC' : '';
+            if (input != null) {
+                this._d['set' + utc + key](input);
+                return this;
+            } else {
+                return this._d['get' + utc + key]();
+            }
+        };
+    }
+
+    // loop through and add shortcuts (Month, Date, Hours, Minutes, Seconds, Milliseconds)
+    for (i = 0; i < proxyGettersAndSetters.length; i ++) {
+        makeGetterAndSetter(proxyGettersAndSetters[i].toLowerCase().replace(/s$/, ''), proxyGettersAndSetters[i]);
+    }
+
+    // add shortcut for year (uses different syntax than the getter/setter 'year' == 'FullYear')
+    makeGetterAndSetter('year', 'FullYear');
+
+    // add plural methods
+    moment.fn.days = moment.fn.day;
+    moment.fn.weeks = moment.fn.week;
+    moment.fn.isoWeeks = moment.fn.isoWeek;
+
+    /************************************
+        Duration Prototype
+    ************************************/
+
+
+    moment.duration.fn = Duration.prototype = {
+        weeks : function () {
+            return absRound(this.days() / 7);
+        },
+
+        valueOf : function () {
+            return this._milliseconds +
+              this._days * 864e5 +
+              this._months * 2592e6;
+        },
+
+        humanize : function (withSuffix) {
+            var difference = +this,
+                output = relativeTime(difference, !withSuffix, this.lang());
+
+            if (withSuffix) {
+                output = this.lang().pastFuture(difference, output);
+            }
+
+            return this.lang().postformat(output);
+        },
+
+        lang : moment.fn.lang
+    };
+
+    function makeDurationGetter(name) {
+        moment.duration.fn[name] = function () {
+            return this._data[name];
+        };
+    }
+
+    function makeDurationAsGetter(name, factor) {
+        moment.duration.fn['as' + name] = function () {
+            return +this / factor;
+        };
+    }
+
+    for (i in unitMillisecondFactors) {
+        if (unitMillisecondFactors.hasOwnProperty(i)) {
+            makeDurationAsGetter(i, unitMillisecondFactors[i]);
+            makeDurationGetter(i.toLowerCase());
+        }
+    }
+
+    makeDurationAsGetter('Weeks', 6048e5);
+
+
+    /************************************
+        Default Lang
+    ************************************/
+
+
+    // Set default language, other languages will inherit from English.
+    moment.lang('en', {
+        ordinal : function (number) {
+            var b = number % 10,
+                output = (~~ (number % 100 / 10) === 1) ? 'th' :
+                (b === 1) ? 'st' :
+                (b === 2) ? 'nd' :
+                (b === 3) ? 'rd' : 'th';
+            return number + output;
+        }
+    });
+
+
+    /************************************
+        Exposing Moment
+    ************************************/
+
+
+    // CommonJS module is defined
+    if (hasModule) {
+        module.exports = moment;
+    }
+    /*global ender:false */
+    if (typeof ender === 'undefined') {
+        // here, `this` means `window` in the browser, or `global` on the server
+        // add `moment` as a global object via a string identifier,
+        // for Closure Compiler "advanced" mode
+        this['moment'] = moment;
+    }
+    /*global define:false */
+    if (typeof define === "function" && define.amd) {
+        define("moment", [], function () {
+            return moment;
+        });
+    }
+}).call(this);
+
+});
+require.register("namjul-backbone.localStorage/backbone.localStorage.js", function(exports, require, module){
+/**
+ * Backbone localStorage Adapter
+ * Version 1.1.3
+ *
+ * https://github.com/jeromegn/Backbone.localStorage
+ */
+(function (root, factory) {
+   if (typeof exports === 'object') {
+     module.exports = factory(require("underscore"), require("backbone"));
+   } else if (typeof define === "function" && define.amd) {
+      // AMD. Register as an anonymous module.
+      define(["underscore","backbone"], function(_, Backbone) {
+        // Use global variables if the locals are undefined.
+        return factory(_ || root._, Backbone || root.Backbone);
+      });
+   } else {
+      // RequireJS isn't being used. Assume underscore and backbone are loaded in <script> tags
+      factory(_, Backbone);
+   }
+}(this, function(_, Backbone) {
+// A simple module to replace `Backbone.sync` with *localStorage*-based
+// persistence. Models are given GUIDS, and saved into a JSON object. Simple
+// as that.
+
+// Hold reference to Underscore.js and Backbone.js in the closure in order
+// to make things work even if they are removed from the global namespace
+
+// Generate four random hex digits.
+function S4() {
+   return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+};
+
+// Generate a pseudo-GUID by concatenating random hexadecimal.
+function guid() {
+   return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+};
+
+// Our Store is represented by a single JS object in *localStorage*. Create it
+// with a meaningful name, like the name you'd give a table.
+// window.Store is deprectated, use Backbone.LocalStorage instead
+Backbone.LocalStorage = window.Store = function(name) {
+  this.name = name;
+  var store = this.localStorage().getItem(this.name);
+  this.records = (store && store.split(",")) || [];
+};
+
+_.extend(Backbone.LocalStorage.prototype, {
+
+  // Save the current state of the **Store** to *localStorage*.
+  save: function() {
+    this.localStorage().setItem(this.name, this.records.join(","));
+  },
+
+  // Add a model, giving it a (hopefully)-unique GUID, if it doesn't already
+  // have an id of it's own.
+  create: function(model) {
+    if (!model.id) {
+      model.id = guid();
+      model.set(model.idAttribute, model.id);
+    }
+    this.localStorage().setItem(this.name+"-"+model.id, JSON.stringify(model));
+    this.records.push(model.id.toString());
+    this.save();
+    return this.find(model);
+  },
+
+  // Update a model by replacing its copy in `this.data`.
+  update: function(model) {
+    this.localStorage().setItem(this.name+"-"+model.id, JSON.stringify(model));
+    if (!_.include(this.records, model.id.toString()))
+      this.records.push(model.id.toString()); this.save();
+    return this.find(model);
+  },
+
+  // Retrieve a model from `this.data` by id.
+  find: function(model) {
+    return this.jsonData(this.localStorage().getItem(this.name+"-"+model.id));
+  },
+
+  // Return the array of all models currently in storage.
+  findAll: function() {
+    // Lodash removed _#chain in v1.0.0-rc.1
+    return (_.chain || _)(this.records)
+      .map(function(id){
+        return this.jsonData(this.localStorage().getItem(this.name+"-"+id));
+      }, this)
+      .compact()
+      .value();
+  },
+
+  // Delete a model from `this.data`, returning it.
+  destroy: function(model) {
+    if (model.isNew())
+      return false
+    this.localStorage().removeItem(this.name+"-"+model.id);
+    this.records = _.reject(this.records, function(id){
+      return id === model.id.toString();
+    });
+    this.save();
+    return model;
+  },
+
+  localStorage: function() {
+    return localStorage;
+  },
+
+  // fix for "illegal access" error on Android when JSON.parse is passed null
+  jsonData: function (data) {
+      return data && JSON.parse(data);
+  },
+
+  // Clear localStorage for specific collection.
+  _clear: function() {
+    var local = this.localStorage(),
+      itemRe = new RegExp("^" + this.name + "-");
+
+    // Remove id-tracking item (e.g., "foo").
+    local.removeItem(this.name);
+
+    // Lodash removed _#chain in v1.0.0-rc.1
+    // Match all data items (e.g., "foo-ID") and remove.
+    (_.chain || _)(local).keys()
+      .filter(function (k) { return itemRe.test(k); })
+      .each(function (k) { local.removeItem(k); });
+  },
+
+  // Size of localStorage.
+  _storageSize: function() {
+    return this.localStorage().length;
+  }
+
+});
+
+// localSync delegate to the model or collection's
+// *localStorage* property, which should be an instance of `Store`.
+// window.Store.sync and Backbone.localSync is deprecated, use Backbone.LocalStorage.sync instead
+Backbone.LocalStorage.sync = window.Store.sync = Backbone.localSync = function(method, model, options) {
+  var store = model.localStorage || model.collection.localStorage;
+
+  var resp, errorMessage, syncDfd = Backbone.$.Deferred && Backbone.$.Deferred(); //If $ is having Deferred - use it.
+
+  try {
+
+    switch (method) {
+      case "read":
+        resp = model.id != undefined ? store.find(model) : store.findAll();
+        break;
+      case "create":
+        resp = store.create(model);
+        break;
+      case "update":
+        resp = store.update(model);
+        break;
+      case "delete":
+        resp = store.destroy(model);
+        break;
+    }
+
+  } catch(error) {
+    if (error.code === DOMException.QUOTA_EXCEEDED_ERR && store._storageSize() === 0)
+      errorMessage = "Private browsing is unsupported";
+    else
+      errorMessage = error.message;
+  }
+
+  if (resp) {
+    if (options && options.success) {
+      if (Backbone.VERSION === "0.9.10") {
+        options.success(model, resp, options);
+      } else {
+        options.success(resp);
+      }
+    }
+    if (syncDfd) {
+      syncDfd.resolve(resp);
+    }
+  
+  } else {
+    errorMessage = errorMessage ? errorMessage
+                                : "Record Not Found";
+
+    if (options && options.error)
+      if (Backbone.VERSION === "0.9.10") {
+        options.error(model, errorMessage, options);
+      } else {
+        options.error(errorMessage);
+      }
+
+    if (syncDfd)
+      syncDfd.reject(errorMessage);
+  }
+
+  // add compatibility with $.ajax
+  // always execute callback for success and error
+  if (options && options.complete) options.complete(resp);
+
+  return syncDfd && syncDfd.promise();
+};
+
+Backbone.ajaxSync = Backbone.sync;
+
+Backbone.getSyncMethod = function(model) {
+  if(model.localStorage || (model.collection && model.collection.localStorage)) {
+    return Backbone.localSync;
+  }
+
+  return Backbone.ajaxSync;
+};
+
+// Override 'Backbone.sync' to default to localSync,
+// the original 'Backbone.sync' is still available in 'Backbone.ajaxSync'
+Backbone.sync = function(method, model, options) {
+  return Backbone.getSyncMethod(model).apply(this, [method, model, options]);
+};
+
+return Backbone.LocalStorage;
+}));
+
+});
+require.register("component-humanize-number/index.js", function(exports, require, module){
+
+module.exports = function(n, options){
+  options = options || {};
+  var d = options.delimiter || ',';
+  var s = options.separator || '.';
+  n = n.toString().split('.');
+  n[0] = n[0].replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1' + d);
+  return n.join(s);
+};
+});
+require.register("amount/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var _ = require('underscore');
+var humanize = require('humanize-number');
+
+/**
+ * Expose `Amount`.
+ */
+
+module.exports = Amount;
+
+/**
+ * Initialize a new 'Amount.
+ */
+
+function Amount(startValue) {
+  this.truncate = 2; 
+  this.reset(startValue);
+}
+
+Amount.prototype.reset = function(startValue) {
+  startValue = startValue || 0;
+  this.index = 0;
+  this.amount = ['.', '0'];
+  this.isDecimal = false;
+
+  startValue = parseFloat(startValue).toString();
+
+  _.each(startValue.split(''), _.bind(function(value) {
+    if(value === '.') {
+      this.toDecimal();
+    } else {
+      this.append(value); 
+    }
+  }, this));
+};
+
+Amount.prototype.value = function() {
+  return parseFloat(this.amount.join(''));
+};
+
+Amount.prototype.format = function(options) {
+  options = options || {delimiter: '.', separator: ','}; 
+  var format = humanize(this.value(), options);
+
+  var arParts = format.split(options.separator);
+  var afterDecimal = (arParts[1] || '').split('');
+
+  if(afterDecimal.length > 2) {
+    afterDecimal = afterDecimal.slice(0, 2);
+  }
+
+  while (afterDecimal.length < 2) {
+    afterDecimal.push('0');
+  }
+
+  return arParts[0] + options.separator + afterDecimal.join('');
+};
+
+Amount.prototype.toDecimal = function() {
+  if(this.index <= _.indexOf(this.amount, '.')) { // prevent double click on decimal
+    this.index++;
+  }
+};
+
+Amount.prototype.append = function(value) {
+  if(this.index - _.indexOf(this.amount, '.') !== this.truncate+1) {
+    this.amount.splice(this.index, 0, value.toString());
+    this.index++;
+  }
+};
+
+Amount.prototype.remove = function() {
+  if(this.index === 0) return;
+  this.index--;
+  if(this.amount[this.index] !== '.') {
+    this.amount.splice(this.index, 1);
+  }
+};
+
+});
+require.register("purchase/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var Amount = require('amount');
+
+/**
+ * Model
+ */
+
+var Model = module.exports = Backbone.Model.extend({
+
+  initialize: function() {
+    if(!this.get('date')) {
+      this.set('date', new Date().valueOf());
+    }
+    
+    this.amount = new Amount(this.get('amount'));
+
+    this.on('modifyAmount', function(value) {
+      if(isNaN(value)) {
+        if(value === 'del') {
+          this.amount.remove();
+        } else {
+          this.amount.toDecimal();
+        }
+      } else {
+        this.amount.append(value);
+      }
+      this.set('amount', this.amount.value());
+    });
+
+    this.on('change:categoryId', function() {
+      this.trigger('change:categoryColor change:categoryName');
+    }, this);
+
+  },
+
+  defaults: {
+    'amount': 0,
+    'categoryId': null,
+    'note': '',
+    'date': 0,
+    'expense': false
+  }
+
+});
+
+});
+require.register("purchases/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var purchase = require('purchase');
+var Store = require('backbone.localStorage');
+var moment = require('moment');
+
+/**
+ * Collection
+ */
+
+var Purchases = module.exports = Backbone.Collection.extend({
+
+  model: purchase,
+
+  localStorage: new Store('purchases'),
+
+  initialize: function() {
+    this.on('change', _.bind(function(model) {
+      var monthGroup = moment(model.get('date')).format('YYYY') + moment(model.get('date')).format('MM');
+      this.trigger('change:month' + monthGroup); 
+    }, this));
+  },
+
+  comparator: function(purchase) {
+    return -purchase.get('date');
+  }
+
+});
+
+/**
+ * Expose collection instance.
+ */
+
+module.exports = new Purchases();
+
+});
+require.register("category/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Model dependencies.
+ */
+
+var Backbone = require('backbone');
+
+/**
+ * Model
+ */
+
+var Model = module.exports = Backbone.Model.extend( {
+
+  initialize: function() {
+    if(!this.get('color')) {
+      // color functions invalid!!! change!
+      this.set('color', get_random_color());
+    }
+    this.on('usage:increase', this.increaseUsage);
+    this.on('usage:decrease', this.decreaseUsage);
+  },
+  
+  defaults: {
+    'name': '',
+    'color': null,
+    'usage': 0,
+    'default': false
+  },
+  
+  increaseUsage: function() {
+    this.set('usage', this.get('usage') + 1);
+    this.save();
+  },
+
+  decreaseUsage: function() {
+    this.set('usage', this.get('usage') - 1);
+    this.save();
+  }
+});
+
+function get_random_color() {
+    var letters = '0123456789ABCDEF'.split('');
+    var color = '#';
+    for (var i = 0; i < 6; i++ ) {
+        color += letters[Math.round(Math.random() * 15)];
+    }
+    return color;
+}
+
+function getRandColor(brightness){
+  //6 levels of brightness from 0 to 5, 0 being the darkest
+  var rgb = [Math.random() * 256, Math.random() * 256, Math.random() * 256];
+  var mix = [brightness*51, brightness*51, brightness*51]; //51 => 255/5
+  var mixedrgb = [rgb[0] + mix[0], rgb[1] + mix[1], rgb[2] + mix[2]].map(function(x){ return Math.round(x/2.0);});
+  return "rgb(" + mixedrgb.join(",") + ")";
+}
+
+/**
+ * This function generates vibrant, "evenly spaced" colours (i.e. no clustering). This is ideal for creating easily distiguishable vibrant markers in Google Maps and other apps.
+ * Adam Cole, 2011-Sept-14
+ * HSV to RBG adapted from: http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript
+ */
+
+function rainbow(numOfSteps, step) {
+    var r, g, b;
+    var h = step / numOfSteps;
+    var i = ~~(h * 6);
+    var f = h * 6 - i;
+    var q = 1 - f;
+    switch(i % 6){
+        case 0: r = 1, g = f, b = 0; break;
+        case 1: r = q, g = 1, b = 0; break;
+        case 2: r = 0, g = 1, b = f; break;
+        case 3: r = 0, g = q, b = 1; break;
+        case 4: r = f, g = 0, b = 1; break;
+        case 5: r = 1, g = 0, b = q; break;
+    }
+    var c = "#" + ("00" + (~ ~(r * 255)).toString(16)).slice(-2) + ("00" + (~ ~(g * 255)).toString(16)).slice(-2) + ("00" + (~ ~(b * 255)).toString(16)).slice(-2);
+    return (c);
+}
+
+});
+require.register("categories/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var category = require('category');
+var Store = require('backbone.localStorage');
+
+
+/**
+ * Collection
+ */
+
+var Categories = module.exports = Backbone.Collection.extend({
+
+  model: category,
+
+  localStorage: new Store('categories'),
+
+  comparator: function(category) {
+    return category.get('usage');
+  },
+
+  getMostUsed: function() {
+    return this.reduce(function(previousCategory, category) {
+      return category.get('usage') > previousCategory.get('usage') ? category : previousCategory;
+    });
+  }
+
+});
+
+/**
+ * Expose collection instance.
+ */
+
+module.exports = new Categories();
+
+});
 
 
 
 
-require.register("settings/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar Store = require('backbone.localStorage');\n\n/**\n * Model for settings.\n */\n\nvar Settings =  Backbone.Model.extend( {\n\n  localStorage: new Store('Settings'),\n\n  defaults: {\n    'group': 'month',\n    'currency': '€'\n  }\n});\n\n/**\n * Fetch settings from store.\n */\n\nvar settings = new Settings({id: 1});\nsettings.fetch();\n\n/**\n * Expose 'settings' singleton instance.\n */\n\nmodule.exports = settings;\n//@ sourceURL=settings/index.js"
-));
-require.register("settings-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar settings = require('settings');\n\n/**\n * Initialize a new backbone view for settings page.\n */\n\nvar SettingsView = module.exports = Backbone.View.extend({\n  el: '#view-settings',\n\n  events: {\n    'click #settings-close': 'close'\n  },\n\n  initialize: function() {\n    this.model = settings;\n    this.on('open', _.bind(this.open, this));\n    var view = reactive(this.el, this.model, this);\n\n    //Custom reactive binding.\n    view.bind('data-select', function(el, name) {\n      el.value = this.obj.get(name);\n      el.onchange = _.bind(function() {\n        console.log(name, el.value);\n        this.obj.set(name, el.value);\n        this.obj.save();\n      }, this);\n    });\n  }, \n\n  open: function() {\n    this.$el.removeClass('view-bottom');\n  },\n\n  close: function() {\n    this.$el.addClass('view-bottom');\n  }\n\n});\n\n\n\n//@ sourceURL=settings-view/index.js"
-));
-require.register("component-hammer.js/index.js", Function("exports, require, module",
-"/*\n * Hammer.JS\n * version 0.6.1\n * author: Eight Media\n * https://github.com/EightMedia/hammer.js\n * Licensed under the MIT license.\n */\nfunction Hammer(element, options, undefined)\n{\n    var self = this;\n\n    var defaults = {\n        // prevent the default event or not... might be buggy when false\n        prevent_default    : false,\n        css_hacks          : true,\n\n        swipe              : true,\n        swipe_time         : 200,   // ms\n        swipe_min_distance : 20, // pixels\n\n        drag               : true,\n        drag_vertical      : true,\n        drag_horizontal    : true,\n        // minimum distance before the drag event starts\n        drag_min_distance  : 20, // pixels\n\n        // pinch zoom and rotation\n        transform          : true,\n        scale_treshold     : 0.1,\n        rotation_treshold  : 15, // degrees\n\n        tap                : true,\n        tap_double         : true,\n        tap_max_interval   : 300,\n        tap_max_distance   : 10,\n        tap_double_distance: 20,\n\n        hold               : true,\n        hold_timeout       : 500\n    };\n    options = mergeObject(defaults, options);\n\n    // some css hacks\n    (function() {\n        if(!options.css_hacks) {\n            return false;\n        }\n\n        var vendors = ['webkit','moz','ms','o',''];\n        var css_props = {\n            \"userSelect\": \"none\",\n            \"touchCallout\": \"none\",\n            \"userDrag\": \"none\",\n            \"tapHighlightColor\": \"rgba(0,0,0,0)\"\n        };\n\n        var prop = '';\n        for(var i = 0; i < vendors.length; i++) {\n            for(var p in css_props) {\n                prop = p;\n                if(vendors[i]) {\n                    prop = vendors[i] + prop.substring(0, 1).toUpperCase() + prop.substring(1);\n                }\n                element.style[ prop ] = css_props[p];\n            }\n        }\n    })();\n\n    // holds the distance that has been moved\n    var _distance = 0;\n\n    // holds the exact angle that has been moved\n    var _angle = 0;\n\n    // holds the diraction that has been moved\n    var _direction = 0;\n\n    // holds position movement for sliding\n    var _pos = { };\n\n    // how many fingers are on the screen\n    var _fingers = 0;\n\n    var _first = false;\n\n    var _gesture = null;\n    var _prev_gesture = null;\n\n    var _touch_start_time = null;\n    var _prev_tap_pos = {x: 0, y: 0};\n    var _prev_tap_end_time = null;\n\n    var _hold_timer = null;\n\n    var _offset = {};\n\n    // keep track of the mouse status\n    var _mousedown = false;\n\n    var _event_start;\n    var _event_move;\n    var _event_end;\n\n    var _has_touch = ('ontouchstart' in window);\n\n\n    /**\n     * option setter/getter\n     * @param   string  key\n     * @param   mixed   value\n     * @return  mixed   value\n     */\n    this.option = function(key, val) {\n        if(val != undefined) {\n            options[key] = val;\n        }\n\n        return options[key];\n    };\n\n\n    /**\n     * angle to direction define\n     * @param  float    angle\n     * @return string   direction\n     */\n    this.getDirectionFromAngle = function( angle ) {\n        var directions = {\n            down: angle >= 45 && angle < 135, //90\n            left: angle >= 135 || angle <= -135, //180\n            up: angle < -45 && angle > -135, //270\n            right: angle >= -45 && angle <= 45 //0\n        };\n\n        var direction, key;\n        for(key in directions){\n            if(directions[key]){\n                direction = key;\n                break;\n            }\n        }\n        return direction;\n    };\n\n\n    /**\n     * destory events\n     * @return  void\n     */\n    this.destroy = function() {\n        if(_has_touch) {\n            removeEvent(element, \"touchstart touchmove touchend touchcancel\", handleEvents);\n        }\n        // for non-touch\n        else {\n            removeEvent(element, \"mouseup mousedown mousemove\", handleEvents);\n            removeEvent(element, \"mouseout\", handleMouseOut);\n        }\n    };\n\n\n    /**\n     * count the number of fingers in the event\n     * when no fingers are detected, one finger is returned (mouse pointer)\n     * @param  event\n     * @return int  fingers\n     */\n    function countFingers( event )\n    {\n        // there is a bug on android (until v4?) that touches is always 1,\n        // so no multitouch is supported, e.g. no, zoom and rotation...\n        return event.touches ? event.touches.length : 1;\n    }\n\n\n    /**\n     * get the x and y positions from the event object\n     * @param  event\n     * @return array  [{ x: int, y: int }]\n     */\n    function getXYfromEvent( event )\n    {\n        event = event || window.event;\n\n        // no touches, use the event pageX and pageY\n        if(!_has_touch) {\n            var doc = document,\n                body = doc.body;\n\n            return [{\n                x: event.pageX || event.clientX + ( doc && doc.scrollLeft || body && body.scrollLeft || 0 ) - ( doc && doc.clientLeft || body && doc.clientLeft || 0 ),\n                y: event.pageY || event.clientY + ( doc && doc.scrollTop || body && body.scrollTop || 0 ) - ( doc && doc.clientTop || body && doc.clientTop || 0 )\n            }];\n        }\n        // multitouch, return array with positions\n        else {\n            var pos = [], src;\n            for(var t=0, len=event.touches.length; t<len; t++) {\n                src = event.touches[t];\n                pos.push({ x: src.pageX, y: src.pageY });\n            }\n            return pos;\n        }\n    }\n\n\n    /**\n     * calculate the angle between two points\n     * @param   object  pos1 { x: int, y: int }\n     * @param   object  pos2 { x: int, y: int }\n     */\n    function getAngle( pos1, pos2 )\n    {\n        return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;\n    }\n\n\n    /**\n     * calculate the scale size between two fingers\n     * @param   object  pos_start\n     * @param   object  pos_move\n     * @return  float   scale\n     */\n    function calculateScale(pos_start, pos_move)\n    {\n        if(pos_start.length == 2 && pos_move.length == 2) {\n            var x, y;\n\n            x = pos_start[0].x - pos_start[1].x;\n            y = pos_start[0].y - pos_start[1].y;\n            var start_distance = Math.sqrt((x*x) + (y*y));\n\n            x = pos_move[0].x - pos_move[1].x;\n            y = pos_move[0].y - pos_move[1].y;\n            var end_distance = Math.sqrt((x*x) + (y*y));\n\n            return end_distance / start_distance;\n        }\n\n        return 0;\n    }\n\n\n    /**\n     * calculate the rotation degrees between two fingers\n     * @param   object  pos_start\n     * @param   object  pos_move\n     * @return  float   rotation\n     */\n    function calculateRotation(pos_start, pos_move)\n    {\n        if(pos_start.length == 2 && pos_move.length == 2) {\n            var x, y;\n\n            x = pos_start[0].x - pos_start[1].x;\n            y = pos_start[0].y - pos_start[1].y;\n            var start_rotation = Math.atan2(y, x) * 180 / Math.PI;\n\n            x = pos_move[0].x - pos_move[1].x;\n            y = pos_move[0].y - pos_move[1].y;\n            var end_rotation = Math.atan2(y, x) * 180 / Math.PI;\n\n            return end_rotation - start_rotation;\n        }\n\n        return 0;\n    }\n\n\n    /**\n     * trigger an event/callback by name with params\n     * @param string name\n     * @param array  params\n     */\n    function triggerEvent( eventName, params )\n    {\n        // return touches object\n        params.touches = getXYfromEvent(params.originalEvent);\n        params.type = eventName;\n\n        // trigger callback\n        if(isFunction(self[\"on\"+ eventName])) {\n            self[\"on\"+ eventName].call(self, params);\n        }\n    }\n\n\n    /**\n     * cancel event\n     * @param   object  event\n     * @return  void\n     */\n\n    function cancelEvent(event)\n    {\n        event = event || window.event;\n        if(event.preventDefault){\n            event.preventDefault();\n            event.stopPropagation();\n        }else{\n            event.returnValue = false;\n            event.cancelBubble = true;\n        }\n    }\n\n\n    /**\n     * reset the internal vars to the start values\n     */\n    function reset()\n    {\n        _pos = {};\n        _first = false;\n        _fingers = 0;\n        _distance = 0;\n        _angle = 0;\n        _gesture = null;\n    }\n\n\n    var gestures = {\n        // hold gesture\n        // fired on touchstart\n        hold : function(event)\n        {\n            // only when one finger is on the screen\n            if(options.hold) {\n                _gesture = 'hold';\n                clearTimeout(_hold_timer);\n\n                _hold_timer = setTimeout(function() {\n                    if(_gesture == 'hold') {\n                        triggerEvent(\"hold\", {\n                            originalEvent   : event,\n                            position        : _pos.start\n                        });\n                    }\n                }, options.hold_timeout);\n            }\n        },\n\n        // swipe gesture\n        // fired on touchend\n        swipe : function(event)\n        {\n            if(!_pos.move) {\n                return;\n            }\n\n            // get the distance we moved\n            var _distance_x = _pos.move[0].x - _pos.start[0].x;\n            var _distance_y = _pos.move[0].y - _pos.start[0].y;\n            _distance = Math.sqrt(_distance_x*_distance_x + _distance_y*_distance_y);\n\n            // compare the kind of gesture by time\n            var now = new Date().getTime();\n            var touch_time = now - _touch_start_time;\n\n            if(options.swipe && (options.swipe_time > touch_time) && (_distance > options.swipe_min_distance)) {\n                // calculate the angle\n                _angle = getAngle(_pos.start[0], _pos.move[0]);\n                _direction = self.getDirectionFromAngle(_angle);\n\n                _gesture = 'swipe';\n\n                var position = { x: _pos.move[0].x - _offset.left,\n                    y: _pos.move[0].y - _offset.top };\n\n                var event_obj = {\n                    originalEvent   : event,\n                    position        : position,\n                    direction       : _direction,\n                    distance        : _distance,\n                    distanceX       : _distance_x,\n                    distanceY       : _distance_y,\n                    angle           : _angle\n                };\n\n                // normal slide event\n                triggerEvent(\"swipe\", event_obj);\n            }\n        },\n\n\n        // drag gesture\n        // fired on mousemove\n        drag : function(event)\n        {\n            // get the distance we moved\n            var _distance_x = _pos.move[0].x - _pos.start[0].x;\n            var _distance_y = _pos.move[0].y - _pos.start[0].y;\n            _distance = Math.sqrt(_distance_x * _distance_x + _distance_y * _distance_y);\n\n            // drag\n            // minimal movement required\n            if(options.drag && (_distance > options.drag_min_distance) || _gesture == 'drag') {\n                // calculate the angle\n                _angle = getAngle(_pos.start[0], _pos.move[0]);\n                _direction = self.getDirectionFromAngle(_angle);\n\n                // check the movement and stop if we go in the wrong direction\n                var is_vertical = (_direction == 'up' || _direction == 'down');\n                if(((is_vertical && !options.drag_vertical) || (!is_vertical && !options.drag_horizontal))\n                    && (_distance > options.drag_min_distance)) {\n                    return;\n                }\n\n                _gesture = 'drag';\n\n                var position = { x: _pos.move[0].x - _offset.left,\n                    y: _pos.move[0].y - _offset.top };\n\n                var event_obj = {\n                    originalEvent   : event,\n                    position        : position,\n                    direction       : _direction,\n                    distance        : _distance,\n                    distanceX       : _distance_x,\n                    distanceY       : _distance_y,\n                    angle           : _angle\n                };\n\n                // on the first time trigger the start event\n                if(_first) {\n                    triggerEvent(\"dragstart\", event_obj);\n\n                    _first = false;\n                }\n\n                // normal slide event\n                triggerEvent(\"drag\", event_obj);\n\n                cancelEvent(event);\n            }\n        },\n\n\n        // transform gesture\n        // fired on touchmove\n        transform : function(event)\n        {\n            if(options.transform) {\n                if(countFingers(event) != 2) {\n                    return false;\n                }\n\n                var rotation = calculateRotation(_pos.start, _pos.move);\n                var scale = calculateScale(_pos.start, _pos.move);\n\n                if(_gesture != 'drag' &&\n                    (_gesture == 'transform' || Math.abs(1-scale) > options.scale_treshold || Math.abs(rotation) > options.rotation_treshold)) {\n                    _gesture = 'transform';\n\n                    _pos.center = {  x: ((_pos.move[0].x + _pos.move[1].x) / 2) - _offset.left,\n                        y: ((_pos.move[0].y + _pos.move[1].y) / 2) - _offset.top };\n\n                    var event_obj = {\n                        originalEvent   : event,\n                        position        : _pos.center,\n                        scale           : scale,\n                        rotation        : rotation\n                    };\n\n                    // on the first time trigger the start event\n                    if(_first) {\n                        triggerEvent(\"transformstart\", event_obj);\n                        _first = false;\n                    }\n\n                    triggerEvent(\"transform\", event_obj);\n\n                    cancelEvent(event);\n\n                    return true;\n                }\n            }\n\n            return false;\n        },\n\n\n        // tap and double tap gesture\n        // fired on touchend\n        tap : function(event)\n        {\n            // compare the kind of gesture by time\n            var now = new Date().getTime();\n            var touch_time = now - _touch_start_time;\n\n            // dont fire when hold is fired\n            if(options.hold && !(options.hold && options.hold_timeout > touch_time)) {\n                return;\n            }\n\n            // when previous event was tap and the tap was max_interval ms ago\n            var is_double_tap = (function(){\n                if (_prev_tap_pos &&\n                    options.tap_double &&\n                    _prev_gesture == 'tap' &&\n                    (_touch_start_time - _prev_tap_end_time) < options.tap_max_interval)\n                {\n                    var x_distance = Math.abs(_prev_tap_pos[0].x - _pos.start[0].x);\n                    var y_distance = Math.abs(_prev_tap_pos[0].y - _pos.start[0].y);\n                    return (_prev_tap_pos && _pos.start && Math.max(x_distance, y_distance) < options.tap_double_distance);\n                }\n                return false;\n            })();\n\n            if(is_double_tap) {\n                _gesture = 'double_tap';\n                _prev_tap_end_time = null;\n\n                triggerEvent(\"doubletap\", {\n                    originalEvent   : event,\n                    position        : _pos.start\n                });\n                cancelEvent(event);\n            }\n\n            // single tap is single touch\n            else {\n                var x_distance = (_pos.move) ? Math.abs(_pos.move[0].x - _pos.start[0].x) : 0;\n                var y_distance =  (_pos.move) ? Math.abs(_pos.move[0].y - _pos.start[0].y) : 0;\n                _distance = Math.max(x_distance, y_distance);\n\n                if(_distance < options.tap_max_distance) {\n                    _gesture = 'tap';\n                    _prev_tap_end_time = now;\n                    _prev_tap_pos = _pos.start;\n\n                    if(options.tap) {\n                        triggerEvent(\"tap\", {\n                            originalEvent   : event,\n                            position        : _pos.start\n                        });\n                        cancelEvent(event);\n                    }\n                }\n            }\n\n        }\n\n    };\n\n\n    function handleEvents(event)\n    {\n        switch(event.type)\n        {\n            case 'mousedown':\n            case 'touchstart':\n                _pos.start = getXYfromEvent(event);\n                _touch_start_time = new Date().getTime();\n                _fingers = countFingers(event);\n                _first = true;\n                _event_start = event;\n\n                // borrowed from jquery offset https://github.com/jquery/jquery/blob/master/src/offset.js\n                var box = element.getBoundingClientRect();\n                var clientTop  = element.clientTop  || document.body.clientTop  || 0;\n                var clientLeft = element.clientLeft || document.body.clientLeft || 0;\n                var scrollTop  = window.pageYOffset || element.scrollTop  || document.body.scrollTop;\n                var scrollLeft = window.pageXOffset || element.scrollLeft || document.body.scrollLeft;\n\n                _offset = {\n                    top: box.top + scrollTop - clientTop,\n                    left: box.left + scrollLeft - clientLeft\n                };\n\n                _mousedown = true;\n\n                // hold gesture\n                gestures.hold(event);\n\n                if(options.prevent_default) {\n                    cancelEvent(event);\n                }\n                break;\n\n            case 'mousemove':\n            case 'touchmove':\n                if(!_mousedown) {\n                    return false;\n                }\n                _event_move = event;\n                _pos.move = getXYfromEvent(event);\n\n                if(!gestures.transform(event)) {\n                    gestures.drag(event);\n                }\n                break;\n\n            case 'mouseup':\n            case 'mouseout':\n            case 'touchcancel':\n            case 'touchend':\n                if(!_mousedown || (_gesture != 'transform' && event.touches && event.touches.length > 0)) {\n                    return false;\n                }\n\n                _mousedown = false;\n                _event_end = event;\n\n\n                // swipe gesture\n                gestures.swipe(event);\n\n\n                // drag gesture\n                // dragstart is triggered, so dragend is possible\n                if(_gesture == 'drag') {\n                    triggerEvent(\"dragend\", {\n                        originalEvent   : event,\n                        direction       : _direction,\n                        distance        : _distance,\n                        angle           : _angle\n                    });\n                }\n\n                // transform\n                // transformstart is triggered, so transformed is possible\n                else if(_gesture == 'transform') {\n                    triggerEvent(\"transformend\", {\n                        originalEvent   : event,\n                        position        : _pos.center,\n                        scale           : calculateScale(_pos.start, _pos.move),\n                        rotation        : calculateRotation(_pos.start, _pos.move)\n                    });\n                }\n                else {\n                    gestures.tap(_event_start);\n                }\n\n                _prev_gesture = _gesture;\n\n                // trigger release event\n                triggerEvent(\"release\", {\n                    originalEvent   : event,\n                    gesture         : _gesture\n                });\n\n                // reset vars\n                reset();\n                break;\n        }\n    }\n\n\n    function handleMouseOut(event) {\n        if(!isInsideHammer(element, event.relatedTarget)) {\n            handleEvents(event);\n        }\n    }\n\n\n    // bind events for touch devices\n    // except for windows phone 7.5, it doesnt support touch events..!\n    if(_has_touch) {\n        addEvent(element, \"touchstart touchmove touchend touchcancel\", handleEvents);\n    }\n    // for non-touch\n    else {\n        addEvent(element, \"mouseup mousedown mousemove\", handleEvents);\n        addEvent(element, \"mouseout\", handleMouseOut);\n    }\n\n\n    /**\n     * find if element is (inside) given parent element\n     * @param   object  element\n     * @param   object  parent\n     * @return  bool    inside\n     */\n    function isInsideHammer(parent, child) {\n        // get related target for IE\n        if(!child && window.event && window.event.toElement){\n            child = window.event.toElement;\n        }\n\n        if(parent === child){\n            return true;\n        }\n\n        // loop over parentNodes of child until we find hammer element\n        if(child){\n            var node = child.parentNode;\n            while(node !== null){\n                if(node === parent){\n                    return true;\n                };\n                node = node.parentNode;\n            }\n        }\n        return false;\n    }\n\n\n    /**\n     * merge 2 objects into a new object\n     * @param   object  obj1\n     * @param   object  obj2\n     * @return  object  merged object\n     */\n    function mergeObject(obj1, obj2) {\n        var output = {};\n\n        if(!obj2) {\n            return obj1;\n        }\n\n        for (var prop in obj1) {\n            if (prop in obj2) {\n                output[prop] = obj2[prop];\n            } else {\n                output[prop] = obj1[prop];\n            }\n        }\n        return output;\n    }\n\n\n    /**\n     * check if object is a function\n     * @param   object  obj\n     * @return  bool    is function\n     */\n    function isFunction( obj ){\n        return Object.prototype.toString.call( obj ) == \"[object Function]\";\n    }\n\n\n    /**\n     * attach event\n     * @param   node    element\n     * @param   string  types\n     * @param   object  callback\n     */\n    function addEvent(element, types, callback) {\n        types = types.split(\" \");\n        for(var t= 0,len=types.length; t<len; t++) {\n            if(element.addEventListener){\n                element.addEventListener(types[t], callback, false);\n            }\n            else if(document.attachEvent){\n                element.attachEvent(\"on\"+ types[t], callback);\n            }\n        }\n    }\n\n\n    /**\n     * detach event\n     * @param   node    element\n     * @param   string  types\n     * @param   object  callback\n     */\n    function removeEvent(element, types, callback) {\n        types = types.split(\" \");\n        for(var t= 0,len=types.length; t<len; t++) {\n            if(element.removeEventListener){\n                element.removeEventListener(types[t], callback, false);\n            }\n            else if(document.detachEvent){\n                element.detachEvent(\"on\"+ types[t], callback);\n            }\n        }\n    }\n}\n\nmodule.exports = Hammer;//@ sourceURL=component-hammer.js/index.js"
-));
-require.register("component-gesture/index.js", Function("exports, require, module",
-"\n/**\n * Module dependencies.\n */\n\nvar Hammer = require('hammer')\n  , Emitter = require('emitter');\n\n/**\n * Bind gestures to `el`.\n *\n * @param {Element} el\n * @return {Gesture}\n * @api public\n */\n\nmodule.exports = function(el){\n  return new Gesture(el);\n};\n\n/**\n * Initalize a new `Gesture` with the given `el`.\n *\n * @param {Element} el\n * @api public\n */\n\nfunction Gesture(el) {\n  Emitter.call(this);\n  this.hammer = new Hammer(el);\n  this.el = el;\n  this.bind();\n}\n\n/**\n * Inherits from `Emitter.prototype`.\n */\n\nGesture.prototype.__proto__ = Emitter.prototype;\n\n/**\n * Bind to hammer.js events.\n *\n * @api private\n */\n\nGesture.prototype.bind = function(){\n  var self = this;\n  var hammer = this.hammer;\n\n  // drag start\n  hammer.ondragstart = function(e){\n    self.emit('drag start', e);\n  };\n\n  // drag\n  hammer.ondrag = function(e){\n    self.emit('drag', e);\n  };\n\n  // drag end\n  hammer.ondragend = function(e){\n    self.emit('drag end', e);\n  };\n\n  // tag\n  hammer.ontap = function(e){\n    self.emit('tap', e);\n  };\n\n  // double tag\n  hammer.ondoubletap = function(e){\n    self.emit('double tap', e);\n  };\n\n  // hold\n  hammer.onhold = function(e){\n    self.emit('hold', e);\n  };\n\n  // release\n  hammer.onrelease = function(e){\n    self.emit('release', e);\n  };\n\n  // transform start\n  hammer.ontransformstart = function(e){\n    self.emit('transform start', e);\n  };\n\n  // transform\n  hammer.ontransform = function(e){\n    self.emit('transform', e);\n  };\n\n  // transform end\n  hammer.ontransformend = function(e){\n    self.emit('transform end', e);\n  };\n\n  // swipe left / right\n  hammer.onswipe = function(e){\n    self.emit('swipe', e);\n    self.emit('swipe ' + e.direction, e);\n  };\n};\n\n/**\n * Unbind events.\n *\n * @api public\n */\n\nGesture.prototype.unbind = function(){\n  this.hammer.destroy();\n};\n\n//@ sourceURL=component-gesture/index.js"
-));
-require.register("category-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar purchases = require('purchases');\nvar gesture = require('gesture');\n\n/**\n * Initialize a new backbone view.\n */\n\nvar CategoryView = module.exports = Backbone.View.extend({\n\n  tagName: 'li',\n\n  className: 'category-view',\n\n  template: _.template(require('./template')),\n\n  events: {\n    'click a': 'selected'\n  },\n\n  initialize: function(options){\n    this.parentView = options.parentView;\n    this.listenTo(this.model, 'destroy', this.remove);\n\n    var categoryView = gesture(this.$el[0]);\n    //this.$el.on('dragend', _.bind(function(e){\n    categoryView.on('hold', _.bind(function(e) {\n      this.destroy();\n    }, this));\n  },\n\n  destroy: function() {\n    if(this.collection.length > 1 && !this.model.get('default')) {\n      var check = confirm(\"Wollen Sie die Kategorie \" + this.model.get('name')  + \" wirklich löschen?\");\n      if(check) {\n        this.model.destroy();      \n      }\n    }\n  },\n\n  render: function() {\n    this.$el.html(this.template());\n    reactive(this.$el[0], this.model, this);\n    return this;\n  },\n\n  selected: function(e) {\n    this.parentView.trigger('change:selection', this.model);\n    e.preventDefault();\n  },\n\n  name: function() {\n    return this.model.get('name');\n  },\n\n  color: function() {\n    return this.model.get('color');\n  }\n\n});\n\n\n//@ sourceURL=category-view/index.js"
-));
-require.register("category-view/template.js", Function("exports, require, module",
-"module.exports = '<aside data-style=\"border-left-color: {color}\"></aside>\\n<a href=\"#\" >\\n  <p data-text=\"name\">Kategorie</p>\\n</a>\\n';//@ sourceURL=category-view/template.js"
-));
-require.register("category-list-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar CategoryView = require('category-view');\nvar Category = require('category');\nvar purchases = require('purchases');\n\n/**\n * Initialize a new backbone view.\n */\n\nvar CategoryListView = module.exports = Backbone.View.extend({\n\n  tagName: 'ul',\n\n  className: 'category-list-view hide',\n\n  template: _.template(require('./template')),\n\n  attributes: {\n    'data-type': 'list'\n  },\n\n  events: {\n    'click li.new-category': 'newCategory'\n  },\n\n  initialize: function(){\n    this.listenTo(this, 'open', this.open);\n    this.listenTo(this, 'close', this.close);\n    this.listenTo(this.collection, 'reset', this.renderList);\n    this.listenTo(this.collection, 'add', this.renderCategory);\n    this.listenTo(this, 'change:selection', this.select);\n    this.listenTo(this.collection, 'remove', this.categoryRemoved);\n    this.render();\n  },\n\n  changeModel: function(model) {\n    this.model = model;\n    \n    if(this.model.isNew()) {\n      this.select(this.collection.getMostUsed());\n    } else {\n      this.select(this.collection.get(this.model.get('categoryId')), true);\n    }\n  },\n\n  render: function() {\n    this.$el.html(this.template());\n    return this;\n  },\n\n  renderList: function() {\n    this.collection.each(this.renderCategory, this);\n  },\n\n  renderCategory: function(model) {\n    this.$el.prepend((new CategoryView({ collection: this.collection, model: model, parentView: this })).render().el);\n  },\n\n  select: function(category, hasCategory) {\n    if(hasCategory) {\n      this.originalCategory = category;\n    }\n    this.model.set('category', category);\n  },\n\n  newCategory: function(e) {\n    this.model.set('category', new Category());\n    e.preventDefault();\n  },\n\n  categoryRemoved: function(category) {\n    if(_.isEqual(this.originalCategory, category)) {\n      this.originalCategory = null;\n    }\n\n    purchases.each(_.bind(function(purchase) {\n      if(purchase.get('categoryId') === category.id) {\n        var newCategory = this.collection.findWhere({default: true});\n        purchase.set('categoryId', newCategory.id);\n        if(_.isEqual(purchase, this.model)) {\n          this.originalCategory = newCategory;\n          var tempCat = this.model.get('category');\n          purchase.unset('category', {silent: true});\n          purchase.save();\n          this.model.set('category', tempCat);\n        } else {\n          purchase.save();\n        }\n        newCategory.trigger('usage:increase');\n      } \n    }, this));\n\n    if(_.isEqual(this.model.get('category'), category)) {\n      this.model.set('category', this.collection.findWhere({default: true}));\n    }\n  },\n\n  setUsage: function() {\n    if(this.originalCategory) {\n      if(!_.isEqual(this.model.get('category'), this.originalCategory)) {\n        this.originalCategory.trigger('usage:decrease');\n        this.model.get('category').trigger('usage:increase');\n      }\n    } else {\n      this.model.get('category').trigger('usage:increase');\n    }\n  },\n   \n  open: function() {\n    this.$el.removeClass('hide');\n  },\n\n  close: function() {\n    this.$el.addClass('hide');\n  }\n\n});\n\n//@ sourceURL=category-list-view/index.js"
-));
-require.register("category-list-view/template.js", Function("exports, require, module",
-"module.exports = '<li class=\"new-category\">\\n  <a href=\"#\">+</a>\\n</li>\\n';//@ sourceURL=category-list-view/template.js"
-));
-require.register("purchase-edit-view/index.js", Function("exports, require, module",
-"\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar $ = require('zepto');\nvar Amount = require('amount');\nvar categories = require('categories');\nvar CategoryListView = require('category-list-view');\nvar Purchase = require('purchase');\nvar purchases = require('purchases');\nvar moment = require('moment');\n\n/**\n * Initialize a new backbone view.\n */\n\nvar PurchaseEditView = module.exports = Backbone.View.extend({\n\n  el: '#purchase-edit-view',\n\n  events: {\n    'click #cancel-edit': 'close',\n    'click .keypad-key': 'changeModelAmount',\n    'click .purchase-btn': 'changePage',\n    'click .save-purchase-btn': 'savePurchase',\n    'click .remove-purchase-btn': 'removePurchase',\n    'blur .purchase-btn.category input': 'blurInput'\n  },\n\n  initialize: function(){\n\n    this.categoryListView = new CategoryListView({collection: categories});\n    this.$('.view-body-inner').append(this.categoryListView.el);\n\n    this.on('open', this.open, this);\n\n    // show active state on touch\n    this.$('.keypad-key').on('touchstart', function(e) {\n      $(this).addClass('active');\n    }).on('touchmove', function(e) {\n      $(this).removeClass('active');\n    }).on('touchend', function(e) {\n      $(this).removeClass('active');\n    });\n\n  },\n\n  blurInput: function(e) {\n    $(e.target).attr('readonly', true);\n  },\n\n  changeModelAmount: function(event) {\n    var targetElement = event.currentTarget;\n    var value = $(targetElement).data('value');\n    this.model.trigger('modifyAmount', value);\n  },\n\n  changePage: function(event) {\n    var targetElement = event.currentTarget;\n    var $targetElement = $(targetElement);\n    if($targetElement.hasClass('active')) {\n      return;\n    }\n\n    $('.purchase-btn.active').removeClass('active');\n    $targetElement.addClass('active');   \n\n    if($targetElement.hasClass('amount')) {\n      this.categoryListView.trigger('close');\n      this.$('.keypad').show();\n      this.$('.purchase-input-wrapper').show();\n    } else if($targetElement.hasClass('category')) {\n      this.categoryListView.trigger('open');\n      this.$('.keypad').hide();\n      this.$('.purchase-input-wrapper').hide();\n    } \n  },\n\n  savePurchase: function() {\n    //set category\n    var category = this.model.get('category');\n    if(category.isNew()) {\n      category.set('name', this.$('.purchase-btn.category input').val());\n      categories.create(category);\n    }\n    this.model.set('categoryId', category.id);\n    //set note\n    this.model.set('note', this.$('.purchase-btn.note input').val());\n    //set usage of category\n    this.categoryListView.setUsage();\n    //set date\n    var date = this.$('.purchase-date').val();\n    if(date !== '' && moment(date).isValid()) {\n      this.model.set('date', moment(date).valueOf()); \n    }\n    //save\n    this.model.unset('category',{silent: true});\n    purchases.create(this.model);\n    this.close();\n  },\n\n  removePurchase: function() {\n    var check = confirm('Wollen Sie wirklich diese Ausgabe löschen?');\n    if(check) {\n      this.model.destroy();\n      this.close();\n    }\n  },\n\n  open: function(purchase) {\n    //create purchase\n    this.model = purchase ? purchase : new Purchase();\n\n    this.listenTo(this.model, 'change:amount', this.changeAmount);\n    this.listenTo(this.model, 'change:category', this.changeCategory);\n\n    //change the purchase model in categoryListView\n    this.categoryListView.changeModel(this.model);\n    //set amount UI to model value\n    this.changeAmount();\n    //sate date to UI\n    if(!this.model.isNew()) {\n      this.$('.purchase-date').val(moment(this.model.get('date')).format('LL'));\n    }\n    \n    //open panel\n    this.$el.removeClass('view-bottom');\n  }, \n\n  close: function() {\n    //remove event handlers from old purchase\n    this.stopListening(this.model);\n    //reset to activate amount\n    this.$('.purchase-btn.amount').trigger('click');\n    //reset note\n    this.$('.purchase-btn.note input').val('');\n    //reset date\n    this.$('.purchase-date').val('');\n    //close panel\n    this.$el.addClass('view-bottom');\n  },\n\n  changeAmount: function() {\n    this.$('.purchase-btn.amount').text(this.model.amount.format());\n  },\n\n  changeCategory: function(model) {\n    var category = model.get('category');\n    var categoryInput = this.$('.purchase-btn.category input');\n    if(category.isNew()) {\n      categoryInput.removeAttr('readonly');\n      categoryInput.val('');\n      categoryInput.focus();\n    } else {\n      categoryInput.val(category.get('name'));\n    }\n  }\n\n});\n\n//@ sourceURL=purchase-edit-view/index.js"
-));
+require.register("settings/index.js", function(exports, require, module){
 
-require.register("purchase-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar settings = require('settings');\nvar moment = require('moment');\nvar categories = require('categories');\n\n/**\n * Month view.\n */\n\nvar PurchaseView = module.exports = Backbone.View.extend({\n\n  tagName: 'li',\n\n  className : 'purchase-view',\n\n  template: _.template(require('./template')),\n\n  events: {\n    'click a': 'editPurchase'\n  },\n\n  initialize: function(options) {\n    this.purchaseEditView = options.purchaseEditView;\n    this.listenTo(settings, 'change:currency', this.changeCurrency);\n    this.listenTo(this.model, 'destroy', this.remove, this); \n  },\n\n  render: function() {\n    this.$el.html(this.template());\n    reactive(this.$el[0], this.model, this);\n    return this;\n  },\n\n  editPurchase: function(e) {\n    this.purchaseEditView.open(this.model);\n    e.preventDefault();\n  },\n\n  changeCurrency: function() {\n    this.model.trigger('change:currency');\n  },\n\n  date: function() {\n    return moment(this.model.get('date')).format('MM.DD');\n  },\n\n  categoryColor: function() {\n    return categories.get(this.model.get('categoryId')).get('color');\n  },\n\n  amount: function() {\n    return this.model.get('amount');\n  },\n\n  currency: function() {\n    return settings.get('currency');\n  },\n\n  categoryName: function() {\n    return categories.get(this.model.get('categoryId')).get('name');\n  },\n\n  note: function() {\n    return this.model.get('note');\n  }\n});\n\n\n//@ sourceURL=purchase-view/index.js"
-));
-require.register("purchase-view/template.js", Function("exports, require, module",
-"module.exports = '<aside data-style=\"border-left-color: {categoryColor}\">\\n  <p data-text=\"date\">date</p>\\n</aside>\\n<aside class=\"pack-end\">\\n  <p data-text=\"{amount} {currency}\">amount</p>\\n</aside>\\n<a href=#\">\\n  <p data-text=\"categoryName\">category</p>\\n  <p data-text=\"note\">note</p>\\n</a>\\n</li>\\n';//@ sourceURL=purchase-view/template.js"
-));
-require.register("month-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar settings = require('settings');\nvar moment = require('moment');\nvar PurchaseView = require('purchase-view');\n\n\n/**\n * Month view.\n */\n\nvar MonthView = module.exports = Backbone.View.extend({\n\n  className : 'month-view',\n\n  events: {\n    'click header': 'open'\n  },\n\n  template: _.template(require('./month')),\n\n  initialize: function(options) {\n    this.purchaseEditView = options.purchaseEditView;\n    this.isFirst = options.isFirst;\n    this.monthGroup = options.monthGroup;\n\n    this._viewPointers = {};\n    this.listenTo(this, 'add', this.addPurchase);\n    this.listenTo(this, 'remove', this.removePurchase);\n    this.listenTo(settings, 'change:currency', this.changeCurrency);\n    this.listenTo(this.collection, 'change:month' + this.monthGroup, function() {\n      this.trigger('change:monthAmount');\n    });\n  },\n\n  addPurchase: function(purchase) {\n    this._viewPointers[purchase.cid] = new PurchaseView({model: purchase, purchaseEditView: this.purchaseEditView});\n    this.$('ul').prepend(this._viewPointers[purchase.cid].render().el);\n    this.trigger('change:monthAmount');\n  },\n\n  removePurchase: function(purchase) {\n    if(this._viewPointers[purchase.cid]) {\n      this._viewPointers[purchase.cid].remove();\n      delete this._viewPointers[purchase.cid];\n      this.trigger('change:monthAmount');\n    }\n    if(!this.hasPurchases()) {\n      this.trigger('removeMonthGroup', this.monthGroup);\n    }\n  },\n\n  render: function() {\n    this.$el.html(this.template());\n    if(!this.isFirst) {\n      this.$('ul').addClass('hide');\n    }\n    reactive(this.$el[0], this);\n    return this;\n  },\n\n  open: function() {\n    this.$('ul').toggleClass('hide');\n  },\n\n  changeCurrency: function() {\n    this.trigger('change:currency');\n  },\n\n  monthDate: function() {\n    return moment(this.monthGroup, 'YYYYMM').format('MMMM YYYY');\n  },\n\n  monthAmount: function() {\n    return Math.floor(_.reduce(this._viewPointers, function(sum, purchaseView) {\n      return purchaseView.model.get('amount') + sum;\n    }, 0) * 100) /100;\n  },\n\n  currency: function() {\n    return settings.get('currency');\n  },\n\n  hasPurchases: function() {\n    return _.size(this._viewPointers);\n  }\n\n});\n\n//@ sourceURL=month-view/index.js"
-));
-require.register("month-view/month.js", Function("exports, require, module",
-"module.exports = '<header>\\n  <span class=\"month-date\" data-text=\"monthDate\">month</span>\\n  <span class=\"month-amount\" data-text=\"{monthAmount} {currency}\">amount</span>\\n</header>\\n<ul>\\n</ul>\\n';//@ sourceURL=month-view/month.js"
-));
-require.register("purchase-list-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar settings = require('settings');\nvar moment = require('moment');\nvar MonthView = require('month-view');\n\n/**\n * List view.\n */\n\nvar ListView = module.exports = Backbone.View.extend({\n\n  el: '#purchase-list-view',\n\n  initialize: function(options) {\n    this.purchaseEditView = options.purchaseEditView;\n    this._viewPointers = {};\n    this.listenTo(settings, 'change', this.change);\n    this.listenTo(this.collection, 'reset', this.renderList, this);\n    this.listenTo(this.collection, 'add', this.addPurchase, this);\n    this.listenTo(this.collection, 'remove', this.removePurchase, this);\n    this.listenTo(this.collection, 'change:date', this.purchaseDateChange, this);\n    var view = reactive(this.el, this.collection, this);\n  },\n\n  purchaseDateChange: function(purchase) {\n    var oldMonthGroup = moment(purchase.previous('date')).format('YYYY') + moment(purchase.previous('date')).format('MM');\n    if(this._viewPointers[oldMonthGroup]) {\n      this._viewPointers[oldMonthGroup].trigger('remove', purchase);\n    }\n    this.addPurchase(purchase);\n  },\n\n  haspurchases: function() {\n    return this.collection.length;\n  },\n\n  change: function() {\n    this.collection.trigger('change:settings');\n  },\n\n  renderList: function() {\n    this.collection.each(this.addPurchase, this);\n    return this;\n  },\n\n  addPurchase: function(purchase) {\n    var monthGroup = moment(purchase.get('date')).format('YYYY') + moment(purchase.get('date')).format('MM');\n    if(!this._viewPointers[monthGroup]) {\n      this._viewPointers[monthGroup] = new MonthView({ collection: this.collection, monthGroup: monthGroup, isFirst: (_.size(this._viewPointers) === 0), purchaseEditView: this.purchaseEditView});\n      this._viewPointers[monthGroup].on('removeMonthGroup', this.removeMonthGroup, this);\n      this.$('div[data-type=\"list\"]').append(this._viewPointers[monthGroup].render().el);\n    }\n    this._viewPointers[monthGroup].trigger('add', purchase);\n    console.log('monthgroupt:before', monthGroup);\n  },\n\n  removePurchase: function(purchase) {\n    var monthGroup = moment(purchase.get('date')).format('YYYY') + moment(purchase.get('date')).format('MM');\n    this._viewPointers[monthGroup].trigger('remove', purchase);\n  },\n\n  removeMonthGroup: function(monthGroup) {\n    this._viewPointers[monthGroup].off('removeMonthGroup');\n    this._viewPointers[monthGroup].remove();\n    delete this._viewPointers[monthGroup];\n  }\n\n});\n//@ sourceURL=purchase-list-view/index.js"
-));
-require.register("overview-view/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar Backbone = require('backbone');\nvar _ = require('underscore');\nvar reactive = require('reactive');\nvar settings = require('settings');\nvar moment = require('moment');\n\n/**\n * Overview view.\n */\n\nvar OverviewView = module.exports = Backbone.View.extend({\n\n  el: '#overview-view',\n\n  initialize: function() {\n    this.listenTo(settings, 'change:currency', this.changeCurrency);\n    this.listenTo(settings, 'change:group', this.change);\n    reactive(this.el, this.collection, this);\n  },\n\n  haspurchases: function() {\n    return this.collection.length;\n  },\n\n  group: function() {\n    switch(settings.get('group')) {\n      case 'month':\n        return moment().format('MMM');\n      case 'week':\n        return 'Kalenderwoche ' + moment().week();\n      case 'year':\n        return moment().format('YYYY');\n    }\n  },\n\n  amount: function() {\n    return this.calculateAmount(settings.get('group'), moment());\n  },\n\n  currency: function() {\n    return settings.get('currency');\n  },\n\n  changeCurrency: function() {\n    this.collection.trigger('change:settings');\n  },\n\n  calculateAmount: function(group, currentDate) {\n    var amount = null;\n    if(group === 'month') {\n      amount = this.collection.reduce(function(sum, purchase) {\n        if(currentDate.month() === moment(purchase.get('date')).month()) {\n          return purchase.get('amount') + sum;\n        } else {\n          return sum;\n        }\n      }, 0);\n    } else if(group === 'year') {\n      amount = this.collection.reduce(function(sum, purchase) {\n        if(currentDate.year() === moment(purchase.get('date')).year()) {\n          return purchase.get('amount') + sum;\n        } else {\n          return sum;\n        }\n      }, 0);\n    } else if(group === 'week') {\n      amount = this.collection.reduce(function(sum, purchase) {\n        if(currentDate.week() === moment(purchase.get('date')).week()) {\n          return purchase.get('amount') + sum;\n        } else {\n          return sum;\n        }\n      }, 0);\n    } \n    return Math.floor(amount * 100) / 100;\n  }\n\n});\n\n//@ sourceURL=overview-view/index.js"
-));
-require.register("boot/index.js", Function("exports, require, module",
-"\n\"use strict\";\n\n/**\n * Module dependencies.\n */\n\nvar $ = require('zepto');\nvar Backbone = require('backbone');\nvar reactive = require('reactive');\nvar purchases = require('purchases');\nvar categories = require('categories');\nvar SettingsView = require('settings-view');\nvar PurchaseEditView = require('purchase-edit-view');\nvar OverviewView = require('overview-view');\nvar PurchaseListView = require('purchase-list-view');\n\n/**\n * Set zepto as DOM tool.\n */\n\nBackbone.$ = $;\n\n/**\n * Configure reactive for backbone models and collections.\n */\n\nreactive.subscribe(function(obj, prop, fn){\n  if (obj instanceof Backbone.Collection) {\n    obj.on('add remove reset change:settings change:' + prop, function () { \n      fn(obj[prop]);\n    });\n  } else {\n    obj.on('change:' + prop, function (m, v) { fn(v); });\n  }\n});\n\nreactive.unsubscribe(function(obj, prop, fn){\n  console.log('unsubscribe');\n  if (obj instanceof Backbone.Collection) {\n    obj.off('add remove reset change:settings change:' + prop, function () { \n      fn(obj[prop]);\n    });\n  } else {\n    obj.off('change:' + prop, function (m, v) { fn(v); });\n  }\n});\n\n/**\n * Starting pages.\n */\n\nvar overviewView = new OverviewView({collection: purchases});\nvar purchaseEditView = new PurchaseEditView();\nvar purchaselistView = new PurchaseListView({collection: purchases, purchaseEditView: purchaseEditView});\nvar settingsView = new SettingsView();\n\n/**\n * Set click listener.\n */\n\n$('.settings-btn').click(function() {\n  settingsView.trigger('open');\n});\n\n$('.add-purchase-btn').click(function() {\n  purchaseEditView.trigger('open');\n});\n\n/**\n * Fetching/Seeding collection \n */\n\ncategories.fetch();\npurchases.fetch({reset: true});\n\n/**\n * Create default category.\n */\n\nif(categories.isEmpty()) {\n  categories.create({ name: 'Others', default: true}); // creates automatic default category\n}\n\n/**\n * Install button/process\n */\n\nif(navigator.mozApps) {\n\n  var request = navigator.mozApps.getSelf();\n  request.onsuccess = function() {\n\n    if(request.result) {\n      console.log('already installed');\n    } else {\n      $('.install-btn').addClass('show-install');\n      $('.install-btn').on('click', function() {\n        installApp();\n      });\n    }\n  };\n  request.onerror = function() {\n    alert('Error: ', request.error.name);\n  };\n\n} else {\n  console.log('Open Wen Apps not supported');\n}\n\nfunction installApp() {\n  var manifestURL = location.href.substring(0, location.href.lastIndexOf(\"/\")) + \"/manifest.webapp\";\n  var app = navigator.mozApps.install(manifestURL);\n  app.onsuccess = function(data) {\n    $('.install-btn').removeClass('show-install');\n  };\n  app.onerror = function() {\n    alert(\"Install failed\\n\\n:\" + app.error.name);\n  };\n}\n\nfunction onUpdateReady() {\n  var check = confirm('found new verion, should we update?');\n  if(check) {\n    location.reload(true);\n  }\n}\nwindow.applicationCache.addEventListener('updateready', onUpdateReady);\n//@ sourceURL=boot/index.js"
-));
-require.alias("component-zepto/index.js", "Ausgaben/deps/zepto-component/index.js");
-require.alias("component-zepto/index.js", "zepto-component/index.js");
+"use strict";
 
-require.alias("component-assert/index.js", "Ausgaben/deps/assert/index.js");
-require.alias("component-assert/index.js", "assert/index.js");
-require.alias("component-stack/index.js", "component-assert/deps/stack/index.js");
+/**
+ * Module dependencies.
+ */
 
-require.alias("component-moment/index.js", "Ausgaben/deps/moment/index.js");
-require.alias("component-moment/index.js", "moment/index.js");
+var Backbone = require('backbone');
+var _ = require('underscore');
+var Store = require('backbone.localStorage');
 
-require.alias("virtru-components-chai/index.js", "Ausgaben/deps/chai/index.js");
-require.alias("virtru-components-chai/index.js", "chai/index.js");
+/**
+ * Model for settings.
+ */
 
-require.alias("visionmedia-mocha/mocha.js", "Ausgaben/deps/mocha/mocha.js");
-require.alias("visionmedia-mocha/mocha.js", "Ausgaben/deps/mocha/index.js");
-require.alias("visionmedia-mocha/mocha.js", "mocha/index.js");
-require.alias("visionmedia-mocha/mocha.js", "visionmedia-mocha/index.js");
+var Settings =  Backbone.Model.extend( {
 
-require.alias("component-live-css/index.js", "Ausgaben/deps/live-css/index.js");
-require.alias("component-live-css/index.js", "live-css/index.js");
-require.alias("visionmedia-superagent/lib/client.js", "component-live-css/deps/superagent/lib/client.js");
-require.alias("visionmedia-superagent/lib/client.js", "component-live-css/deps/superagent/index.js");
-require.alias("component-emitter/index.js", "visionmedia-superagent/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
+  localStorage: new Store('Settings'),
 
-require.alias("RedVentures-reduce/index.js", "visionmedia-superagent/deps/reduce/index.js");
+  defaults: {
+    'group': 'month',
+    'currency': '€'
+  }
+});
 
-require.alias("visionmedia-superagent/lib/client.js", "visionmedia-superagent/index.js");
+/**
+ * Fetch settings from store.
+ */
 
-require.alias("visionmedia-debug/index.js", "component-live-css/deps/debug/index.js");
-require.alias("visionmedia-debug/debug.js", "component-live-css/deps/debug/debug.js");
+var settings = new Settings({id: 1});
+settings.fetch();
 
-require.alias("component-each/index.js", "component-live-css/deps/each/index.js");
-require.alias("component-type/index.js", "component-each/deps/type/index.js");
+/**
+ * Expose 'settings' singleton instance.
+ */
 
-require.alias("component-url/index.js", "component-live-css/deps/url/index.js");
+module.exports = settings;
 
+});
+require.register("settings-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var settings = require('settings');
+
+/**
+ * Initialize a new backbone view for settings page.
+ */
+
+var SettingsView = module.exports = Backbone.View.extend({
+  el: '#view-settings',
+
+  events: {
+    'click #settings-close': 'close'
+  },
+
+  initialize: function() {
+    this.model = settings;
+    this.on('open', _.bind(this.open, this));
+    var view = reactive(this.el, this.model, this);
+
+    //Custom reactive binding.
+    view.bind('data-select', function(el, name) {
+      el.value = this.obj.get(name);
+      el.onchange = _.bind(function() {
+        console.log(name, el.value);
+        this.obj.set(name, el.value);
+        this.obj.save();
+      }, this);
+    });
+  }, 
+
+  open: function() {
+    this.$el.removeClass('view-bottom');
+  },
+
+  close: function() {
+    this.$el.addClass('view-bottom');
+  }
+
+});
+
+
+
+
+});
+require.register("component-emitter/index.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var index = require('indexof');
+
+/**
+ * Expose `Emitter`.
+ */
+
+module.exports = Emitter;
+
+/**
+ * Initialize a new `Emitter`.
+ *
+ * @api public
+ */
+
+function Emitter(obj) {
+  if (obj) return mixin(obj);
+};
+
+/**
+ * Mixin the emitter properties.
+ *
+ * @param {Object} obj
+ * @return {Object}
+ * @api private
+ */
+
+function mixin(obj) {
+  for (var key in Emitter.prototype) {
+    obj[key] = Emitter.prototype[key];
+  }
+  return obj;
+}
+
+/**
+ * Listen on the given `event` with `fn`.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.on = function(event, fn){
+  this._callbacks = this._callbacks || {};
+  (this._callbacks[event] = this._callbacks[event] || [])
+    .push(fn);
+  return this;
+};
+
+/**
+ * Adds an `event` listener that will be invoked a single
+ * time then automatically removed.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.once = function(event, fn){
+  var self = this;
+  this._callbacks = this._callbacks || {};
+
+  function on() {
+    self.off(event, on);
+    fn.apply(this, arguments);
+  }
+
+  fn._off = on;
+  this.on(event, on);
+  return this;
+};
+
+/**
+ * Remove the given callback for `event` or all
+ * registered callbacks.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.off =
+Emitter.prototype.removeListener =
+Emitter.prototype.removeAllListeners = function(event, fn){
+  this._callbacks = this._callbacks || {};
+
+  // all
+  if (0 == arguments.length) {
+    this._callbacks = {};
+    return this;
+  }
+
+  // specific event
+  var callbacks = this._callbacks[event];
+  if (!callbacks) return this;
+
+  // remove all handlers
+  if (1 == arguments.length) {
+    delete this._callbacks[event];
+    return this;
+  }
+
+  // remove specific handler
+  var i = index(callbacks, fn._off || fn);
+  if (~i) callbacks.splice(i, 1);
+  return this;
+};
+
+/**
+ * Emit `event` with the given args.
+ *
+ * @param {String} event
+ * @param {Mixed} ...
+ * @return {Emitter}
+ */
+
+Emitter.prototype.emit = function(event){
+  this._callbacks = this._callbacks || {};
+  var args = [].slice.call(arguments, 1)
+    , callbacks = this._callbacks[event];
+
+  if (callbacks) {
+    callbacks = callbacks.slice(0);
+    for (var i = 0, len = callbacks.length; i < len; ++i) {
+      callbacks[i].apply(this, args);
+    }
+  }
+
+  return this;
+};
+
+/**
+ * Return array of callbacks for `event`.
+ *
+ * @param {String} event
+ * @return {Array}
+ * @api public
+ */
+
+Emitter.prototype.listeners = function(event){
+  this._callbacks = this._callbacks || {};
+  return this._callbacks[event] || [];
+};
+
+/**
+ * Check if this emitter has `event` handlers.
+ *
+ * @param {String} event
+ * @return {Boolean}
+ * @api public
+ */
+
+Emitter.prototype.hasListeners = function(event){
+  return !! this.listeners(event).length;
+};
+
+});
+require.register("component-hammer.js/index.js", function(exports, require, module){
+/*
+ * Hammer.JS
+ * version 0.6.1
+ * author: Eight Media
+ * https://github.com/EightMedia/hammer.js
+ * Licensed under the MIT license.
+ */
+function Hammer(element, options, undefined)
+{
+    var self = this;
+
+    var defaults = {
+        // prevent the default event or not... might be buggy when false
+        prevent_default    : false,
+        css_hacks          : true,
+
+        swipe              : true,
+        swipe_time         : 200,   // ms
+        swipe_min_distance : 20, // pixels
+
+        drag               : true,
+        drag_vertical      : true,
+        drag_horizontal    : true,
+        // minimum distance before the drag event starts
+        drag_min_distance  : 20, // pixels
+
+        // pinch zoom and rotation
+        transform          : true,
+        scale_treshold     : 0.1,
+        rotation_treshold  : 15, // degrees
+
+        tap                : true,
+        tap_double         : true,
+        tap_max_interval   : 300,
+        tap_max_distance   : 10,
+        tap_double_distance: 20,
+
+        hold               : true,
+        hold_timeout       : 500
+    };
+    options = mergeObject(defaults, options);
+
+    // some css hacks
+    (function() {
+        if(!options.css_hacks) {
+            return false;
+        }
+
+        var vendors = ['webkit','moz','ms','o',''];
+        var css_props = {
+            "userSelect": "none",
+            "touchCallout": "none",
+            "userDrag": "none",
+            "tapHighlightColor": "rgba(0,0,0,0)"
+        };
+
+        var prop = '';
+        for(var i = 0; i < vendors.length; i++) {
+            for(var p in css_props) {
+                prop = p;
+                if(vendors[i]) {
+                    prop = vendors[i] + prop.substring(0, 1).toUpperCase() + prop.substring(1);
+                }
+                element.style[ prop ] = css_props[p];
+            }
+        }
+    })();
+
+    // holds the distance that has been moved
+    var _distance = 0;
+
+    // holds the exact angle that has been moved
+    var _angle = 0;
+
+    // holds the diraction that has been moved
+    var _direction = 0;
+
+    // holds position movement for sliding
+    var _pos = { };
+
+    // how many fingers are on the screen
+    var _fingers = 0;
+
+    var _first = false;
+
+    var _gesture = null;
+    var _prev_gesture = null;
+
+    var _touch_start_time = null;
+    var _prev_tap_pos = {x: 0, y: 0};
+    var _prev_tap_end_time = null;
+
+    var _hold_timer = null;
+
+    var _offset = {};
+
+    // keep track of the mouse status
+    var _mousedown = false;
+
+    var _event_start;
+    var _event_move;
+    var _event_end;
+
+    var _has_touch = ('ontouchstart' in window);
+
+
+    /**
+     * option setter/getter
+     * @param   string  key
+     * @param   mixed   value
+     * @return  mixed   value
+     */
+    this.option = function(key, val) {
+        if(val != undefined) {
+            options[key] = val;
+        }
+
+        return options[key];
+    };
+
+
+    /**
+     * angle to direction define
+     * @param  float    angle
+     * @return string   direction
+     */
+    this.getDirectionFromAngle = function( angle ) {
+        var directions = {
+            down: angle >= 45 && angle < 135, //90
+            left: angle >= 135 || angle <= -135, //180
+            up: angle < -45 && angle > -135, //270
+            right: angle >= -45 && angle <= 45 //0
+        };
+
+        var direction, key;
+        for(key in directions){
+            if(directions[key]){
+                direction = key;
+                break;
+            }
+        }
+        return direction;
+    };
+
+
+    /**
+     * destory events
+     * @return  void
+     */
+    this.destroy = function() {
+        if(_has_touch) {
+            removeEvent(element, "touchstart touchmove touchend touchcancel", handleEvents);
+        }
+        // for non-touch
+        else {
+            removeEvent(element, "mouseup mousedown mousemove", handleEvents);
+            removeEvent(element, "mouseout", handleMouseOut);
+        }
+    };
+
+
+    /**
+     * count the number of fingers in the event
+     * when no fingers are detected, one finger is returned (mouse pointer)
+     * @param  event
+     * @return int  fingers
+     */
+    function countFingers( event )
+    {
+        // there is a bug on android (until v4?) that touches is always 1,
+        // so no multitouch is supported, e.g. no, zoom and rotation...
+        return event.touches ? event.touches.length : 1;
+    }
+
+
+    /**
+     * get the x and y positions from the event object
+     * @param  event
+     * @return array  [{ x: int, y: int }]
+     */
+    function getXYfromEvent( event )
+    {
+        event = event || window.event;
+
+        // no touches, use the event pageX and pageY
+        if(!_has_touch) {
+            var doc = document,
+                body = doc.body;
+
+            return [{
+                x: event.pageX || event.clientX + ( doc && doc.scrollLeft || body && body.scrollLeft || 0 ) - ( doc && doc.clientLeft || body && doc.clientLeft || 0 ),
+                y: event.pageY || event.clientY + ( doc && doc.scrollTop || body && body.scrollTop || 0 ) - ( doc && doc.clientTop || body && doc.clientTop || 0 )
+            }];
+        }
+        // multitouch, return array with positions
+        else {
+            var pos = [], src;
+            for(var t=0, len=event.touches.length; t<len; t++) {
+                src = event.touches[t];
+                pos.push({ x: src.pageX, y: src.pageY });
+            }
+            return pos;
+        }
+    }
+
+
+    /**
+     * calculate the angle between two points
+     * @param   object  pos1 { x: int, y: int }
+     * @param   object  pos2 { x: int, y: int }
+     */
+    function getAngle( pos1, pos2 )
+    {
+        return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
+    }
+
+
+    /**
+     * calculate the scale size between two fingers
+     * @param   object  pos_start
+     * @param   object  pos_move
+     * @return  float   scale
+     */
+    function calculateScale(pos_start, pos_move)
+    {
+        if(pos_start.length == 2 && pos_move.length == 2) {
+            var x, y;
+
+            x = pos_start[0].x - pos_start[1].x;
+            y = pos_start[0].y - pos_start[1].y;
+            var start_distance = Math.sqrt((x*x) + (y*y));
+
+            x = pos_move[0].x - pos_move[1].x;
+            y = pos_move[0].y - pos_move[1].y;
+            var end_distance = Math.sqrt((x*x) + (y*y));
+
+            return end_distance / start_distance;
+        }
+
+        return 0;
+    }
+
+
+    /**
+     * calculate the rotation degrees between two fingers
+     * @param   object  pos_start
+     * @param   object  pos_move
+     * @return  float   rotation
+     */
+    function calculateRotation(pos_start, pos_move)
+    {
+        if(pos_start.length == 2 && pos_move.length == 2) {
+            var x, y;
+
+            x = pos_start[0].x - pos_start[1].x;
+            y = pos_start[0].y - pos_start[1].y;
+            var start_rotation = Math.atan2(y, x) * 180 / Math.PI;
+
+            x = pos_move[0].x - pos_move[1].x;
+            y = pos_move[0].y - pos_move[1].y;
+            var end_rotation = Math.atan2(y, x) * 180 / Math.PI;
+
+            return end_rotation - start_rotation;
+        }
+
+        return 0;
+    }
+
+
+    /**
+     * trigger an event/callback by name with params
+     * @param string name
+     * @param array  params
+     */
+    function triggerEvent( eventName, params )
+    {
+        // return touches object
+        params.touches = getXYfromEvent(params.originalEvent);
+        params.type = eventName;
+
+        // trigger callback
+        if(isFunction(self["on"+ eventName])) {
+            self["on"+ eventName].call(self, params);
+        }
+    }
+
+
+    /**
+     * cancel event
+     * @param   object  event
+     * @return  void
+     */
+
+    function cancelEvent(event)
+    {
+        event = event || window.event;
+        if(event.preventDefault){
+            event.preventDefault();
+            event.stopPropagation();
+        }else{
+            event.returnValue = false;
+            event.cancelBubble = true;
+        }
+    }
+
+
+    /**
+     * reset the internal vars to the start values
+     */
+    function reset()
+    {
+        _pos = {};
+        _first = false;
+        _fingers = 0;
+        _distance = 0;
+        _angle = 0;
+        _gesture = null;
+    }
+
+
+    var gestures = {
+        // hold gesture
+        // fired on touchstart
+        hold : function(event)
+        {
+            // only when one finger is on the screen
+            if(options.hold) {
+                _gesture = 'hold';
+                clearTimeout(_hold_timer);
+
+                _hold_timer = setTimeout(function() {
+                    if(_gesture == 'hold') {
+                        triggerEvent("hold", {
+                            originalEvent   : event,
+                            position        : _pos.start
+                        });
+                    }
+                }, options.hold_timeout);
+            }
+        },
+
+        // swipe gesture
+        // fired on touchend
+        swipe : function(event)
+        {
+            if(!_pos.move) {
+                return;
+            }
+
+            // get the distance we moved
+            var _distance_x = _pos.move[0].x - _pos.start[0].x;
+            var _distance_y = _pos.move[0].y - _pos.start[0].y;
+            _distance = Math.sqrt(_distance_x*_distance_x + _distance_y*_distance_y);
+
+            // compare the kind of gesture by time
+            var now = new Date().getTime();
+            var touch_time = now - _touch_start_time;
+
+            if(options.swipe && (options.swipe_time > touch_time) && (_distance > options.swipe_min_distance)) {
+                // calculate the angle
+                _angle = getAngle(_pos.start[0], _pos.move[0]);
+                _direction = self.getDirectionFromAngle(_angle);
+
+                _gesture = 'swipe';
+
+                var position = { x: _pos.move[0].x - _offset.left,
+                    y: _pos.move[0].y - _offset.top };
+
+                var event_obj = {
+                    originalEvent   : event,
+                    position        : position,
+                    direction       : _direction,
+                    distance        : _distance,
+                    distanceX       : _distance_x,
+                    distanceY       : _distance_y,
+                    angle           : _angle
+                };
+
+                // normal slide event
+                triggerEvent("swipe", event_obj);
+            }
+        },
+
+
+        // drag gesture
+        // fired on mousemove
+        drag : function(event)
+        {
+            // get the distance we moved
+            var _distance_x = _pos.move[0].x - _pos.start[0].x;
+            var _distance_y = _pos.move[0].y - _pos.start[0].y;
+            _distance = Math.sqrt(_distance_x * _distance_x + _distance_y * _distance_y);
+
+            // drag
+            // minimal movement required
+            if(options.drag && (_distance > options.drag_min_distance) || _gesture == 'drag') {
+                // calculate the angle
+                _angle = getAngle(_pos.start[0], _pos.move[0]);
+                _direction = self.getDirectionFromAngle(_angle);
+
+                // check the movement and stop if we go in the wrong direction
+                var is_vertical = (_direction == 'up' || _direction == 'down');
+                if(((is_vertical && !options.drag_vertical) || (!is_vertical && !options.drag_horizontal))
+                    && (_distance > options.drag_min_distance)) {
+                    return;
+                }
+
+                _gesture = 'drag';
+
+                var position = { x: _pos.move[0].x - _offset.left,
+                    y: _pos.move[0].y - _offset.top };
+
+                var event_obj = {
+                    originalEvent   : event,
+                    position        : position,
+                    direction       : _direction,
+                    distance        : _distance,
+                    distanceX       : _distance_x,
+                    distanceY       : _distance_y,
+                    angle           : _angle
+                };
+
+                // on the first time trigger the start event
+                if(_first) {
+                    triggerEvent("dragstart", event_obj);
+
+                    _first = false;
+                }
+
+                // normal slide event
+                triggerEvent("drag", event_obj);
+
+                cancelEvent(event);
+            }
+        },
+
+
+        // transform gesture
+        // fired on touchmove
+        transform : function(event)
+        {
+            if(options.transform) {
+                if(countFingers(event) != 2) {
+                    return false;
+                }
+
+                var rotation = calculateRotation(_pos.start, _pos.move);
+                var scale = calculateScale(_pos.start, _pos.move);
+
+                if(_gesture != 'drag' &&
+                    (_gesture == 'transform' || Math.abs(1-scale) > options.scale_treshold || Math.abs(rotation) > options.rotation_treshold)) {
+                    _gesture = 'transform';
+
+                    _pos.center = {  x: ((_pos.move[0].x + _pos.move[1].x) / 2) - _offset.left,
+                        y: ((_pos.move[0].y + _pos.move[1].y) / 2) - _offset.top };
+
+                    var event_obj = {
+                        originalEvent   : event,
+                        position        : _pos.center,
+                        scale           : scale,
+                        rotation        : rotation
+                    };
+
+                    // on the first time trigger the start event
+                    if(_first) {
+                        triggerEvent("transformstart", event_obj);
+                        _first = false;
+                    }
+
+                    triggerEvent("transform", event_obj);
+
+                    cancelEvent(event);
+
+                    return true;
+                }
+            }
+
+            return false;
+        },
+
+
+        // tap and double tap gesture
+        // fired on touchend
+        tap : function(event)
+        {
+            // compare the kind of gesture by time
+            var now = new Date().getTime();
+            var touch_time = now - _touch_start_time;
+
+            // dont fire when hold is fired
+            if(options.hold && !(options.hold && options.hold_timeout > touch_time)) {
+                return;
+            }
+
+            // when previous event was tap and the tap was max_interval ms ago
+            var is_double_tap = (function(){
+                if (_prev_tap_pos &&
+                    options.tap_double &&
+                    _prev_gesture == 'tap' &&
+                    (_touch_start_time - _prev_tap_end_time) < options.tap_max_interval)
+                {
+                    var x_distance = Math.abs(_prev_tap_pos[0].x - _pos.start[0].x);
+                    var y_distance = Math.abs(_prev_tap_pos[0].y - _pos.start[0].y);
+                    return (_prev_tap_pos && _pos.start && Math.max(x_distance, y_distance) < options.tap_double_distance);
+                }
+                return false;
+            })();
+
+            if(is_double_tap) {
+                _gesture = 'double_tap';
+                _prev_tap_end_time = null;
+
+                triggerEvent("doubletap", {
+                    originalEvent   : event,
+                    position        : _pos.start
+                });
+                cancelEvent(event);
+            }
+
+            // single tap is single touch
+            else {
+                var x_distance = (_pos.move) ? Math.abs(_pos.move[0].x - _pos.start[0].x) : 0;
+                var y_distance =  (_pos.move) ? Math.abs(_pos.move[0].y - _pos.start[0].y) : 0;
+                _distance = Math.max(x_distance, y_distance);
+
+                if(_distance < options.tap_max_distance) {
+                    _gesture = 'tap';
+                    _prev_tap_end_time = now;
+                    _prev_tap_pos = _pos.start;
+
+                    if(options.tap) {
+                        triggerEvent("tap", {
+                            originalEvent   : event,
+                            position        : _pos.start
+                        });
+                        cancelEvent(event);
+                    }
+                }
+            }
+
+        }
+
+    };
+
+
+    function handleEvents(event)
+    {
+        switch(event.type)
+        {
+            case 'mousedown':
+            case 'touchstart':
+                _pos.start = getXYfromEvent(event);
+                _touch_start_time = new Date().getTime();
+                _fingers = countFingers(event);
+                _first = true;
+                _event_start = event;
+
+                // borrowed from jquery offset https://github.com/jquery/jquery/blob/master/src/offset.js
+                var box = element.getBoundingClientRect();
+                var clientTop  = element.clientTop  || document.body.clientTop  || 0;
+                var clientLeft = element.clientLeft || document.body.clientLeft || 0;
+                var scrollTop  = window.pageYOffset || element.scrollTop  || document.body.scrollTop;
+                var scrollLeft = window.pageXOffset || element.scrollLeft || document.body.scrollLeft;
+
+                _offset = {
+                    top: box.top + scrollTop - clientTop,
+                    left: box.left + scrollLeft - clientLeft
+                };
+
+                _mousedown = true;
+
+                // hold gesture
+                gestures.hold(event);
+
+                if(options.prevent_default) {
+                    cancelEvent(event);
+                }
+                break;
+
+            case 'mousemove':
+            case 'touchmove':
+                if(!_mousedown) {
+                    return false;
+                }
+                _event_move = event;
+                _pos.move = getXYfromEvent(event);
+
+                if(!gestures.transform(event)) {
+                    gestures.drag(event);
+                }
+                break;
+
+            case 'mouseup':
+            case 'mouseout':
+            case 'touchcancel':
+            case 'touchend':
+                if(!_mousedown || (_gesture != 'transform' && event.touches && event.touches.length > 0)) {
+                    return false;
+                }
+
+                _mousedown = false;
+                _event_end = event;
+
+
+                // swipe gesture
+                gestures.swipe(event);
+
+
+                // drag gesture
+                // dragstart is triggered, so dragend is possible
+                if(_gesture == 'drag') {
+                    triggerEvent("dragend", {
+                        originalEvent   : event,
+                        direction       : _direction,
+                        distance        : _distance,
+                        angle           : _angle
+                    });
+                }
+
+                // transform
+                // transformstart is triggered, so transformed is possible
+                else if(_gesture == 'transform') {
+                    triggerEvent("transformend", {
+                        originalEvent   : event,
+                        position        : _pos.center,
+                        scale           : calculateScale(_pos.start, _pos.move),
+                        rotation        : calculateRotation(_pos.start, _pos.move)
+                    });
+                }
+                else {
+                    gestures.tap(_event_start);
+                }
+
+                _prev_gesture = _gesture;
+
+                // trigger release event
+                triggerEvent("release", {
+                    originalEvent   : event,
+                    gesture         : _gesture
+                });
+
+                // reset vars
+                reset();
+                break;
+        }
+    }
+
+
+    function handleMouseOut(event) {
+        if(!isInsideHammer(element, event.relatedTarget)) {
+            handleEvents(event);
+        }
+    }
+
+
+    // bind events for touch devices
+    // except for windows phone 7.5, it doesnt support touch events..!
+    if(_has_touch) {
+        addEvent(element, "touchstart touchmove touchend touchcancel", handleEvents);
+    }
+    // for non-touch
+    else {
+        addEvent(element, "mouseup mousedown mousemove", handleEvents);
+        addEvent(element, "mouseout", handleMouseOut);
+    }
+
+
+    /**
+     * find if element is (inside) given parent element
+     * @param   object  element
+     * @param   object  parent
+     * @return  bool    inside
+     */
+    function isInsideHammer(parent, child) {
+        // get related target for IE
+        if(!child && window.event && window.event.toElement){
+            child = window.event.toElement;
+        }
+
+        if(parent === child){
+            return true;
+        }
+
+        // loop over parentNodes of child until we find hammer element
+        if(child){
+            var node = child.parentNode;
+            while(node !== null){
+                if(node === parent){
+                    return true;
+                };
+                node = node.parentNode;
+            }
+        }
+        return false;
+    }
+
+
+    /**
+     * merge 2 objects into a new object
+     * @param   object  obj1
+     * @param   object  obj2
+     * @return  object  merged object
+     */
+    function mergeObject(obj1, obj2) {
+        var output = {};
+
+        if(!obj2) {
+            return obj1;
+        }
+
+        for (var prop in obj1) {
+            if (prop in obj2) {
+                output[prop] = obj2[prop];
+            } else {
+                output[prop] = obj1[prop];
+            }
+        }
+        return output;
+    }
+
+
+    /**
+     * check if object is a function
+     * @param   object  obj
+     * @return  bool    is function
+     */
+    function isFunction( obj ){
+        return Object.prototype.toString.call( obj ) == "[object Function]";
+    }
+
+
+    /**
+     * attach event
+     * @param   node    element
+     * @param   string  types
+     * @param   object  callback
+     */
+    function addEvent(element, types, callback) {
+        types = types.split(" ");
+        for(var t= 0,len=types.length; t<len; t++) {
+            if(element.addEventListener){
+                element.addEventListener(types[t], callback, false);
+            }
+            else if(document.attachEvent){
+                element.attachEvent("on"+ types[t], callback);
+            }
+        }
+    }
+
+
+    /**
+     * detach event
+     * @param   node    element
+     * @param   string  types
+     * @param   object  callback
+     */
+    function removeEvent(element, types, callback) {
+        types = types.split(" ");
+        for(var t= 0,len=types.length; t<len; t++) {
+            if(element.removeEventListener){
+                element.removeEventListener(types[t], callback, false);
+            }
+            else if(document.detachEvent){
+                element.detachEvent("on"+ types[t], callback);
+            }
+        }
+    }
+}
+
+module.exports = Hammer;
+});
+require.register("component-gesture/index.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var Hammer = require('hammer')
+  , Emitter = require('emitter');
+
+/**
+ * Bind gestures to `el`.
+ *
+ * @param {Element} el
+ * @return {Gesture}
+ * @api public
+ */
+
+module.exports = function(el){
+  return new Gesture(el);
+};
+
+/**
+ * Initalize a new `Gesture` with the given `el`.
+ *
+ * @param {Element} el
+ * @api public
+ */
+
+function Gesture(el) {
+  Emitter.call(this);
+  this.hammer = new Hammer(el);
+  this.el = el;
+  this.bind();
+}
+
+/**
+ * Inherits from `Emitter.prototype`.
+ */
+
+Gesture.prototype.__proto__ = Emitter.prototype;
+
+/**
+ * Bind to hammer.js events.
+ *
+ * @api private
+ */
+
+Gesture.prototype.bind = function(){
+  var self = this;
+  var hammer = this.hammer;
+
+  // drag start
+  hammer.ondragstart = function(e){
+    self.emit('drag start', e);
+  };
+
+  // drag
+  hammer.ondrag = function(e){
+    self.emit('drag', e);
+  };
+
+  // drag end
+  hammer.ondragend = function(e){
+    self.emit('drag end', e);
+  };
+
+  // tag
+  hammer.ontap = function(e){
+    self.emit('tap', e);
+  };
+
+  // double tag
+  hammer.ondoubletap = function(e){
+    self.emit('double tap', e);
+  };
+
+  // hold
+  hammer.onhold = function(e){
+    self.emit('hold', e);
+  };
+
+  // release
+  hammer.onrelease = function(e){
+    self.emit('release', e);
+  };
+
+  // transform start
+  hammer.ontransformstart = function(e){
+    self.emit('transform start', e);
+  };
+
+  // transform
+  hammer.ontransform = function(e){
+    self.emit('transform', e);
+  };
+
+  // transform end
+  hammer.ontransformend = function(e){
+    self.emit('transform end', e);
+  };
+
+  // swipe left / right
+  hammer.onswipe = function(e){
+    self.emit('swipe', e);
+    self.emit('swipe ' + e.direction, e);
+  };
+};
+
+/**
+ * Unbind events.
+ *
+ * @api public
+ */
+
+Gesture.prototype.unbind = function(){
+  this.hammer.destroy();
+};
+
+
+});
+require.register("category-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var purchases = require('purchases');
+var gesture = require('gesture');
+
+/**
+ * Initialize a new backbone view.
+ */
+
+var CategoryView = module.exports = Backbone.View.extend({
+
+  tagName: 'li',
+
+  className: 'category-view',
+
+  template: _.template(require('./template')),
+
+  events: {
+    'click a': 'selected'
+  },
+
+  initialize: function(options){
+    this.parentView = options.parentView;
+    this.listenTo(this.model, 'destroy', this.remove);
+
+    var categoryView = gesture(this.$el[0]);
+    //this.$el.on('dragend', _.bind(function(e){
+    categoryView.on('hold', _.bind(function(e) {
+      this.destroy();
+    }, this));
+  },
+
+  destroy: function() {
+    if(this.collection.length > 1 && !this.model.get('default')) {
+      var check = confirm("Wollen Sie die Kategorie " + this.model.get('name')  + " wirklich löschen?");
+      if(check) {
+        this.model.destroy();      
+      }
+    }
+  },
+
+  render: function() {
+    this.$el.html(this.template());
+    reactive(this.$el[0], this.model, this);
+    return this;
+  },
+
+  selected: function(e) {
+    this.parentView.trigger('change:selection', this.model);
+    e.preventDefault();
+  },
+
+  name: function() {
+    return this.model.get('name');
+  },
+
+  color: function() {
+    return this.model.get('color');
+  }
+
+});
+
+
+
+});
+require.register("category-view/template.js", function(exports, require, module){
+module.exports = '<aside data-style="border-left-color: {color}"></aside>\n<a href="#" >\n  <p data-text="name">Kategorie</p>\n</a>\n';
+});
+require.register("category-list-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var CategoryView = require('category-view');
+var Category = require('category');
+var purchases = require('purchases');
+
+/**
+ * Initialize a new backbone view.
+ */
+
+var CategoryListView = module.exports = Backbone.View.extend({
+
+  tagName: 'ul',
+
+  className: 'category-list-view hide',
+
+  template: _.template(require('./template')),
+
+  attributes: {
+    'data-type': 'list'
+  },
+
+  events: {
+    'click li.new-category': 'newCategory'
+  },
+
+  initialize: function(){
+    this.listenTo(this, 'open', this.open);
+    this.listenTo(this, 'close', this.close);
+    this.listenTo(this.collection, 'reset', this.renderList);
+    this.listenTo(this.collection, 'add', this.renderCategory);
+    this.listenTo(this, 'change:selection', this.select);
+    this.listenTo(this.collection, 'remove', this.categoryRemoved);
+    this.render();
+  },
+
+  changeModel: function(model) {
+    this.model = model;
+    
+    if(this.model.isNew()) {
+      this.select(this.collection.getMostUsed());
+    } else {
+      this.select(this.collection.get(this.model.get('categoryId')), true);
+    }
+  },
+
+  render: function() {
+    this.$el.html(this.template());
+    return this;
+  },
+
+  renderList: function() {
+    this.collection.each(this.renderCategory, this);
+  },
+
+  renderCategory: function(model) {
+    this.$el.prepend((new CategoryView({ collection: this.collection, model: model, parentView: this })).render().el);
+  },
+
+  select: function(category, hasCategory) {
+    if(hasCategory) {
+      this.originalCategory = category;
+    }
+    this.model.set('category', category);
+  },
+
+  newCategory: function(e) {
+    this.model.set('category', new Category());
+    e.preventDefault();
+  },
+
+  categoryRemoved: function(category) {
+    if(_.isEqual(this.originalCategory, category)) {
+      this.originalCategory = null;
+    }
+
+    purchases.each(_.bind(function(purchase) {
+      if(purchase.get('categoryId') === category.id) {
+        var newCategory = this.collection.findWhere({default: true});
+        purchase.set('categoryId', newCategory.id);
+        if(_.isEqual(purchase, this.model)) {
+          this.originalCategory = newCategory;
+          var tempCat = this.model.get('category');
+          purchase.unset('category', {silent: true});
+          purchase.save();
+          this.model.set('category', tempCat);
+        } else {
+          purchase.save();
+        }
+        newCategory.trigger('usage:increase');
+      } 
+    }, this));
+
+    if(_.isEqual(this.model.get('category'), category)) {
+      this.model.set('category', this.collection.findWhere({default: true}));
+    }
+  },
+
+  setUsage: function() {
+    if(this.originalCategory) {
+      if(!_.isEqual(this.model.get('category'), this.originalCategory)) {
+        this.originalCategory.trigger('usage:decrease');
+        this.model.get('category').trigger('usage:increase');
+      }
+    } else {
+      this.model.get('category').trigger('usage:increase');
+    }
+  },
+   
+  open: function() {
+    this.$el.removeClass('hide');
+  },
+
+  close: function() {
+    this.$el.addClass('hide');
+  }
+
+});
+
+
+});
+require.register("category-list-view/template.js", function(exports, require, module){
+module.exports = '<li class="new-category">\n  <a href="#">+</a>\n</li>\n';
+});
+require.register("purchase-edit-view/index.js", function(exports, require, module){
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var $ = require('zepto-component');
+var Amount = require('amount');
+var categories = require('categories');
+var CategoryListView = require('category-list-view');
+var Purchase = require('purchase');
+var purchases = require('purchases');
+var moment = require('moment');
+
+/**
+ * Initialize a new backbone view.
+ */
+
+var PurchaseEditView = module.exports = Backbone.View.extend({
+
+  el: '#purchase-edit-view',
+
+  events: {
+    'click #cancel-edit': 'close',
+    'click .keypad-key': 'changeModelAmount',
+    'click .purchase-btn': 'changePage',
+    'click .save-purchase-btn': 'savePurchase',
+    'click .remove-purchase-btn': 'removePurchase',
+    'blur .purchase-btn.category input': 'blurInput'
+  },
+
+  initialize: function(){
+
+    this.categoryListView = new CategoryListView({collection: categories});
+    this.$('.view-body-inner').append(this.categoryListView.el);
+
+    this.on('open', this.open, this);
+
+    // show active state on touch
+    this.$('.keypad-key').on('touchstart', function(e) {
+      $(this).addClass('active');
+    }).on('touchmove', function(e) {
+      $(this).removeClass('active');
+    }).on('touchend', function(e) {
+      $(this).removeClass('active');
+    });
+
+  },
+
+  blurInput: function(e) {
+    $(e.target).attr('readonly', true);
+  },
+
+  changeModelAmount: function(event) {
+    var targetElement = event.currentTarget;
+    var value = $(targetElement).data('value');
+    this.model.trigger('modifyAmount', value);
+  },
+
+  changePage: function(event) {
+    var targetElement = event.currentTarget;
+    var $targetElement = $(targetElement);
+    if($targetElement.hasClass('active')) {
+      return;
+    }
+
+    $('.purchase-btn.active').removeClass('active');
+    $targetElement.addClass('active');   
+
+    if($targetElement.hasClass('amount')) {
+      this.categoryListView.trigger('close');
+      this.$('.keypad').show();
+      this.$('.purchase-input-wrapper').show();
+    } else if($targetElement.hasClass('category')) {
+      this.categoryListView.trigger('open');
+      this.$('.keypad').hide();
+      this.$('.purchase-input-wrapper').hide();
+    } 
+  },
+
+  savePurchase: function() {
+    //set category
+    var category = this.model.get('category');
+    if(category.isNew()) {
+      category.set('name', this.$('.purchase-btn.category input').val());
+      categories.create(category);
+    }
+    this.model.set('categoryId', category.id);
+    //set note
+    this.model.set('note', this.$('.purchase-btn.note input').val());
+    //set usage of category
+    this.categoryListView.setUsage();
+    //set date
+    var date = this.$('.purchase-date').val();
+    if(date !== '' && moment(date).isValid()) {
+      this.model.set('date', moment(date).valueOf()); 
+    }
+    //save
+    this.model.unset('category',{silent: true});
+    purchases.create(this.model);
+    this.close();
+  },
+
+  removePurchase: function() {
+    var check = confirm('Wollen Sie wirklich diese Ausgabe löschen?');
+    if(check) {
+      this.model.destroy();
+      this.close();
+    }
+  },
+
+  open: function(purchase) {
+    //create purchase
+    this.model = purchase ? purchase : new Purchase();
+
+    this.listenTo(this.model, 'change:amount', this.changeAmount);
+    this.listenTo(this.model, 'change:category', this.changeCategory);
+
+    //change the purchase model in categoryListView
+    this.categoryListView.changeModel(this.model);
+    //set amount UI to model value
+    this.changeAmount();
+    //sate date to UI
+    if(!this.model.isNew()) {
+      this.$('.purchase-date').val(moment(this.model.get('date')).format('LL'));
+    }
+    
+    //open panel
+    this.$el.removeClass('view-bottom');
+  }, 
+
+  close: function() {
+    //remove event handlers from old purchase
+    this.stopListening(this.model);
+    //reset to activate amount
+    this.$('.purchase-btn.amount').trigger('click');
+    //reset note
+    this.$('.purchase-btn.note input').val('');
+    //reset date
+    this.$('.purchase-date').val('');
+    //close panel
+    this.$el.addClass('view-bottom');
+  },
+
+  changeAmount: function() {
+    this.$('.purchase-btn.amount').text(this.model.amount.format());
+  },
+
+  changeCategory: function(model) {
+    var category = model.get('category');
+    var categoryInput = this.$('.purchase-btn.category input');
+    if(category.isNew()) {
+      categoryInput.removeAttr('readonly');
+      categoryInput.val('');
+      categoryInput.focus();
+    } else {
+      categoryInput.val(category.get('name'));
+    }
+  }
+
+});
+
+
+});
+
+require.register("purchase-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var settings = require('settings');
+var moment = require('moment');
+var categories = require('categories');
+
+/**
+ * Month view.
+ */
+
+var PurchaseView = module.exports = Backbone.View.extend({
+
+  tagName: 'li',
+
+  className : 'purchase-view',
+
+  template: _.template(require('./template')),
+
+  events: {
+    'click a': 'editPurchase'
+  },
+
+  initialize: function(options) {
+    this.purchaseEditView = options.purchaseEditView;
+    this.listenTo(settings, 'change:currency', this.changeCurrency);
+    this.listenTo(this.model, 'destroy', this.remove, this); 
+  },
+
+  render: function() {
+    this.$el.html(this.template());
+    reactive(this.$el[0], this.model, this);
+    return this;
+  },
+
+  editPurchase: function(e) {
+    this.purchaseEditView.open(this.model);
+    e.preventDefault();
+  },
+
+  changeCurrency: function() {
+    this.model.trigger('change:currency');
+  },
+
+  date: function() {
+    return moment(this.model.get('date')).format('MM.DD');
+  },
+
+  categoryColor: function() {
+    return categories.get(this.model.get('categoryId')).get('color');
+  },
+
+  amount: function() {
+    return this.model.get('amount');
+  },
+
+  currency: function() {
+    return settings.get('currency');
+  },
+
+  categoryName: function() {
+    return categories.get(this.model.get('categoryId')).get('name');
+  },
+
+  note: function() {
+    return this.model.get('note');
+  }
+});
+
+
+
+});
+require.register("purchase-view/template.js", function(exports, require, module){
+module.exports = '<aside data-style="border-left-color: {categoryColor}">\n  <p data-text="date">date</p>\n</aside>\n<aside class="pack-end">\n  <p data-text="{amount} {currency}">amount</p>\n</aside>\n<a href=#">\n  <p data-text="categoryName">category</p>\n  <p data-text="note">note</p>\n</a>\n</li>\n';
+});
+require.register("month-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var settings = require('settings');
+var moment = require('moment');
+var PurchaseView = require('purchase-view');
+
+
+/**
+ * Month view.
+ */
+
+var MonthView = module.exports = Backbone.View.extend({
+
+  className : 'month-view',
+
+  events: {
+    'click header': 'open'
+  },
+
+  template: _.template(require('./month')),
+
+  initialize: function(options) {
+    this.purchaseEditView = options.purchaseEditView;
+    this.isFirst = options.isFirst;
+    this.monthGroup = options.monthGroup;
+
+    this._viewPointers = {};
+    this.listenTo(this, 'add', this.addPurchase);
+    this.listenTo(this, 'remove', this.removePurchase);
+    this.listenTo(settings, 'change:currency', this.changeCurrency);
+    this.listenTo(this.collection, 'change:month' + this.monthGroup, function() {
+      this.trigger('change:monthAmount');
+    });
+  },
+
+  addPurchase: function(purchase) {
+    this._viewPointers[purchase.cid] = new PurchaseView({model: purchase, purchaseEditView: this.purchaseEditView});
+    this.$('ul').prepend(this._viewPointers[purchase.cid].render().el);
+    this.trigger('change:monthAmount');
+  },
+
+  removePurchase: function(purchase) {
+    if(this._viewPointers[purchase.cid]) {
+      this._viewPointers[purchase.cid].remove();
+      delete this._viewPointers[purchase.cid];
+      this.trigger('change:monthAmount');
+    }
+    if(!this.hasPurchases()) {
+      this.trigger('removeMonthGroup', this.monthGroup);
+    }
+  },
+
+  render: function() {
+    this.$el.html(this.template());
+    if(!this.isFirst) {
+      this.$('ul').addClass('hide');
+    }
+    reactive(this.$el[0], this);
+    return this;
+  },
+
+  open: function() {
+    this.$('ul').toggleClass('hide');
+  },
+
+  changeCurrency: function() {
+    this.trigger('change:currency');
+  },
+
+  monthDate: function() {
+    return moment(this.monthGroup, 'YYYYMM').format('MMMM YYYY');
+  },
+
+  monthAmount: function() {
+    return Math.floor(_.reduce(this._viewPointers, function(sum, purchaseView) {
+      return purchaseView.model.get('amount') + sum;
+    }, 0) * 100) /100;
+  },
+
+  currency: function() {
+    return settings.get('currency');
+  },
+
+  hasPurchases: function() {
+    return _.size(this._viewPointers);
+  }
+
+});
+
+
+});
+require.register("month-view/month.js", function(exports, require, module){
+module.exports = '<header>\n  <span class="month-date" data-text="monthDate">month</span>\n  <span class="month-amount" data-text="{monthAmount} {currency}">amount</span>\n</header>\n<ul>\n</ul>\n';
+});
+require.register("purchase-list-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var settings = require('settings');
+var moment = require('moment');
+var MonthView = require('month-view');
+
+/**
+ * List view.
+ */
+
+var ListView = module.exports = Backbone.View.extend({
+
+  el: '#purchase-list-view',
+
+  initialize: function(options) {
+    this.purchaseEditView = options.purchaseEditView;
+    this._viewPointers = {};
+    this.listenTo(settings, 'change', this.change);
+    this.listenTo(this.collection, 'reset', this.renderList, this);
+    this.listenTo(this.collection, 'add', this.addPurchase, this);
+    this.listenTo(this.collection, 'remove', this.removePurchase, this);
+    this.listenTo(this.collection, 'change:date', this.purchaseDateChange, this);
+    var view = reactive(this.el, this.collection, this);
+  },
+
+  purchaseDateChange: function(purchase) {
+    var oldMonthGroup = moment(purchase.previous('date')).format('YYYY') + moment(purchase.previous('date')).format('MM');
+    if(this._viewPointers[oldMonthGroup]) {
+      this._viewPointers[oldMonthGroup].trigger('remove', purchase);
+    }
+    this.addPurchase(purchase);
+  },
+
+  haspurchases: function() {
+    return this.collection.length;
+  },
+
+  change: function() {
+    this.collection.trigger('change:settings');
+  },
+
+  renderList: function() {
+    this.collection.each(this.addPurchase, this);
+    return this;
+  },
+
+  addPurchase: function(purchase) {
+    var monthGroup = moment(purchase.get('date')).format('YYYY') + moment(purchase.get('date')).format('MM');
+    if(!this._viewPointers[monthGroup]) {
+      this._viewPointers[monthGroup] = new MonthView({ collection: this.collection, monthGroup: monthGroup, isFirst: (_.size(this._viewPointers) === 0), purchaseEditView: this.purchaseEditView});
+      this._viewPointers[monthGroup].on('removeMonthGroup', this.removeMonthGroup, this);
+      this.$('div[data-type="list"]').append(this._viewPointers[monthGroup].render().el);
+    }
+    this._viewPointers[monthGroup].trigger('add', purchase);
+    console.log('monthgroupt:before', monthGroup);
+  },
+
+  removePurchase: function(purchase) {
+    var monthGroup = moment(purchase.get('date')).format('YYYY') + moment(purchase.get('date')).format('MM');
+    this._viewPointers[monthGroup].trigger('remove', purchase);
+  },
+
+  removeMonthGroup: function(monthGroup) {
+    this._viewPointers[monthGroup].off('removeMonthGroup');
+    this._viewPointers[monthGroup].remove();
+    delete this._viewPointers[monthGroup];
+  }
+
+});
+
+});
+require.register("overview-view/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var Backbone = require('backbone');
+var _ = require('underscore');
+var reactive = require('reactive');
+var settings = require('settings');
+var moment = require('moment');
+
+/**
+ * Overview view.
+ */
+
+var OverviewView = module.exports = Backbone.View.extend({
+
+  el: '#overview-view',
+
+  initialize: function() {
+    this.listenTo(settings, 'change:currency', this.changeCurrency);
+    this.listenTo(settings, 'change:group', this.change);
+    reactive(this.el, this.collection, this);
+  },
+
+  haspurchases: function() {
+    return this.collection.length;
+  },
+
+  group: function() {
+    switch(settings.get('group')) {
+      case 'month':
+        return moment().format('MMM');
+      case 'week':
+        return 'Kalenderwoche ' + moment().week();
+      case 'year':
+        return moment().format('YYYY');
+    }
+  },
+
+  amount: function() {
+    return this.calculateAmount(settings.get('group'), moment());
+  },
+
+  currency: function() {
+    return settings.get('currency');
+  },
+
+  changeCurrency: function() {
+    this.collection.trigger('change:settings');
+  },
+
+  calculateAmount: function(group, currentDate) {
+    var amount = null;
+    if(group === 'month') {
+      amount = this.collection.reduce(function(sum, purchase) {
+        if(currentDate.month() === moment(purchase.get('date')).month()) {
+          return purchase.get('amount') + sum;
+        } else {
+          return sum;
+        }
+      }, 0);
+    } else if(group === 'year') {
+      amount = this.collection.reduce(function(sum, purchase) {
+        if(currentDate.year() === moment(purchase.get('date')).year()) {
+          return purchase.get('amount') + sum;
+        } else {
+          return sum;
+        }
+      }, 0);
+    } else if(group === 'week') {
+      amount = this.collection.reduce(function(sum, purchase) {
+        if(currentDate.week() === moment(purchase.get('date')).week()) {
+          return purchase.get('amount') + sum;
+        } else {
+          return sum;
+        }
+      }, 0);
+    } 
+    return Math.floor(amount * 100) / 100;
+  }
+
+});
+
+
+});
+require.register("boot/index.js", function(exports, require, module){
+
+"use strict";
+
+/**
+ * Module dependencies.
+ */
+
+var $ = require('zepto-component');
+var Backbone = require('backbone');
+var reactive = require('reactive');
+var purchases = require('purchases');
+var categories = require('categories');
+var SettingsView = require('settings-view');
+var PurchaseEditView = require('purchase-edit-view');
+var OverviewView = require('overview-view');
+var PurchaseListView = require('purchase-list-view');
+
+/**
+ * Set zepto as DOM tool.
+ */
+
+Backbone.$ = $;
+
+/**
+ * Configure reactive for backbone models and collections.
+ */
+
+reactive.subscribe(function(obj, prop, fn){
+  if (obj instanceof Backbone.Collection) {
+    obj.on('add remove reset change:settings change:' + prop, function () { 
+      fn(obj[prop]);
+    });
+  } else {
+    obj.on('change:' + prop, function (m, v) { fn(v); });
+  }
+});
+
+reactive.unsubscribe(function(obj, prop, fn){
+  console.log('unsubscribe');
+  if (obj instanceof Backbone.Collection) {
+    obj.off('add remove reset change:settings change:' + prop, function () { 
+      fn(obj[prop]);
+    });
+  } else {
+    obj.off('change:' + prop, function (m, v) { fn(v); });
+  }
+});
+
+/**
+ * Starting pages.
+ */
+
+var overviewView = new OverviewView({collection: purchases});
+var purchaseEditView = new PurchaseEditView();
+var purchaselistView = new PurchaseListView({collection: purchases, purchaseEditView: purchaseEditView});
+var settingsView = new SettingsView();
+
+/**
+ * Set click listener.
+ */
+
+$('.settings-btn').click(function() {
+  settingsView.trigger('open');
+});
+
+$('.add-purchase-btn').click(function() {
+  purchaseEditView.trigger('open');
+});
+
+/**
+ * Fetching/Seeding collection 
+ */
+
+categories.fetch();
+purchases.fetch({reset: true});
+
+/**
+ * Create default category.
+ */
+
+if(categories.isEmpty()) {
+  categories.create({ name: 'Others', default: true}); // creates automatic default category
+}
+
+/**
+ * Install button/process
+ */
+
+if(navigator.mozApps) {
+
+  var request = navigator.mozApps.getSelf();
+  request.onsuccess = function() {
+
+    if(request.result) {
+      console.log('already installed');
+    } else {
+      $('.install-btn').addClass('show-install');
+      $('.install-btn').on('click', function() {
+        installApp();
+      });
+    }
+  };
+  request.onerror = function() {
+    alert('Error: ', request.error.name);
+  };
+
+} else {
+  console.log('Open Wen Apps not supported');
+}
+
+function installApp() {
+  var manifestURL = location.href.substring(0, location.href.lastIndexOf("/")) + "/manifest.webapp";
+  var app = navigator.mozApps.install(manifestURL);
+  app.onsuccess = function(data) {
+    $('.install-btn').removeClass('show-install');
+  };
+  app.onerror = function() {
+    alert("Install failed\n\n:" + app.error.name);
+  };
+}
+
+function onUpdateReady() {
+  var check = confirm('found new verion, should we update?');
+  if(check) {
+    location.reload(true);
+  }
+}
+window.applicationCache.addEventListener('updateready', onUpdateReady);
+
+});
 require.alias("boot/index.js", "Ausgaben/deps/boot/index.js");
 require.alias("boot/index.js", "boot/index.js");
+require.alias("component-zepto/index.js", "boot/deps/zepto-component/index.js");
+
 require.alias("component-reactive/lib/index.js", "boot/deps/reactive/lib/index.js");
 require.alias("component-reactive/lib/utils.js", "boot/deps/reactive/lib/utils.js");
 require.alias("component-reactive/lib/text-binding.js", "boot/deps/reactive/lib/text-binding.js");
@@ -433,10 +9587,6 @@ require.alias("component-reactive/lib/index.js", "component-reactive/index.js");
 require.alias("namjul-backbone/backbone.js", "boot/deps/backbone/backbone.js");
 require.alias("namjul-backbone/index.js", "boot/deps/backbone/index.js");
 require.alias("component-underscore/index.js", "namjul-backbone/deps/underscore/index.js");
-
-require.alias("zepto/index.js", "boot/deps/zepto/index.js");
-require.alias("zepto/index.js", "boot/deps/zepto/index.js");
-require.alias("zepto/index.js", "zepto/index.js");
 
 require.alias("purchases/index.js", "boot/deps/purchases/index.js");
 require.alias("purchases/index.js", "boot/deps/purchases/index.js");
@@ -571,6 +9721,8 @@ require.alias("settings-view/index.js", "settings-view/index.js");
 
 require.alias("purchase-edit-view/index.js", "boot/deps/purchase-edit-view/index.js");
 require.alias("purchase-edit-view/index.js", "boot/deps/purchase-edit-view/index.js");
+require.alias("component-zepto/index.js", "purchase-edit-view/deps/zepto-component/index.js");
+
 require.alias("component-underscore/index.js", "purchase-edit-view/deps/underscore/index.js");
 
 require.alias("component-moment/index.js", "purchase-edit-view/deps/moment/index.js");
@@ -582,10 +9734,6 @@ require.alias("component-underscore/index.js", "namjul-backbone/deps/underscore/
 
 
 
-
-require.alias("zepto/index.js", "purchase-edit-view/deps/zepto/index.js");
-require.alias("zepto/index.js", "purchase-edit-view/deps/zepto/index.js");
-require.alias("zepto/index.js", "zepto/index.js");
 
 require.alias("amount/index.js", "purchase-edit-view/deps/amount/index.js");
 require.alias("amount/index.js", "purchase-edit-view/deps/amount/index.js");

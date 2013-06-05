@@ -2,6 +2,7 @@
   "name": "purchase-edit-view",
   "description": "View to display single purchase for editing/adding",
   "dependencies": {
+    "component/zepto": "*",
     "component/underscore": "*",
     "component/moment": "*",
     "namjul/backbone": "*",
@@ -23,7 +24,6 @@
     "images/purchase-delete.png"
   ],
   "local": [
-    "zepto",
     "amount",
     "categories",
     "purchase",
