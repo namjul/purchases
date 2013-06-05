@@ -1,0 +1,25 @@
+{
+  "name": "overview-view",
+  "description": "Backbone view displays summary of purchases.",
+  "dependencies": {
+    "component/moment": "*",
+    "component/reactive": "*",
+    "component/underscore": "*",
+    "namjul/ffosbb-headers": "*",
+    "namjul/ffosbb-tabs": "*",
+    "namjul/backbone": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "styles": [
+    "overview-view.css"
+  ],
+  "local": [
+    "settings"
+  ],
+  "images": [
+  ]
+}

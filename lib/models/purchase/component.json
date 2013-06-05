@@ -1,0 +1,16 @@
+{
+  "name": "purchase",
+  "description": "Purchase model",
+  "dependencies": {
+    "component/underscore": "*",
+    "namjul/backbone": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "local": [
+    "amount"
+  ]
+}

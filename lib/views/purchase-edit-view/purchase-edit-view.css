@@ -1,0 +1,151 @@
+#purchase-edit-view {
+  z-index: 2;
+}
+
+#purchase-edit-view .view-body-inner {
+  padding: 0;
+  background: #f6f7f1;
+}
+
+/* purchase buttons styles */
+.purchase-btn-wrapper {
+  overflow: hidden;
+}
+
+.purchase-btn {
+  float: left;
+  height: 8rem;
+  width: 25%;
+  background: #f6f7f1;
+  -moz-transition: width 0.1s ease-out; 
+  -moz-box-sizing: border-box;
+}
+
+.purchase-btn:nth-child(2) {
+  border-left: solid 0.1rem #dcdcdc;
+  border-right: solid 0.1rem #dcdcdc;
+}
+
+.purchase-btn.active {
+  width: 50%;
+  background: #e3e3e3;
+  font-size: 2.5rem;
+}
+
+.purchase-btn > input {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  border: none;
+  -moz-box-sizing: border-box;
+  cursor: none;
+  resize: none;
+  background: transparent;
+  text-align: center;
+  font-family: "MozTT",Sans-serif;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.purchase-btn.amount {
+  text-align: center;
+  line-height: 8rem;
+}
+
+/* keyboard styles */
+.keypad {
+  width: 100%;
+  display: table;
+  table-layout: fixed;
+  background: #2c2828;
+}
+
+.keypad-cell {
+  display: table-cell;
+}
+
+
+.keypad-cell:first-child .keypad-key {
+  border-left: 0;
+}
+
+.keypad-cell:last-child .keypad-key {
+  border-right: 0;
+}
+
+.keypad-key {
+  -moz-box-sizing: border-box;
+  height: 6rem;
+  vertical-align: middle;
+  color: #fff;
+  font-weight: 400;
+  font-size: 5rem;
+  line-height: 5.5rem;
+  border-width: 0.1rem;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.2) rgba(0, 0 , 0, 0.3) rgba(0, 0 , 0, 0.3) rgba(255, 255, 255, 0.2);
+  text-align: center;
+  padding: 0.2rem 0 0 0;
+}
+
+.keypad-key:active {
+  background: #00aacc;
+}
+
+.keypad-key.active {
+  background: #00aacc;
+}
+
+.keypad-key.keypad-key-centered {
+  line-height: 3rem;
+}
+
+.keypad-key[data-value="del"] div.delete {
+  width: 3rem;
+  height: 2rem;
+  background: url('images/delete.png') no-repeat center center;
+  margin: 1.7rem auto;
+} 
+
+/* list styles */
+
+.purchase-input-wrapper header h2 {
+  background: #3d3a3a ;
+  border-bottom:solid  0.1rem rgba(0, 0, 0, 0.5) ;
+  color: #fff ;
+}
+
+.purchase-input-wrapper [data-type="list"] {
+  padding: 0;
+}
+.purchase-input-wrapper [data-type="list"] li {
+  padding-left: 0;
+  border-bottom: 0.1rem solid #e6e6e3;
+  color: #000;
+  height: auto;
+}
+
+.purchase-input-wrapper [data-type="list"] li p {
+  padding: 1rem 3rem 1.2rem;
+}
+
+.purchase-input-wrapper [data-type="list"] label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.purchase-input-wrapper [data-type="list"] label:not([for]) > span {
+  left: auto;
+  right: 3rem;
+}
+
+.purchase-input-wrapper [data-type="list"] span > input[type="date"] {
+  font-size: 1.7rem;
+}
+
+section[role="region"] > header:first-child .icon.icon-delete {
+  background-image: url(images/purchase-delete.png);
+}

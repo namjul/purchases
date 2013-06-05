@@ -1,0 +1,11 @@
+#purchase-list-view [data-type="list"] {
+  padding: 0;
+}
+
+#purchase-list-view [data-type="list"] header {
+  padding: 15px 0.5rem 0.8rem;
+  font-size: 1.8rem;
+}
+#purchase-list-view [data-type="list"] .month-amount {
+  float: right;
+}

@@ -1,0 +1,17 @@
+{
+  "name": "categories",
+  "description": "Backbone collection for categories.",
+  "dependencies": {
+    "component/underscore": "*",
+    "namjul/backbone": "*",
+    "namjul/backbone.localStorage": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "local": [
+    "category"
+  ]
+}

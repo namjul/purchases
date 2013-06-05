@@ -1,0 +1,23 @@
+{
+  "name": "purchase-view",
+  "description": "Backbone view display single purchase.",
+  "dependencies": {
+    "component/moment": "*",
+    "component/reactive": "*",
+    "component/underscore": "*",
+    "namjul/backbone": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js",
+    "template.js"
+  ],
+  "styles": [
+    "purchase-view.css"
+  ],
+  "local": [
+    "settings",
+    "categories"
+  ]
+}

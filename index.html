@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<!--
+Exchange the line above for this to enable offline support
+<html manifest="manifest.appcache">
+
+Please make your homework before doing this:
+http://www.alistapart.com/articles/application-cache-is-a-douchebag/
+http://appcachefacts.info
+This might be necessary to set up on your server, to make sure
+files are updated when the appcache file itself is:
+https://github.com/robnyman/Firefox-OS-Boilerplate-App/blob/gh-pages/.htaccess
+-->
+  <head>
+    <title>Todo</title>
+    <meta charset="utf-8"> 
+    <meta name="viewport" content="width=device-width,user-scalable=no">
+    <link rel="stylesheet" href="build/build.css">
+  </head>
+  <body>
+    <!-- Tab View Section -->
+    <section role="tablist" data-items="2" class="bottom">
+      <!-- Purchase Overview Section -->
+      <article role="tab" id="panel1">
+        <a href="#panel1">Overview</a>
+        <div role="tabpanel">
+          <section role="region" class="view">
+            <header>
+              <menu type="toolbar">
+                <button role="menuitem" class="install-btn">Install</button>
+                <button role="menuitem" class="add-purchase-btn"><span class="icon icon-add">Add</span></button>
+                <button role="menuitem" class="settings-btn"><span class="icon icon-settings">settings</span></button> 
+              </menu>
+              <h1>Overview</h1>
+            </header>
+            <article class="view-body">
+              <section id="overview-view" class="view-body-inner">
+                <div data-hide="haspurchases">
+                  <div class="arrow">
+                    <p class="small">New purchase</p>
+                  </div>
+                  <div class="info">
+                    <p>No purchases</p>
+                    <p>Start to enter purchases</p>
+                  </div>
+                </div>
+                <div data-show="haspurchases">
+                  <p data-text="group">group</p>
+                  <p>
+                    <span data-text="amount">amount</span>
+                    <span data-text="currency">€</span>
+                  </p>
+                </div>
+              </section>
+            </article>
+          </section>
+        </div>
+      </article>
+
+      <!-- Purchase List Section -->
+      <article role="tab" id="panel2">
+        <a href="#panel2">Flow</a>
+        <div role="tabpanel">
+          <section role="region" class="view">
+            <header>
+              <menu type="toolbar">
+                <button role="menuitem" class="install-btn">Install</button>
+                <button role="menuitem" class="add-purchase-btn"><span class="icon icon-add">Add</span></button>
+                <button role="menuitem" class="settings-btn"><span class="icon icon-settings">settings</span></button> 
+              </menu>
+              <h1>Flow</h1>
+            </header>
+            <article class="view-body">
+              <section id="purchase-list-view" class="view-body-inner">
+                <div data-hide="haspurchases">
+                  <div class="arrow">
+                    <p class="small">New purchase</p>
+                  </div>
+                  <div class="info">
+                    <p>No purchases</p>
+                    <p>Start to enter purchases</p>
+                  </div>
+                </div>
+                <div data-show="haspurchases" data-type="list">
+                </div>
+              </section>
+            </article>
+          </section>
+        </div>
+      </article>
+    </section>
+
+    <!-- Purchase New/Edit Section -->
+    <section role="region" id="purchase-edit-view" class="view view-bottom">
+      <header>
+        <button id="cancel-edit" class="negative"><span class="icon icon-close">Exit</span></button>
+        <menu type="toolbar">
+          <button role="menuitem" class="remove-purchase-btn"><span class="icon icon-delete">Delete</span></button>
+          <button role="menuitem" class="save-purchase-btn">Done</button>
+        </menu>
+        <h1>New purchase</h1>
+      </header>
+      <article class="view-body">
+        <section class="view-body-inner">
+
+          <!-- Purchase data section -->
+          <div class="purchase-btn-wrapper">
+            <div class="purchase-btn amount active">
+            </div>
+            <div class="purchase-btn category">
+              <input placeholder="Category" type="text" readonly="true" data-property-value="category"> 
+            </div>
+            <div class="purchase-btn note">
+              <input placeholder="Note" type="text"> 
+            </div>
+          </div>
+
+          <!-- Purchase keyboard section -->
+          <div class="keypad">
+            <div class="keypad-cell">
+              <div class="keypad-key" data-value="1">1</div>
+              <div class="keypad-key" data-value="4">4</div>
+              <div class="keypad-key" data-value="7">7</div>
+              <div class="keypad-key keypad-key-centered" data-value=",">,</div>
+            </div>
+            <div class="keypad-cell">
+              <div class="keypad-key" data-value="2">2</div>
+              <div class="keypad-key" data-value="5">5</div>
+              <div class="keypad-key" data-value="8">8</div>
+              <div class="keypad-key" data-value="0">0</div>
+            </div>
+            <div class="keypad-cell">
+              <div class="keypad-key" data-value="3">3</div>
+              <div class="keypad-key" data-value="6">6</div>
+              <div class="keypad-key" data-value="9">9</div>
+              <div class="keypad-key keypad-key-centered" data-value="del">
+                <div class="delete"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Purchase information section -->
+          <div class="purchase-input-wrapper">
+            <header>
+              <h2>Additional information</h2>
+            </header>
+            <ul data-type="list">
+              <li>
+                <p>Date</p>
+                <p>
+                  <span class="button icon icon-dialog">
+                    <input class="purchase-date" placeholder="Jetzt" name="purchaseDate" type="date">
+                  </span>
+                </p>
+              </li>
+            </ul>
+          </div>
+        </section>        
+      </article>
+    </section>
+
+    <!-- Settings Section -->
+    <section role="region" id="view-settings" class="skin-organic view view-bottom">
+      <header>
+        <menu type="toolbar" id="settings-form-actions">
+          <button id="settings-close" role="menuitem">Done</button>
+        </menu>
+        <h1>Settings</h1>
+      </header>
+      <article class="view-body">
+        <section class="view-body-inner">
+          <header>
+            <h2>General Settings</h2>
+          </header>
+          <ul data-type="list">
+            <li>
+              <p>Currency</p>
+              <p>
+                <span class="button icon icon-dialog">
+                  <select data-select="currency" name="currency">
+                    <option value="$">Dollar</option>
+                    <option value="€">Euro</option>
+                  </select>
+                </span>
+              </p>
+            </li>
+            <li>
+              <p>Group</p>
+              <p>
+                <span class="button icon icon-dialog">
+                  <select data-select="group" name="group">
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                    <option value="year">Year</option>
+                  </select>
+                </span>
+              </p>
+            </li>
+          </ul>
+        </section>        
+      </article>
+    </section>
+
+    <script src="build/build.js"></script>
+    <script>
+      require('boot')
+    </script>
+  </body>
+</html>

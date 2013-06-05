@@ -1,0 +1,33 @@
+{
+  "name": "purchase-edit-view",
+  "description": "View to display single purchase for editing/adding",
+  "dependencies": {
+    "component/underscore": "*",
+    "component/moment": "*",
+    "namjul/backbone": "*",
+    "namjul/ffosbb-headers": "*",
+    "namjul/ffosbb-lists": "*",
+    "namjul/ffosbb-buttons": "*",
+    "namjul/ffosbb-switches": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "styles": [
+    "purchase-edit-view.css"
+  ],
+  "images": [
+    "images/delete.png",
+    "images/purchase-delete.png"
+  ],
+  "local": [
+    "zepto",
+    "amount",
+    "categories",
+    "purchase",
+    "purchases",
+    "category-list-view"
+  ]
+}

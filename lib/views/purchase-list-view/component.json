@@ -1,0 +1,24 @@
+{
+  "name": "purchase-list-view",
+  "description": "Backbone view display a list of purchases.",
+  "dependencies": {
+    "component/moment": "*",
+    "component/reactive": "*",
+    "component/underscore": "*",
+    "namjul/backbone": "*",
+    "namjul/ffosbb-headers": "*",
+    "namjul/ffosbb-tabs": "*",
+    "namjul/ffosbb-lists": "*"
+  },
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "styles": [
+    "purchase-list-view.css"
+  ],
+  "local": [
+    "settings",
+    "month-view"
+  ]
+}

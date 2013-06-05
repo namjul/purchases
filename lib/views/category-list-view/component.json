@@ -1,0 +1,23 @@
+{
+  "name": "category-list-view",
+  "description": "Backbone view to display list of categories.",
+  "dependencies": {
+    "component/underscore": "*",
+    "namjul/backbone": "*",
+    "namjul/ffosbb-lists": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js",
+    "template.js"
+  ],
+  "styles": [
+    "category-list-view.css"
+  ],
+  "local": [
+    "purchases",
+    "category",
+    "category-view"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Purchases",
+  "description": "Purchases is an FirefoxOS app for tracking purchases.",
+  "version": "0.0.1",
+  "launch_path": "/index.html#panel1",
+  "icons": {
+    "60": "/build/boot/images/icon-60.png",
+    "128": "/build/boot/images/icon-128.png"
+  },
+  "developer": {
+    "name": "Samuel Hobl",
+    "url": "http://github.com/namjul"
+  },
+  "default_locale": "en"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Ausgaben",
+  "description": "Ausgaben FirefoxOS App",
+  "version": "0.0.1",
+  "devDependencies": {
+    "chai": "*",
+    "supervisor": "*",
+    "jshint": "~2.0.1",
+    "karma": "~0.8.5"
+  }
+}

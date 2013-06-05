@@ -1,0 +1,24 @@
+{
+  "name": "settings-view",
+  "description": "backbone view for settings page.",
+  "dependencies": {
+    "component/reactive": "*",
+    "component/underscore": "*",
+    "namjul/backbone": "*",
+    "namjul/ffosbb-headers": "*",
+    "namjul/ffosbb-lists": "*",
+    "namjul/ffosbb-switches": "*",
+    "namjul/ffosbb-buttons": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "styles": [
+    "settings-view.css"
+  ],
+  "local": [
+    "settings"
+  ]
+}

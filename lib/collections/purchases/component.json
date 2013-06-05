@@ -1,0 +1,18 @@
+{
+  "name": "purchases",
+  "description": "Backbone collections of purchases.",
+  "dependencies": {
+    "component/underscore": "*",
+    "component/moment": "*",
+    "namjul/backbone": "*",
+    "namjul/backbone.localStorage": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "local": [
+    "purchase"
+  ]
+}

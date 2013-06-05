@@ -1,0 +1,23 @@
+{
+  "name": "Ausgaben",
+  "description": "Ausgaben FirefoxOS App",
+  "version": "0.0.1",
+  "paths": [
+    "lib/collections",
+    "lib/models",
+    "lib/views",
+    "lib/utils",
+    "lib"
+  ],
+  "local": [
+    "boot"
+  ],
+  "development": {
+    "component/zepto": "*",
+    "component/assert": "*",
+    "component/moment": "*",
+    "virtru-components/chai": "*",
+    "visionmedia/mocha": "*",
+    "component/live-css": "*"
+  }
+}

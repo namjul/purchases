@@ -1,0 +1,18 @@
+{
+  "name": "settings",
+  "description": "Singleton Object for setting properties",
+  "dependencies": {
+    "component/underscore": "*",
+    "namjul/backbone": "*",
+    "namjul/backbone.localStorage": "*",
+    "namjul/ffosbb-lists": "*",
+    "namjul/ffosbb-buttons": "*"
+  },
+  "development": {},
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "local": [
+  ]
+}
